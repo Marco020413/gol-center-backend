@@ -24,7 +24,7 @@ class PartidoController extends Controller
             'goles_local' => 0,
             'goles_visitante' => 0,
             'fecha' => $request->fecha,
-            'estatus' => 'programado' // Valores: programado, en_curso, finalizado
+            'estatus' => 'programado'
         ]);
 
         return response()->json(['message' => 'Partido creado', 'id' => $id_partido]);

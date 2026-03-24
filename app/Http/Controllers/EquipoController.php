@@ -70,8 +70,34 @@ class EquipoController extends Controller
 
     public function eliminar($id)
     {
-        $this->database->getReference('equipos/' . $id)->remove();
-        return response()->json(['message' => 'Equipo eliminado']);
+        try {
+            // 1. Obtenemos el nombre antes de borrar
+            $equipoParaBorrar = $this->database->getReference('equipos/' . $id)->getValue();
+            $nombreEquipo = $equipoParaBorrar['nombre'] ?? null;
+
+            if (!$nombreEquipo) {
+                return response()->json(['error' => 'Equipo no encontrado'], 404);
+            }
+
+            // 2. Buscamos a todos los jugadores que pertenecen a este equipo para liberarlos
+            $jugadores = $this->database->getReference('jugadores')->getValue() ?? [];
+            
+            foreach ($jugadores as $telefono => $datos) {
+                if (isset($datos['equipo']) && $datos['equipo'] === $nombreEquipo) {
+                    // Los ponemos como 'Libre' o simplemente quitamos el equipo
+                    $this->database->getReference('jugadores/' . $telefono)->update([
+                        'equipo' => 'Libre' 
+                    ]);
+                }
+            }
+
+            // 3. Ahora sí borramos el equipo
+            $this->database->getReference('equipos/' . $id)->remove();
+
+            return response()->json(['message' => 'Equipo eliminado y jugadores liberados con éxito']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     public function actualizar(Request $request, $telefono)

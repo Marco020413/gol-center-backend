@@ -14,6 +14,28 @@
 
         <div id="tab-content">
             <div id="content-jugadores" class="tab-pane">
+                <div class="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="relative">
+                        <span class="absolute inset -y-0 left-0 pl-3 flex items-center text-slate-500">
+                            <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        </span>
+                        <input type="text" id="busquedaJugador" onkeyup="filtrarTabla()" placeholder="Buscar por nombre o teléfono..." class="w-full bg-slate-900 border border-slate-800 rounded-lg pl-10 pr-4 py-2 text-sm text-white outline-none focus:border-blue-500 transition">
+                    </div>
+                    
+                    <select id="filtroEquipo" onchange="filtrarTabla()" class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white outline-none focus:border-blue-500">
+                        <option value="">Todos los equipos</option>
+                        <option value="Libre">Agentes Libres (Sin Equipo)</option>
+                    </select>
+
+                    <select id="ordenarPor" onchange="filtrarTabla()" class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white outline-none focus:border-blue-500">
+                        <option value="nombre">Ordenar por Nombre</option>
+                        <option value="goles">Más Goleadores</option>
+                        <option value="pj">Más Partidos</option>
+                        <option value="dorsal">Por Dorsal (#)</option>
+                    </select>
+                </div>
+    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+        <table id="tablaPrincipalJugadores" class="w-full text-left">
                 <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
                     <table class="w-full text-left">
                         <thead class="bg-slate-800/50 text-slate-400 text-xs uppercase text-center">
@@ -34,15 +56,25 @@
                                             {{ $j['numero'] ?? '00' }}
                                         </div>
                                         <div class="text-left">
-                                            <div class="font-medium text-white">{{ $j['nombre'] ?? 'Sin Nombre' }}</div>
-                                            <div class="text-[10px] text-slate-500">{{ $telefono }}</div>
+                                            <div class="font-medium text-white" data-field="nombre">{{ $j['nombre'] ?? 'Sin Nombre' }}</div>
+                                            <div class="text-[10px] text-slate-500" data-field="telefono">{{ $telefono }}</div>
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-6 py-4 text-center">
-                                    <span class="text-blue-400 font-semibold">{{ $j['equipo'] ?? 'Libre' }}</span>
+                                <td class="px-6 py-4 text-center" data-field="equipo" data-valor="{{ $j['equipo'] ?? 'Libre' }}">
+                                    @if(($j['equipo'] ?? 'Libre') === 'Libre')
+                                        <span class="bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-black uppercase animate-pulse">
+                                            ⚠️ Sin Equipo
+                                        </span>
+                                    @else
+                                        <span class="text-blue-400 font-semibold uppercase tracking-wider text-xs">
+                                            {{ $j['equipo'] }}
+                                        </span>
+                                    @endif
                                 </td>
-                                <td class="px-6 py-4 text-center text-slate-400">{{ $j['partidos_jugados'] ?? 0 }}</td>
+                                <td class="px-6 py-4 text-center {{ ($j['partidos_jugados'] ?? 0) >= 5 ? 'text-red-500 font-bold' : 'text-slate-400' }}">
+                                    {{ $j['partidos_jugados'] ?? 0 }}
+                                </td>
                                 <td class="px-6 py-4 text-center font-bold text-white">{{ $j['goles'] ?? 0 }}</td>
                                 <td class="px-6 py-4 text-center flex justify-center gap-2">
                                     <button onclick="editarJugador('{{ $telefono }}', '{{ $j['nombre'] ?? '' }}', '{{ $j['equipo'] ?? '' }}', '{{ $j['edad'] ?? 0 }}', '{{ $j['direccion'] ?? '' }}', '{{ $j['numero'] ?? 0 }}')" class="text-blue-500 hover:text-blue-400 p-1 transition">

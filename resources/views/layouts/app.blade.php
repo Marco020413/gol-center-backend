@@ -223,12 +223,13 @@
 
     async function cargarEquipos() {
         const select = document.getElementById('selectEquipos');
+        const selectFiltro = document.getElementById('filtroEquipo');
         if(!select) return;
         try {
             const response = await fetch('/api/equipos');
             const equipos = await response.json();
             const currentVal = select.value;
-            select.innerHTML = '<option value="">Selecciona un equipo</option>';
+            select.innerHTML = '<option value="Libre">-- AGENTE LIBRE --</option>';
             for (const id in equipos) {
                 const option = document.createElement('option');
                 option.value = equipos[id].nombre;
@@ -439,7 +440,55 @@
         // SI ENTRA A GESTIÓN DE EQUIPOS, CARGAMOS LA LISTA
         if(tabName === 'equipos_gest') cargarGestionEquipos();
     }
+
+    function filtrarTabla() {
+    const busqueda = document.getElementById('busquedaJugador').value.toLowerCase().trim();
+    const equipoFiltro = document.getElementById('filtroEquipo').value; // "Libre" o nombre del equipo
+    const orden = document.getElementById('ordenarPor').value;
     
+    const tablaBody = document.querySelector('#content-jugadores tbody');
+    if (!tablaBody) return;
+
+    const filas = Array.from(tablaBody.querySelectorAll('tr'));
+
+    filas.forEach(fila => {
+        // 1. Extraer datos de los data-fields
+        const nombre = fila.querySelector('[data-field="nombre"]')?.innerText.toLowerCase() || "";
+        const telefono = fila.querySelector('[data-field="telefono"]')?.innerText.toLowerCase() || "";
+        
+        // LEEMOS EL ATRIBUTO DATA-VALOR QUE PUSIMOS EN EL PASO ANTERIOR
+        const equipoCelda = fila.querySelector('[data-field="equipo"]');
+        const valorEquipo = equipoCelda ? equipoCelda.getAttribute('data-valor') : "";
+
+        // 2. Lógica de Búsqueda
+        const coincideBusqueda = nombre.includes(busqueda) || telefono.includes(busqueda);
+        
+        // 3. Lógica de Filtro de Equipo
+        let coincideEquipo = true;
+        if (equipoFiltro === "Libre") {
+            // Ahora comparamos contra el valor puro "Libre"
+            coincideEquipo = (valorEquipo === "Libre");
+        } else if (equipoFiltro !== "") {
+            coincideEquipo = (valorEquipo === equipoFiltro);
+        }
+
+        fila.style.display = (coincideBusqueda && coincideEquipo) ? "" : "none";
+    });
+
+    // --- Mantenemos tu lógica de ordenamiento que ya funcionaba ---
+    const filasVisibles = filas.filter(f => f.style.display !== "none");
+    filasVisibles.sort((a, b) => {
+        if (orden === 'goles') return (parseInt(b.cells[3].innerText) || 0) - (parseInt(a.cells[3].innerText) || 0);
+        if (orden === 'pj') return (parseInt(b.cells[2].innerText) || 0) - (parseInt(a.cells[2].innerText) || 0);
+        if (orden === 'dorsal') {
+            const numA = parseInt(a.querySelector('.bg-blue-600\\/20')?.innerText) || 0;
+            const numB = parseInt(b.querySelector('.bg-blue-600\\/20')?.innerText) || 0;
+            return numA - numB;
+        }
+        return a.querySelector('[data-field="nombre"]').innerText.localeCompare(b.querySelector('[data-field="nombre"]').innerText);
+    }).forEach(f => tablaBody.appendChild(f));
+}
+        
 </script>
 </body>
 </html>
