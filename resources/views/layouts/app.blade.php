@@ -239,18 +239,25 @@
             if(editMode) select.value = currentVal;
         } catch (e) { console.error("Error:", e); }
     }
-
+    
     function changeTab(tabName) {
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
         document.querySelectorAll('.tab-btn').forEach(b => {
             b.classList.remove('text-blue-500', 'border-b-2', 'border-blue-500');
             b.classList.add('text-slate-500');
         });
+
         const target = document.getElementById('content-' + tabName);
         if(target) target.classList.remove('hidden');
-        if(event.currentTarget) {
-            event.currentTarget.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
+
+        // Usamos window.event para mayor compatibilidad o verificamos si existe
+        if(window.event && window.event.currentTarget) {
+            window.event.currentTarget.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
         }
+
+        // Disparar carga de datos según la pestaña
+        if(tabName === 'partidos') cargarPartidosCards();
+        if(tabName === 'equipos_gest') cargarGestionEquipos();
     }
 
     function abrirModalEquipo() { 
@@ -433,62 +440,351 @@
             b.classList.remove('text-blue-500', 'border-b-2', 'border-blue-500');
             b.classList.add('text-slate-500');
         });
+
         const target = document.getElementById('content-' + tabName);
         if(target) target.classList.remove('hidden');
-        if(event.currentTarget) event.currentTarget.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
 
-        // SI ENTRA A GESTIÓN DE EQUIPOS, CARGAMOS LA LISTA
+        // Resaltar el botón presionado de forma segura
+        if(window.event && window.event.currentTarget) {
+            window.event.currentTarget.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
+        }
+
+        // DISPARAR CARGAS AUTOMÁTICAS
+        if(tabName === 'partidos') cargarPartidosCards();
         if(tabName === 'equipos_gest') cargarGestionEquipos();
     }
 
-    function filtrarTabla() {
-    const busqueda = document.getElementById('busquedaJugador').value.toLowerCase().trim();
-    const equipoFiltro = document.getElementById('filtroEquipo').value; // "Libre" o nombre del equipo
-    const orden = document.getElementById('ordenarPor').value;
-    
-    const tablaBody = document.querySelector('#content-jugadores tbody');
-    if (!tablaBody) return;
+    document.addEventListener('DOMContentLoaded', () => {
+        // Definición de variables globales de modales
+        window.modalJugador = document.getElementById('modalJugador');
+        window.modalEquipo = document.getElementById('modalEquipo');
+        window.modalCrearPartido = document.getElementById('modalCrearPartido');
 
-    const filas = Array.from(tablaBody.querySelectorAll('tr'));
-
-    filas.forEach(fila => {
-        // 1. Extraer datos de los data-fields
-        const nombre = fila.querySelector('[data-field="nombre"]')?.innerText.toLowerCase() || "";
-        const telefono = fila.querySelector('[data-field="telefono"]')?.innerText.toLowerCase() || "";
-        
-        // LEEMOS EL ATRIBUTO DATA-VALOR QUE PUSIMOS EN EL PASO ANTERIOR
-        const equipoCelda = fila.querySelector('[data-field="equipo"]');
-        const valorEquipo = equipoCelda ? equipoCelda.getAttribute('data-valor') : "";
-
-        // 2. Lógica de Búsqueda
-        const coincideBusqueda = nombre.includes(busqueda) || telefono.includes(busqueda);
-        
-        // 3. Lógica de Filtro de Equipo
-        let coincideEquipo = true;
-        if (equipoFiltro === "Libre") {
-            // Ahora comparamos contra el valor puro "Libre"
-            coincideEquipo = (valorEquipo === "Libre");
-        } else if (equipoFiltro !== "") {
-            coincideEquipo = (valorEquipo === equipoFiltro);
-        }
-
-        fila.style.display = (coincideBusqueda && coincideEquipo) ? "" : "none";
+        // CARGA INICIAL: Traemos los partidos de una vez para que estén listos
+        cargarPartidosCards();
+        cargarGestionEquipos();
     });
 
-    // --- Mantenemos tu lógica de ordenamiento que ya funcionaba ---
-    const filasVisibles = filas.filter(f => f.style.display !== "none");
-    filasVisibles.sort((a, b) => {
-        if (orden === 'goles') return (parseInt(b.cells[3].innerText) || 0) - (parseInt(a.cells[3].innerText) || 0);
-        if (orden === 'pj') return (parseInt(b.cells[2].innerText) || 0) - (parseInt(a.cells[2].innerText) || 0);
-        if (orden === 'dorsal') {
-            const numA = parseInt(a.querySelector('.bg-blue-600\\/20')?.innerText) || 0;
-            const numB = parseInt(b.querySelector('.bg-blue-600\\/20')?.innerText) || 0;
-            return numA - numB;
-        }
-        return a.querySelector('[data-field="nombre"]').innerText.localeCompare(b.querySelector('[data-field="nombre"]').innerText);
-    }).forEach(f => tablaBody.appendChild(f));
-}
+    function filtrarTabla() {
+        const busqueda = document.getElementById('busquedaJugador').value.toLowerCase().trim();
+        const equipoFiltro = document.getElementById('filtroEquipo').value; // "Libre" o nombre del equipo
+        const orden = document.getElementById('ordenarPor').value;
         
+        const tablaBody = document.querySelector('#content-jugadores tbody');
+        if (!tablaBody) return;
+
+        const filas = Array.from(tablaBody.querySelectorAll('tr'));
+
+        filas.forEach(fila => {
+            // 1. Extraer datos de los data-fields
+            const nombre = fila.querySelector('[data-field="nombre"]')?.innerText.toLowerCase() || "";
+            const telefono = fila.querySelector('[data-field="telefono"]')?.innerText.toLowerCase() || "";
+            
+            // LEEMOS EL ATRIBUTO DATA-VALOR QUE PUSIMOS EN EL PASO ANTERIOR
+            const equipoCelda = fila.querySelector('[data-field="equipo"]');
+            const valorEquipo = equipoCelda ? equipoCelda.getAttribute('data-valor') : "";
+
+            // 2. Lógica de Búsqueda
+            const coincideBusqueda = nombre.includes(busqueda) || telefono.includes(busqueda);
+            
+            // 3. Lógica de Filtro de Equipo
+            let coincideEquipo = true;
+            if (equipoFiltro === "Libre") {
+                // Ahora comparamos contra el valor puro "Libre"
+                coincideEquipo = (valorEquipo === "Libre");
+            } else if (equipoFiltro !== "") {
+                coincideEquipo = (valorEquipo === equipoFiltro);
+            }
+
+            fila.style.display = (coincideBusqueda && coincideEquipo) ? "" : "none";
+        });
+
+        // --- Mantenemos tu lógica de ordenamiento que ya funcionaba ---
+        const filasVisibles = filas.filter(f => f.style.display !== "none");
+        filasVisibles.sort((a, b) => {
+            if (orden === 'goles') return (parseInt(b.cells[3].innerText) || 0) - (parseInt(a.cells[3].innerText) || 0);
+            if (orden === 'pj') return (parseInt(b.cells[2].innerText) || 0) - (parseInt(a.cells[2].innerText) || 0);
+            if (orden === 'dorsal') {
+                const numA = parseInt(a.querySelector('.bg-blue-600\\/20')?.innerText) || 0;
+                const numB = parseInt(b.querySelector('.bg-blue-600\\/20')?.innerText) || 0;
+                return numA - numB;
+            }
+            return a.querySelector('[data-field="nombre"]').innerText.localeCompare(b.querySelector('[data-field="nombre"]').innerText);
+        }).forEach(f => tablaBody.appendChild(f));
+    }
+        
+
+    // --- FUNCIONES PARA EL MODAL DE PARTIDOS ---
+    function abrirModalCrearPartido() {
+        const modal = document.getElementById('modalCrearPartido');
+        if (modal) {
+            modal.classList.replace('hidden', 'flex');
+            llenarSelectsEquipos();
+        }
+    }
+
+    function cerrarModalCrearPartido() {
+        const modal = document.getElementById('modalCrearPartido');
+        if (modal) {
+            modal.classList.replace('flex', 'hidden');
+            document.getElementById('formCrearPartido').reset();
+        }
+    }
+
+    async function llenarSelectsEquipos() {
+        try {
+            const res = await fetch('/api/equipos');
+            const equipos = await res.json();
+            const selects = [document.getElementById('selectLocal'), document.getElementById('selectVisitante')];
+            
+            selects.forEach(s => {
+                if (!s) return;
+                s.innerHTML = '<option value="">Selecciona un club</option>';
+                for (const id in equipos) {
+                    const opt = document.createElement('option');
+                    opt.value = equipos[id].nombre;
+                    opt.textContent = equipos[id].nombre.toUpperCase();
+                    s.appendChild(opt);
+                }
+            });
+        } catch (e) { console.error("Error llenando selects:", e); }
+    }
+
+    // Usamos addEventListener en lugar de onsubmit directo para mayor estabilidad
+    document.addEventListener('DOMContentLoaded', () => {
+        // Inicializar referencias de modales
+        window.modalJugador = document.getElementById('modalJugador');
+        window.modalEquipo = document.getElementById('modalEquipo');
+        window.modalCrearPartido = document.getElementById('modalCrearPartido');
+        window.modalActualizarMarcador = document.getElementById('modalActualizarMarcador');
+
+        // --- LISTENER CREAR PARTIDO ---
+        const formPartidos = document.getElementById('formCrearPartido');
+        if (formPartidos) {
+            formPartidos.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const data = {
+                    local: document.getElementById('selectLocal').value,
+                    visitante: document.getElementById('selectVisitante').value,
+                    fecha: formPartidos.fecha.value,
+                    hora: formPartidos.hora.value
+                };
+                if (data.local === data.visitante) return alert("❌ No pueden jugar contra el mismo equipo");
+                try {
+                    const res = await fetch('/api/admin/partidos/crear', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                        body: JSON.stringify(data)
+                    });
+                    if (res.ok) { alert("⚽ Partido programado"); cerrarModalCrearPartido(); cargarPartidosCards(); }
+                } catch (e) { alert("Error de conexión"); }
+            });
+        }
+
+
+    // --- LISTENER ACTUALIZAR RESULTADO ---
+    const formActualizar = document.getElementById('formActualizarMarcador');
+        if (formActualizar) {
+            formActualizar.onsubmit = async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('edit_partido_id').value;
+                
+                const checkFinal = document.getElementById('confirmar_final');
+                const esFinal = checkFinal ? checkFinal.checked : false;
+
+                if (esFinal) {
+                    if (!confirm("⚠️ Estás a punto de CERRAR EL ACTA. Una vez guardado, los goles NO podrán editarse más. ¿El marcador es correcto?")) {
+                        return;
+                    }
+                }
+
+                // SOLO mandamos goles y el check de cierre. 
+                // NO mandamos 'estatus' para que la lógica automática del controlador mande.
+                const data = {
+                    goles_local: document.getElementById('goles_local').value,
+                    goles_visitante: document.getElementById('goles_visitante').value,
+                    confirmar_final: esFinal
+                };
+
+                try {
+                    const res = await fetch(`/api/admin/partidos/actualizar/${id}`, {
+                        method: 'PUT',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}' 
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    if (res.ok) {
+                        alert(esFinal ? "🔒 Acta cerrada y resultado bloqueado" : "✅ Marcador actualizado");
+                        cerrarModalMarcador();
+                        cargarPartidosCards(); 
+                    }
+                } catch (e) { alert("Error de conexión"); }
+            };
+        }
+
+        // Carga inicial de datos
+        cargarPartidosCards();
+        cargarGestionEquipos();
+    });
+
+    // --- FUNCIONES GLOBALES ---
+
+    async function cargarPartidosCards() {
+        const contenedor = document.getElementById('contenedorListaPartidos');
+        if (!contenedor) return;
+
+        try {
+            const res = await fetch('/api/partidos');
+            const partidos = await res.json();
+            contenedor.innerHTML = '';
+            
+            for (const id in partidos) {
+                const p = partidos[id];
+                
+                // Colores dinámicos según el estatus real del servidor
+                let statusHTML = '';
+                if(p.resultado_confirmado) {
+                    statusHTML = '<span class="text-white bg-slate-700 px-2 py-0.5 rounded text-[8px] font-black">ACTA CERRADA 🔒</span>';
+                } else if(p.estatus === 'en_curso') {
+                    statusHTML = '<span class="text-green-500 animate-pulse font-black">EN CURSO 🟢</span>';
+                } else if(p.estatus === 'finalizado') {
+                    statusHTML = '<span class="text-amber-500 font-black">POR SUBIR RESULTADO ⚠️</span>';
+                } else {
+                    statusHTML = '<span class="text-slate-500 font-black uppercase">PROGRAMADO</span>';
+                }
+
+                // Solo bloqueamos el botón si el acta está CERRADA
+                const botonGestionar = !p.resultado_confirmado 
+                    ? `<button onclick="abrirActualizarMarcador('${id}')" class="mt-2 w-full text-[10px] bg-blue-600/10 text-blue-500 border border-blue-500/20 px-2 py-1 rounded hover:bg-blue-600 hover:text-white transition uppercase font-black">Gestionar</button>` 
+                    : `<span class="text-[9px] text-slate-500 italic block mt-2">Resultado Inamovible</span>`;
+
+                contenedor.innerHTML += `
+                    <div class="bg-slate-900 border ${p.resultado_confirmado ? 'border-slate-800' : 'border-blue-500/20'} rounded-xl p-4 flex items-center justify-between shadow-lg mb-4">
+                        <div class="flex-1 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <img src="${p.escudo_local}" class="size-7 object-contain">
+                                    <span class="font-bold text-slate-200 text-sm uppercase">${p.equipo_local}</span>
+                                </div>
+                                <span class="text-xl font-black text-white">${p.goles_local}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <img src="${p.escudo_visitante}" class="size-7 object-contain">
+                                    <span class="font-bold text-slate-200 text-sm uppercase">${p.equipo_visitante}</span>
+                                </div>
+                                <span class="text-xl font-black text-white">${p.goles_visitante}</span>
+                            </div>
+                        </div>
+                        <div class="w-px h-10 bg-slate-800 mx-4"></div>
+                        <div class="text-right min-w-[110px]">
+                            <p class="text-[9px] mb-1">${statusHTML}</p>
+                            <p class="text-[10px] text-slate-500 font-bold">${p.fecha_formateada}</p>
+                            ${botonGestionar}
+                        </div>
+                    </div>
+                `;
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    async function abrirActualizarMarcador(id) {
+        try {
+            const res = await fetch('/api/partidos');
+            const partidos = await res.json();
+            const p = partidos[id];
+            const displayStatus = document.getElementById('display_estatus');
+            
+            if(!p) return alert("No se encontró el partido");
+
+            document.getElementById('edit_partido_id').value = id;
+            
+            // Nombres de equipos
+            const lblLocal = document.getElementById('edit_labelLocal');
+            const lblVisit = document.getElementById('edit_labelVisitante');
+            if(lblLocal) lblLocal.innerText = p.equipo_local.toUpperCase();
+            if(lblVisit) lblVisit.innerText = p.equipo_visitante.toUpperCase();
+
+            // Goles
+            document.getElementById('goles_local').value = p.goles_local || 0;
+            document.getElementById('goles_visitante').value = p.goles_visitante || 0;
+
+            if(displayStatus) {
+                let textoEstado = p.estatus.replace('_', ' ').toUpperCase();
+                displayStatus.innerText = textoEstado;
+                
+                if(p.estatus === 'en_curso') {
+                    displayStatus.className = "text-green-500 font-black uppercase text-xs tracking-widest bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20 animate-pulse";
+                } else if(p.estatus === 'finalizado') {
+                    displayStatus.className = "text-amber-500 font-black uppercase text-xs tracking-widest bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20";
+                } else {
+                    displayStatus.className = "text-blue-500 font-black uppercase text-xs tracking-widest bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20";
+                }
+            }
+
+            // Reset checkbox
+            const checkFinal = document.getElementById('confirmar_final');
+            if(checkFinal) checkFinal.checked = false;
+
+            window.modalActualizarMarcador.classList.replace('hidden', 'flex');
+        } catch (e) { console.error("Error abriendo gestor:", e); }
+    }
+
+    function cerrarModalMarcador() { window.modalActualizarMarcador.classList.replace('flex', 'hidden'); }
+
+    // --- FUNCIÓN PARA BORRAR PARTIDO (SEGURIDAD EXTRA) ---
+    async function eliminarPartido() {
+        const id = document.getElementById('edit_partido_id').value;
+        if (!confirm("⚠️ ¿Estás COMPLETAMENTE seguro de borrar este partido? Esta acción es irreversible.")) return;
+        
+        try {
+            const res = await fetch(`/api/admin/partidos/eliminar/${id}`, {
+                method: 'DELETE',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+            });
+            if (res.ok) {
+                alert("🗑️ Partido eliminado");
+                cerrarModalMarcador();
+                cargarPartidosCards();
+            }
+        } catch (e) { alert("Error al eliminar"); }
+    }
+
+    // Funciones de Pestañas y creación (Mantenlas igual)
+    function changeTab(tabName) {
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+        document.querySelectorAll('.tab-btn').forEach(b => {
+            b.classList.remove('text-blue-500', 'border-b-2', 'border-blue-500');
+            b.classList.add('text-slate-500');
+        });
+        const target = document.getElementById('content-' + tabName);
+        if(target) target.classList.remove('hidden');
+        if(window.event && window.event.currentTarget) window.event.currentTarget.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
+        if(tabName === 'partidos') cargarPartidosCards();
+    }
+    
+    function abrirModalCrearPartido() { window.modalCrearPartido.classList.replace('hidden', 'flex'); llenarSelectsEquipos(); }
+    function cerrarModalCrearPartido() { window.modalCrearPartido.classList.replace('flex', 'hidden'); }
+    
+    async function llenarSelectsEquipos() {
+        const res = await fetch('/api/equipos');
+        const equipos = await res.json();
+        const selects = [document.getElementById('selectLocal'), document.getElementById('selectVisitante')];
+        selects.forEach(s => {
+            if (!s) return;
+            s.innerHTML = '<option value="">Selecciona club</option>';
+            for (const id in equipos) {
+                const opt = document.createElement('option');
+                opt.value = equipos[id].nombre;
+                opt.textContent = equipos[id].nombre.toUpperCase();
+                s.appendChild(opt);
+            }
+        });
+    }
+    
 </script>
 </body>
 </html>

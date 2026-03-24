@@ -16,7 +16,7 @@
             <div id="content-jugadores" class="tab-pane">
                 <div class="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="relative">
-                        <span class="absolute inset -y-0 left-0 pl-3 flex items-center text-slate-500">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">
                             <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                         </span>
                         <input type="text" id="busquedaJugador" onkeyup="filtrarTabla()" placeholder="Buscar por nombre o teléfono..." class="w-full bg-slate-900 border border-slate-800 rounded-lg pl-10 pr-4 py-2 text-sm text-white outline-none focus:border-blue-500 transition">
@@ -34,10 +34,9 @@
                         <option value="dorsal">Por Dorsal (#)</option>
                     </select>
                 </div>
-    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-        <table id="tablaPrincipalJugadores" class="w-full text-left">
+
                 <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-                    <table class="w-full text-left">
+                    <table id="tablaPrincipalJugadores" class="w-full text-left">
                         <thead class="bg-slate-800/50 text-slate-400 text-xs uppercase text-center">
                             <tr>
                                 <th class="px-6 py-4 text-left">Jugador</th>
@@ -50,7 +49,7 @@
                         <tbody class="divide-y divide-slate-800 text-sm">
                             @forelse($jugadores as $telefono => $j)
                             <tr class="hover:bg-blue-900/5 transition">
-                                <td class="px-6 py-4 text-center">
+                                <td class="px-6 py-4">
                                     <div class="flex items-center gap-3">
                                         <div class="size-8 bg-blue-600/20 text-blue-500 rounded-full flex items-center justify-center font-bold text-xs border border-blue-500/30">
                                             {{ $j['numero'] ?? '00' }}
@@ -100,10 +99,13 @@
             </div>
 
             <div id="content-partidos" class="tab-pane hidden space-y-4">
-                <div class="p-4 bg-slate-900 border border-slate-800 border-l-4 border-blue-600 rounded-r-xl flex justify-between items-center">
-                    <div class="text-[10px] font-black text-slate-500 uppercase">PROXIMAMENTE</div>
-                    <div class="text-slate-400 text-sm italic">Módulo de partidos en desarrollo...</div>
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-white uppercase tracking-tighter">Partidos de la Jornada</h2>
+                    <button onclick="abrirModalCrearPartido()" class="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-blue-500 shadow-lg shadow-blue-900/20">
+                        + PROGRAMAR PARTIDO
+                    </button>
                 </div>
+                <div id="contenedorListaPartidos"></div>
             </div>
 
             <div id="content-posiciones" class="tab-pane hidden p-10 text-center border-2 border-dashed border-slate-800 rounded-xl text-slate-600">Posiciones...</div>
@@ -125,7 +127,7 @@
 <div id="modalJugador" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center z-[100] p-4">
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
         <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-blue-600/10">
-            <h3 id="tituloModalJugador" class="text-xl font-bold text-white">Nuevo Jugador</h3>
+            <h3 id="tituloModalJugador" class="text-xl font-bold text-white uppercase tracking-tighter">Nuevo Jugador</h3>
             <button onclick="cerrarModal()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
         </div>
         <form id="formRegistroJugador" class="p-6 space-y-4 text-sm">
@@ -145,7 +147,7 @@
                     <input type="number" name="edad" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
                 </div>
                 <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Teléfono (ID Único)</label>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Teléfono</label>
                     <input type="number" name="telefono" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
                 </div>
             </div>
@@ -160,7 +162,7 @@
                 </select>
             </div>
             <div id="mensajeError" class="hidden text-red-500 text-[10px] bg-red-500/10 p-2 rounded border border-red-500/20 text-center uppercase font-bold"></div>
-            <button type="submit" id="btnGuardar" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition">Registrar Jugador :)</button>
+            <button type="submit" id="btnGuardar" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition">GUARDAR JUGADOR</button>
         </form>
     </div>
 </div>
@@ -168,15 +170,15 @@
 <div id="modalEquipo" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center z-[110] p-4">
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
         <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-blue-600/10">
-            <h3 id="tituloModalEquipo" class="text-xl font-bold text-white">Gestión de Equipo</h3>
+            <h3 id="tituloModalEquipo" class="text-xl font-bold text-white uppercase tracking-tighter">Gestión de Equipo</h3>
             <button onclick="cerrarModalEquipo()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
         </div>
         <form id="formRegistroEquipo" method="POST" enctype="multipart/form-data" class="p-6 space-y-4 text-sm">
             @csrf
             <input type="hidden" name="equipo_id_edit" id="equipo_id_edit">
             <div>
-                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Nombre del Equipo</label>
-                <input type="text" name="nombre" id="nombreEquipoInput" required placeholder="Ej. Real Tecámac" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none">
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Nombre</label>
+                <input type="text" name="nombre" id="nombreEquipoInput" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
             </div>
             <div>
                 <label class="block text-[10px] font-bold uppercase text-slate-500 mb-2">Escudo</label>
@@ -192,7 +194,84 @@
                     </label>
                 </div>
             </div>
-            <button type="submit" id="btnGuardarEquipo" class="w-full bg-blue-600 font-bold py-3 rounded-xl shadow-lg transition uppercase text-[10px]">Guardar Equipo</button>
+            <button type="submit" id="btnGuardarEquipo" class="w-full bg-blue-600 font-bold py-3 rounded-xl transition uppercase text-xs">Guardar Equipo</button>
+        </form>
+    </div>
+</div>
+
+<div id="modalCrearPartido" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center z-[120] p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+        <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-blue-600/10">
+            <h3 class="text-xl font-bold text-white uppercase tracking-tighter">Programar Partido</h3>
+            <button onclick="cerrarModalCrearPartido()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
+        </div>
+        <form id="formCrearPartido" class="p-6 space-y-4 text-sm">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Local</label>
+                    <select name="local" id="selectLocal" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500"></select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Visitante</label>
+                    <select name="visitante" id="selectVisitante" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500"></select>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Fecha</label>
+                    <input type="date" name="fecha" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Hora</label>
+                    <input type="time" name="hora" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                </div>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition uppercase text-xs">Crear Encuentro ⚽</button>
+        </form>
+    </div>
+</div>
+
+<div id="modalActualizarMarcador" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center z-[130] p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+        <div class="p-6 border-b border-slate-800 bg-blue-600/10 flex justify-between items-center">
+            <h3 class="text-lg font-bold text-white uppercase tracking-tighter">Gestionar Partido</h3>
+            <button onclick="cerrarModalMarcador()" class="text-slate-500 hover:text-white">&times;</button>
+        </div>
+        <form id="formActualizarMarcador" class="p-6 space-y-6">
+            <input type="hidden" id="edit_partido_id">
+            
+            <div class="text-center">
+                <span class="text-[10px] text-slate-500 font-bold uppercase block mb-1">Estado del Sistema</span>
+                <span id="display_estatus" class="text-blue-500 font-black uppercase text-xs tracking-widest bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">Cargando...</span>
+            </div>
+
+            <div class="flex items-center justify-around gap-4">
+                <div class="text-center">
+                    <label id="edit_labelLocal" class="block text-[10px] font-bold text-slate-500 uppercase mb-2">LOCAL</label>
+                    <input type="number" id="goles_local" required class="size-16 bg-slate-800 border border-slate-700 rounded-xl text-center text-2xl font-black text-white outline-none focus:border-blue-500">
+                </div>
+                <span class="text-slate-700 font-black text-2xl mt-6">VS</span>
+                <div class="text-center">
+                    <label id="edit_labelVisitante" class="block text-[10px] font-bold text-slate-500 uppercase mb-2">VISITANTE</label>
+                    <input type="number" id="goles_visitante" required class="size-16 bg-slate-800 border border-slate-700 rounded-xl text-center text-2xl font-black text-white outline-none focus:border-blue-500">
+                </div>
+            </div>
+
+            <div class="bg-blue-900/20 p-3 rounded-lg border border-blue-500/30">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" id="confirmar_final" class="size-4 accent-blue-600">
+                    <span class="text-[10px] text-blue-300 font-bold uppercase leading-tight">
+                        Confirmar resultado final y cerrar acta (Bloquea edición)
+                    </span>
+                </label>
+            </div>
+
+            <div class="space-y-3 pt-4 border-t border-slate-800">
+                <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-xs hover:bg-blue-500 transition shadow-lg uppercase tracking-widest">Guardar Cambios</button>
+                <button type="button" onclick="eliminarPartido()" class="w-full text-[10px] text-red-500 font-bold py-2 hover:bg-red-500/10 rounded-lg transition uppercase tracking-widest">
+                    🗑️ Eliminar Partido
+                </button>
+            </div>
         </form>
     </div>
 </div>
@@ -208,6 +287,7 @@
             document.querySelectorAll('input[name="escudo_url"]').forEach(r => r.checked = false);
         }
     }
+
     function mostrarPreview(url, nombre) {
         const contenedor = document.getElementById('previewContenedor');
         const img = document.getElementById('imgPreview');

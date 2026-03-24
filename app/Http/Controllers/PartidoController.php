@@ -14,6 +14,80 @@ class PartidoController extends Controller
         $this->database = app('firebase')->createDatabase();
     }
 
+   public function listar(Request $request)
+    {
+        try {
+            $partidos = $this->database->getReference('partidos')->getValue() ?? [];
+            $equipos = $this->database->getReference('equipos')->getValue() ?? [];
+            
+            // FORZAMOS LA HORA DE MÉXICO PARA COMPARAR CORRECTAMENTE
+            $ahora = \Carbon\Carbon::now('America/Mexico_City'); 
+
+            $listadoFormateado = [];
+            $escudoDefault = 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png';
+
+            foreach ($partidos as $id => $p) {
+                $idLocal = str_replace(['.', '#', '$', '[', ']', ' '], '-', $p['equipo_local'] ?? '');
+                $idVisitante = str_replace(['.', '#', '$', '[', ']', ' '], '-', $p['equipo_visitante'] ?? '');
+
+                // Convertimos la fecha y hora del partido a un objeto Carbon (Hora México)
+                $fechaPartido = \Carbon\Carbon::parse($p['fecha'] . ' ' . ($p['hora'] ?? '00:00'), 'America/Mexico_City');
+                
+                // Definimos el fin del partido (Hora inicio + 100 minutos)
+                $finPartido = $fechaPartido->copy()->addMinutes(100);
+
+                // LÓGICA DE ESTADOS AUTOMÁTICOS
+                if (!($p['resultado_confirmado'] ?? false)) {
+                    if ($ahora->lt($fechaPartido)) {
+                        // Si la hora actual es MENOR a la del partido
+                        $p['estatus'] = 'programado';
+                    } elseif ($ahora->between($fechaPartido, $finPartido)) {
+                        // Si estamos entre el inicio y el fin
+                        $p['estatus'] = 'en_curso';
+                    } else {
+                        // Si ya pasaron los 100 minutos
+                        $p['estatus'] = 'finalizado';
+                    }
+                } else {
+                    $p['estatus'] = 'confirmado';
+                }
+
+                $p['escudo_local'] = $equipos[$idLocal]['escudo'] ?? $escudoDefault;
+                $p['escudo_visitante'] = $equipos[$idVisitante]['escudo'] ?? $escudoDefault;
+                $p['fecha_formateada'] = $fechaPartido->format('d/m') . ' - ' . ($p['hora'] ?? '00:00');
+                
+                $listadoFormateado[$id] = $p;
+            }
+            return response()->json($listadoFormateado);
+        } catch (\Exception $e) { 
+            return response()->json(['error' => $e->getMessage()], 500); 
+        }
+    }
+
+    public function actualizarMarcador(Request $request, $id)
+        {
+            $referencia = $this->database->getReference('partidos/' . $id);
+            $partido = $referencia->getValue();
+
+            // Regla de Oro: Si ya está confirmado, nadie toca nada
+            if ($partido['resultado_confirmado'] ?? false) {
+                return response()->json(['error' => 'El acta de este partido ya ha sido cerrada.'], 403);
+            }
+
+            $updateData = [
+                'goles_local' => (int)$request->goles_local,
+                'goles_visitante' => (int)$request->goles_visitante,
+            ];
+
+            // Si el usuario marcó la casilla de confirmar resultado final
+            if ($request->confirmar_final) {
+                $updateData['resultado_confirmado'] = true;
+            }
+
+            $referencia->update($updateData);
+            return response()->json(['message' => 'Actualizado correctamente']);
+        }
+
     // Regla #4: Solo Admin debería crear (por ahora lo metemos al grupo protegido)
     public function crear(Request $request)
     {
@@ -24,36 +98,17 @@ class PartidoController extends Controller
             'goles_local' => 0,
             'goles_visitante' => 0,
             'fecha' => $request->fecha,
+            'hora' => $request->hora,
             'estatus' => 'programado'
         ]);
 
         return response()->json(['message' => 'Partido creado', 'id' => $id_partido]);
     }
 
-    // Regla #3 y #5: El Árbitro actualiza, pero validamos el estatus
-    public function actualizarMarcador(Request $request, $id)
+
+    public function eliminar($id)
     {
-        $referencia = $this->database->getReference('partidos/' . $id);
-        $partido = $referencia->getSnapshot()->getValue();
-
-        if (!$partido) {
-            return response()->json(['error' => 'Partido no encontrado'], 404);
-        }
-
-        // --- VALIDACIÓN DE SEGURIDAD (Regla #5) ---
-        if ($partido['estatus'] === 'finalizado') {
-            return response()->json([
-                'error' => 'Acción denegada. El partido ya ha finalizado y no puede ser modificado.'
-            ], 403);
-        }
-
-        // Si el partido está programado o en curso, permitimos actualizar
-        $referencia->update([
-            'goles_local' => $request->goles_local,
-            'goles_visitante' => $request->goles_visitante,
-            'estatus' => $request->estatus // El árbitro decide cuándo pasar a 'finalizado'
-        ]);
-
-        return response()->json(['message' => 'Marcador actualizado correctamente']);
+        $this->database->getReference('partidos/' . $id)->remove();
+        return response()->json(['message' => 'Partido borrado']);
     }
 }

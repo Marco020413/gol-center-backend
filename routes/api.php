@@ -13,6 +13,13 @@ Route::put('/admin/jugadores/actualizar/{telefono}', [App\Http\Controllers\Jugad
 Route::get('/equipos/escudos', [App\Http\Controllers\EquipoController::class, 'listarEscudos']);
 Route::delete('/admin/equipos/eliminar/{id}', [App\Http\Controllers\EquipoController::class, 'eliminar']);
 
+// Rutas para Partidos
+Route::get('/partidos', [App\Http\Controllers\PartidoController::class, 'listar']);
+Route::post('/admin/partidos/crear', [App\Http\Controllers\PartidoController::class, 'crear']);
+Route::put('/admin/partidos/actualizar/{id}', [App\Http\Controllers\PartidoController::class, 'actualizarMarcador']);
+Route::delete('/admin/partidos/eliminar/{id}', [App\Http\Controllers\PartidoController::class, 'eliminar']);
+
+
 // Rutas de Administración
 Route::prefix('admin')->group(function () {
     Route::post('/jugadores/registrar', [JugadorController::class, 'registrar']);
