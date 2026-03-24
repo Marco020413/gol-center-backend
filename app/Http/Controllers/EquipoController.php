@@ -15,37 +15,26 @@ class EquipoController extends Controller
 
     public function registrar(Request $request)
     {
-        // 1. Prioridad: Si hay un archivo, usamos ese. Si no, usamos el radio seleccionado.
         $escudoUrl = $request->escudo_url; 
 
         if ($request->hasFile('escudo_file')) {
             $file = $request->file('escudo_file');
-            
-            // Validar que sea imagen
-            if (strpos($file->getMimeType(), 'image') !== false) {
-                $name = time() . '_' . $file->getClientOriginalName();
-                
-                // Asegurar que la carpeta exista
-                $path = public_path('img/escudos');
-                if (!file_exists($path)) {
-                    mkdir($path, 0777, true);
-                }
-
-                $file->move($path, $name);
-                $escudoUrl = '/img/escudos/' . $name;
-            }
+            $name = time() . '_' . $file->getClientOriginalName();
+            $path = public_path('img/escudos');
+            if (!file_exists($path)) { mkdir($path, 0777, true); }
+            $file->move($path, $name);
+            $escudoUrl = '/img/escudos/' . $name;
         }
 
-        // 2. Guardar en Firebase
-        // Usamos un ID más limpio que base64 para evitar problemas de rutas
+        // Usamos el nombre como ID (limpiando caracteres especiales)
         $equipoId = str_replace(['.', '#', '$', '[', ']'], '-', $request->nombre);
         
         $this->database->getReference('equipos/' . $equipoId)->set([
             'nombre' => $request->nombre,
-            'escudo' => $escudoUrl
+            'escudo' => $escudoUrl ?? 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png'
         ]);
 
-        return response()->json(['message' => 'Equipo registrado correctamente', 'url' => $escudoUrl]);
+        return response()->json(['message' => 'Equipo guardado']);
     }
 
     public function listar()
@@ -78,4 +67,11 @@ class EquipoController extends Controller
         
         return response()->json($escudos);
     }
+
+    public function eliminar($id)
+    {
+        $this->database->getReference('equipos/' . $id)->remove();
+        return response()->json(['message' => 'Equipo eliminado']);
+    }
+
 }

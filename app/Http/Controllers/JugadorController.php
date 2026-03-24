@@ -14,13 +14,12 @@ class JugadorController extends Controller
         $this->database = app('firebase')->createDatabase();
     }
 
-    public function registrar(Request $request)
-    {
-        // 1. Validamos que lleguen los datos del formulario
+    public function registrar(Request $request) {
         $validator = Validator::make($request->all(), [
             'nombre'   => 'required|string',
             'telefono' => 'required|numeric',
             'equipo'   => 'required|string',
+            'numero'   => 'required|numeric', 
             'edad'     => 'required|numeric',
             'direccion'=> 'required|string',
         ]);
@@ -30,12 +29,23 @@ class JugadorController extends Controller
         }
 
         try {
-            // 2. Definimos el path manualmente (jugadores / numero de telefono)
-            // Esto es lo que faltaba y hacía que fallara el registro
-            $path = 'jugadores/' . $request->telefono;
+            // --- VALIDACIÓN DE DORSAL ÚNICO POR EQUIPO ---
+            $jugadores = $this->database->getReference('jugadores')->getValue() ?? [];
+            
+            foreach ($jugadores as $j) {
+                if (isset($j['equipo']) && $j['equipo'] === $request->equipo && 
+                    isset($j['numero']) && (int)$j['numero'] === (int)$request->numero) {
+                    return response()->json([
+                        'error' => "El número {$request->numero} ya está ocupado en el equipo {$request->equipo}."
+                    ], 422);
+                }
+            }
+            // ---------------------------------------------
 
+            $path = 'jugadores/' . $request->telefono;
             $this->database->getReference($path)->set([
                 'nombre'           => $request->nombre,
+                'numero'           => $request->numero,
                 'edad'             => $request->edad,
                 'direccion'        => $request->direccion,
                 'equipo'           => $request->equipo,
@@ -50,35 +60,24 @@ class JugadorController extends Controller
         }
     }
 
-    public function listarTodos()
-    {
-        // NO TOCAMOS ESTO: Se queda como tú lo tenías para que tu tabla funcione
-        $jugadores = $this->database->getReference('jugadores')->getValue();
-        return response()->json($jugadores);
-    }
-
-    public function eliminar($telefono)
-    {
-        $this->database->getReference('jugadores/' . $telefono)->remove();
-        return response()->json(['message' => 'Jugador eliminado correctamente']);
-    }
-
     public function actualizar(Request $request, $telefono)
     {
-        $validator = Validator::make($request->all(), [
-            'nombre'    => 'required|string',
-            'equipo'    => 'required|string',
-            'edad'      => 'required|numeric',
-            'direccion' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['error' => 'Datos inválidos'], 400);
-        }
-
         try {
+            // Validar duplicados al editar (ignorando al jugador actual)
+            $jugadores = $this->database->getReference('jugadores')->getValue() ?? [];
+            foreach ($jugadores as $id => $j) {
+                if ($id != $telefono && 
+                    isset($j['equipo']) && $j['equipo'] === $request->equipo && 
+                    isset($j['numero']) && (int)$j['numero'] === (int)$request->numero) {
+                    return response()->json([
+                        'error' => "El número {$request->numero} ya lo tiene otro jugador en este equipo."
+                    ], 422);
+                }
+            }
+
             $this->database->getReference('jugadores/' . $telefono)->update([
                 'nombre'    => $request->nombre,
+                'numero'    => $request->numero,
                 'equipo'    => $request->equipo,
                 'edad'      => $request->edad,
                 'direccion' => $request->direccion
@@ -89,4 +88,15 @@ class JugadorController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+
+    public function listarTodos() {
+        $jugadores = $this->database->getReference('jugadores')->getValue();
+        return response()->json($jugadores);
+    }
+
+    public function eliminar($telefono) {
+        $this->database->getReference('jugadores/' . $telefono)->remove();
+        return response()->json(['message' => 'Jugador eliminado correctamente']);
+    }
+    
 }

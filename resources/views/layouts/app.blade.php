@@ -55,15 +55,25 @@
 
         // UNIFICADO: Procesa tanto Registro como Edición
         if(window.formJugador) {
+            // 1. Modifica el onsubmit para incluir el número
             window.formJugador.onsubmit = async (e) => {
                 e.preventDefault();
                 const btn = document.getElementById('btnGuardar');
-                btn.innerText = 'Procesando...'; btn.disabled = true;
+                const msgError = document.getElementById('mensajeError'); // Usamos tu div de error
+                
+                btn.innerText = 'Procesando...'; 
+                btn.disabled = true;
+                if(msgError) msgError.classList.add('hidden');
 
-                const formData = new FormData(window.formJugador);
-                const data = Object.fromEntries(formData.entries());
+                const data = {
+                    nombre: window.formJugador.nombre.value,
+                    edad: window.formJugador.edad.value,
+                    direccion: window.formJugador.direccion.value,
+                    telefono: editMode ? editTelefono : window.formJugador.telefono.value,
+                    equipo: window.formJugador.equipo.value,
+                    numero: window.formJugador.numero.value
+                };
 
-                // Si estamos editando, usamos el ID que guardamos al dar clic en el lápiz
                 const url = editMode ? `/api/admin/jugadores/actualizar/${editTelefono}` : '/api/admin/jugadores/registrar';
                 const method = editMode ? 'PUT' : 'POST';
 
@@ -81,18 +91,47 @@
                     const result = await response.json();
 
                     if (response.ok) { 
-                        alert(editMode ? '✅ ¡Actualizado!' : '✅ ¡Registrado!'); 
+                        alert(editMode ? '✅ ¡Actualizado correctamente!' : '✅ ¡Jugador registrado!'); 
                         location.reload(); 
                     } else {
-                        alert("Error: " + (result.error || "No se pudo completar"));
-                        btn.innerText = 'Registrar Jugador :)'; btn.disabled = false;
+                        // AQUÍ CAPTURAMOS EL AVISO DE DORSAL OCUPADO
+                        const mensaje = result.error || "Error al procesar la solicitud";
+                        alert("⚠️ " + mensaje);
+                        
+                        // También lo mostramos en el cuadrito rojo del modal si existe
+                        if(msgError) {
+                            msgError.innerText = mensaje;
+                            msgError.classList.remove('hidden');
+                        }
+                        
+                        btn.innerText = editMode ? 'Actualizar Datos' : 'Registrar Jugador :)';
+                        btn.disabled = false;
                     }
                 } catch (error) { 
                     console.error('Error:', error); 
-                    alert('❌ Error de conexión');
+                    alert('❌ Error crítico de conexión');
                     btn.disabled = false;
                 }
             };
+
+            // 2. Modifica la función editar para recibir el dorsal (#)
+            async function editarJugador(telefono, nombre, equipo, edad, direccion, numero) {
+                editMode = true;
+                editTelefono = telefono;
+                
+                document.querySelector('#modalJugador h3').innerText = 'Editar Jugador';
+                const f = window.formJugador;
+                f.nombre.value = nombre;
+                f.telefono.value = telefono;
+                f.telefono.disabled = true; 
+                f.edad.value = edad;
+                f.direccion.value = direccion;
+                f.numero.value = numero || ''; // <--- CARGA EL DORSAL EN EL MODAL
+
+                await cargarEquipos(); 
+                f.equipo.value = equipo; 
+                abrirModal();
+            }
         }
 
         // Registro de Equipos
@@ -147,20 +186,23 @@
     function abrirModalEquipo() { window.modalEquipo.classList.replace('hidden', 'flex'); }
     function cerrarModalEquipo() { window.modalEquipo.classList.replace('flex', 'hidden'); }
 
-    async function editarJugador(telefono, nombre, equipo, edad, direccion) {
+    async function editarJugador(telefono, nombre, equipo, edad, direccion, numero) {
         editMode = true;
         editTelefono = telefono;
         
         document.querySelector('#modalJugador h3').innerText = 'Editar Jugador';
         document.getElementById('btnGuardar').innerText = 'Actualizar Datos';
         
-        const f = window.formJugador;
+        const f = window.formRegistroJugador; // Asegúrate que el ID coincida
         f.nombre.value = nombre;
         f.telefono.value = telefono;
         f.telefono.disabled = true; 
-        f.equipo.value = equipo;
         f.edad.value = edad;
         f.direccion.value = direccion;
+        f.numero.value = numero; 
+
+        await cargarEquipos(); 
+        f.equipo.value = equipo; 
 
         abrirModal();
     }
@@ -257,6 +299,69 @@
         img.src = url;
         txt.innerText = nombre;
     }
+    
+        // Carga la lista de equipos con botones de eliminar
+    async function cargarGestionEquipos() {
+        const contenedor = document.getElementById('listaEquiposCards');
+        if(!contenedor) return;
+        try {
+            const response = await fetch('/api/equipos');
+            const equipos = await response.json();
+            contenedor.innerHTML = '';
+            for (const id in equipos) {
+                const eq = equipos[id];
+                contenedor.innerHTML += `
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between shadow-lg">
+                        <div class="flex items-center gap-4">
+                            <img src="${eq.escudo}" class="size-12 object-contain bg-white/5 rounded-lg border border-slate-700">
+                            <p class="font-bold text-white text-sm uppercase">${eq.nombre}</p>
+                        </div>
+                        <button onclick="eliminarEquipo('${id}')" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                    </div>
+                `;
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    async function eliminarEquipo(id) {
+        if(!confirm('⚠️ ¿Estás seguro de eliminar este equipo?')) return;
+        try {
+            const response = await fetch(`/api/admin/equipos/eliminar/${id}`, {
+                method: 'DELETE',
+                headers: { 
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                }
+            });
+
+            if(response.ok) { 
+                alert('🗑️ Equipo eliminado'); 
+                location.reload(); 
+            } else {
+                alert('❌ No se pudo eliminar (Error: ' + response.status + ')');
+            }
+        } catch (e) { 
+            alert('Error de conexión'); 
+        }
+    }
+
+    // Modifica tu función changeTab para cargar los equipos al entrar al tab
+    function changeTab(tabName) {
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+        document.querySelectorAll('.tab-btn').forEach(b => {
+            b.classList.remove('text-blue-500', 'border-b-2', 'border-blue-500');
+            b.classList.add('text-slate-500');
+        });
+        const target = document.getElementById('content-' + tabName);
+        if(target) target.classList.remove('hidden');
+        if(event.currentTarget) event.currentTarget.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
+
+        // SI ENTRA A GESTIÓN DE EQUIPOS, CARGAMOS LA LISTA
+        if(tabName === 'equipos_gest') cargarGestionEquipos();
+    }
+    
 </script>
 </body>
 </html>
