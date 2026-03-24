@@ -184,7 +184,10 @@
     }
 
     function abrirModalEquipo() { window.modalEquipo.classList.replace('hidden', 'flex'); }
-    function cerrarModalEquipo() { window.modalEquipo.classList.replace('flex', 'hidden'); }
+    function cerrarModalEquipo() { 
+        window.modalEquipo.classList.replace('flex', 'hidden'); 
+        editMode = false; 
+    }
 
     async function editarJugador(telefono, nombre, equipo, edad, direccion, numero) {
         editMode = true;
@@ -300,7 +303,64 @@
         txt.innerText = nombre;
     }
     
-        // Carga la lista de equipos con botones de eliminar
+    // CORRECCIÓN: Función para abrir el modal en modo EDICIÓN
+    async function editarEquipo(id, nombre, escudo) {
+        editMode = true;
+        document.getElementById('tituloModalEquipo').innerText = 'Editar Equipo';
+        document.getElementById('equipo_id_edit').value = id; // El ID oculto que ya tienes en el HTML
+        document.getElementById('nombreEquipoInput').value = nombre;
+        
+        // Mostramos el escudo actual
+        mostrarPreview(escudo, nombre);
+        
+        abrirModalEquipo();
+    }
+
+    async function registrarNuevoEquipo() {
+        const form = document.getElementById('formRegistroEquipo');
+        const btn = document.getElementById('btnGuardarEquipo');
+        
+        btn.innerText = 'Procesando...';
+        btn.disabled = true;
+
+        const data = new FormData(form);
+
+        try {
+            const response = await fetch('/api/admin/equipos/registrar', {
+                method: 'POST',
+                body: data,
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                }
+            });
+
+            if (response.ok) {
+                alert('✅ Equipo guardado con éxito');
+                location.reload();
+            } else {
+                alert('❌ Error al guardar');
+                btn.innerText = 'Guardar Equipo';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            alert('❌ Error de conexión');
+            btn.disabled = false;
+        }
+    }
+
+    // Limpiar el modal al abrir para "Nuevo Equipo"
+        function abrirModalEquipo() { 
+            if(!editMode) {
+                document.getElementById('formRegistroEquipo').reset();
+                document.getElementById('equipo_id_edit').value = '';
+                document.getElementById('tituloModalEquipo').innerText = 'Nuevo Equipo';
+                document.getElementById('previewContenedor').classList.add('hidden');
+            }
+            window.modalEquipo.classList.replace('hidden', 'flex'); 
+            cargarGaleriaEscudos(); 
+        }
+
+    // 1. CARGAR LISTA (Actualizado para que el botón de editar funcione con tu HTML)
     async function cargarGestionEquipos() {
         const contenedor = document.getElementById('listaEquiposCards');
         if(!contenedor) return;
@@ -316,36 +376,54 @@
                             <img src="${eq.escudo}" class="size-12 object-contain bg-white/5 rounded-lg border border-slate-700">
                             <p class="font-bold text-white text-sm uppercase">${eq.nombre}</p>
                         </div>
-                        <button onclick="eliminarEquipo('${id}')" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        </button>
+                        <div class="flex gap-2">
+                            <button onclick="editarEquipo('${id}', '${eq.nombre}', '${eq.escudo}')" class="text-blue-500 hover:bg-blue-500/10 p-2 rounded-lg transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                            <button onclick="eliminarEquipoExhaustivo('${id}', '${eq.nombre}')" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                        </div>
                     </div>
                 `;
             }
         } catch (e) { console.error(e); }
     }
 
-    async function eliminarEquipo(id) {
-        if(!confirm('⚠️ ¿Estás seguro de eliminar este equipo?')) return;
-        try {
-            const response = await fetch(`/api/admin/equipos/eliminar/${id}`, {
-                method: 'DELETE',
-                headers: { 
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json'
-                }
-            });
+    // 2. EDITAR EQUIPO (Corregido el error de innerText)
+    async function editarEquipo(id, nombre, escudo) {
+        editMode = true;
+        const titulo = document.getElementById('tituloModalEquipo');
+        if(titulo) titulo.innerText = 'Editar Equipo';
+        
+        document.getElementById('equipo_id_edit').value = id;
+        document.getElementById('nombreEquipoInput').value = nombre;
+        
+        // Mostramos el escudo actual en la vista previa
+        mostrarPreview(escudo, nombre);
+        
+        window.modalEquipo.classList.replace('hidden', 'flex');
+        cargarGaleriaEscudos();
+    }
 
-            if(response.ok) { 
-                alert('🗑️ Equipo eliminado'); 
-                location.reload(); 
-            } else {
-                alert('❌ No se pudo eliminar (Error: ' + response.status + ')');
-            }
-        } catch (e) { 
-            alert('Error de conexión'); 
+    // 3. ELIMINAR SEGURO (Mantenemos tu versión exhaustiva)
+    async function eliminarEquipoExhaustivo(id, nombre) {
+        if(!confirm(`⚠️ ¿Seguro que quieres borrar a "${nombre}"?`)) return;
+        const validacion = prompt(`Para confirmar, escribe el nombre del equipo: ${nombre}`);
+        
+        if (validacion === nombre) {
+            try {
+                const response = await fetch(`/api/admin/equipos/eliminar/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+                });
+                if(response.ok) { alert('🗑️ Equipo eliminado'); location.reload(); }
+            } catch (e) { alert('Error de conexión'); }
+        } else {
+            alert('❌ Nombre incorrecto.');
         }
     }
+
 
     // Modifica tu función changeTab para cargar los equipos al entrar al tab
     function changeTab(tabName) {

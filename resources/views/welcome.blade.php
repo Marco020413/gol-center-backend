@@ -136,7 +136,7 @@
 <div id="modalEquipo" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center z-[110] p-4">
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
         <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-blue-600/10">
-            <h3 class="text-xl font-bold text-white">Gestión de Equipo</h3>
+            <h3 id="tituloModalEquipo" class="text-xl font-bold text-white">Gestión de Equipo</h3>
             <button onclick="cerrarModalEquipo()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
         </div>
         <form id="formRegistroEquipo" method="POST" enctype="multipart/form-data" class="p-6 space-y-4 text-sm">

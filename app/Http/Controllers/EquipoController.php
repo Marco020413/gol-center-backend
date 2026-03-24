@@ -15,6 +15,9 @@ class EquipoController extends Controller
 
     public function registrar(Request $request)
     {
+        // 1. Definimos el ID: Si es edición usamos el que viene, si no, generamos uno nuevo.
+        $equipoId = $request->equipo_id_edit ?? str_replace(['.', '#', '$', '[', ']'], '-', $request->nombre);
+        
         $escudoUrl = $request->escudo_url; 
 
         if ($request->hasFile('escudo_file')) {
@@ -26,10 +29,7 @@ class EquipoController extends Controller
             $escudoUrl = '/img/escudos/' . $name;
         }
 
-        // Usamos el nombre como ID (limpiando caracteres especiales)
-        $equipoId = str_replace(['.', '#', '$', '[', ']'], '-', $request->nombre);
-        
-        $this->database->getReference('equipos/' . $equipoId)->set([
+        $this->database->getReference('equipos/' . $equipoId)->update([
             'nombre' => $request->nombre,
             'escudo' => $escudoUrl ?? 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png'
         ]);
@@ -74,4 +74,34 @@ class EquipoController extends Controller
         return response()->json(['message' => 'Equipo eliminado']);
     }
 
+    public function actualizar(Request $request, $telefono)
+    {
+        try {
+            $jugadorRef = $this->database->getReference('jugadores/' . $telefono);
+            $datosActuales = $jugadorRef->getValue();
+
+            // VALIDACIÓN: Mínimo 5 partidos para cambiar de equipo
+            if (isset($request->equipo) && $datosActuales['equipo'] !== $request->equipo) {
+                $pj = (int)($datosActuales['partidos_jugados'] ?? 0);
+                if ($pj < 5) {
+                    return response()->json([
+                        'error' => "El jugador solo tiene {$pj} partidos jugados. Necesita mínimo 5 para ser transferido."
+                    ], 422);
+                }
+            }
+
+            // Proceder con la actualización normal
+            $jugadorRef->update([
+                'nombre'    => $request->nombre,
+                'numero'    => $request->numero,
+                'equipo'    => $request->equipo,
+                'edad'      => $request->edad,
+                'direccion' => $request->direccion
+            ]);
+
+            return response()->json(['message' => '¡Jugador actualizado!']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }
