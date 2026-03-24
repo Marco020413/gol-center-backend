@@ -39,13 +39,14 @@
     </main>
 
     <footer class="text-center py-10 text-slate-600 text-xs border-t border-slate-900 mt-10">
-        &copy; 2026 Gol Center | Ciberseguridad & Desarrollo UT Tecámac
+        &copy; 2026 Gol Center | Hilario
     </footer>
 
     <script>
     // Variables globales para el estado
     let editMode = false;
     let editTelefono = null;
+    let cachePartidos = [];
 
     document.addEventListener('DOMContentLoaded', () => {
         window.modalJugador = document.getElementById('modalJugador');
@@ -455,10 +456,18 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        // Definición de variables globales de modales
         window.modalJugador = document.getElementById('modalJugador');
         window.modalEquipo = document.getElementById('modalEquipo');
-        window.modalCrearPartido = document.getElementById('modalCrearPartido');
+        window.abrirModalCrearPartido = function() {
+            const modal = document.getElementById('modalCrearPartido');
+            if (modal) {
+                modal.classList.replace('hidden', 'flex');
+                llenarSelectsEquipos(); 
+                if (typeof llenarSelectsCampos === 'function') {
+                    llenarSelectsCampos(); 
+                }
+            }
+        };
 
         // CARGA INICIAL: Traemos los partidos de una vez para que estén listos
         cargarPartidosCards();
@@ -514,12 +523,12 @@
     }
         
 
-    // --- FUNCIONES PARA EL MODAL DE PARTIDOS ---
-    function abrirModalCrearPartido() {
+   function abrirModalCrearPartido() {
         const modal = document.getElementById('modalCrearPartido');
         if (modal) {
             modal.classList.replace('hidden', 'flex');
-            llenarSelectsEquipos();
+            llenarSelectsEquipos(); 
+            llenarSelectsCampos();
         }
     }
 
@@ -551,55 +560,81 @@
     }
 
     // Usamos addEventListener en lugar de onsubmit directo para mayor estabilidad
+
     document.addEventListener('DOMContentLoaded', () => {
-        // Inicializar referencias de modales
+        // 1. Inicializar referencias de modales
         window.modalJugador = document.getElementById('modalJugador');
         window.modalEquipo = document.getElementById('modalEquipo');
         window.modalCrearPartido = document.getElementById('modalCrearPartido');
         window.modalActualizarMarcador = document.getElementById('modalActualizarMarcador');
 
-        // --- LISTENER CREAR PARTIDO ---
+        // 2. ACTIVAR SENSORES DE AGENDA 
+        // Escuchamos cambios en Campo, Fecha y Hora para actualizar la tabla visual
+        const selectCampos = document.getElementById('selectCampos');
+        const inputFecha = document.querySelector('#formCrearPartido input[name="fecha"]');
+        const inputHora = document.querySelector('#formCrearPartido input[name="hora"]');
+
+        if(selectCampos) selectCampos.addEventListener('change', window.verificarConflictosInteligentes);
+        if(inputFecha) inputFecha.addEventListener('change', window.verificarConflictosInteligentes);
+        if(inputHora) inputHora.addEventListener('change', window.verificarConflictosInteligentes);
+
+        // 3. --- LISTENER CREAR PARTIDO (VERSION INTELIGENTE) ---
         const formPartidos = document.getElementById('formCrearPartido');
         if (formPartidos) {
             formPartidos.addEventListener('submit', async (e) => {
                 e.preventDefault();
+                
                 const data = {
                     local: document.getElementById('selectLocal').value,
                     visitante: document.getElementById('selectVisitante').value,
+                    campo_id: document.getElementById('selectCampos').value,
                     fecha: formPartidos.fecha.value,
                     hora: formPartidos.hora.value
                 };
+
                 if (data.local === data.visitante) return alert("❌ No pueden jugar contra el mismo equipo");
+                
                 try {
                     const res = await fetch('/api/admin/partidos/crear', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}' 
+                        },
                         body: JSON.stringify(data)
                     });
-                    if (res.ok) { alert("⚽ Partido programado"); cerrarModalCrearPartido(); cargarPartidosCards(); }
-                } catch (e) { alert("Error de conexión"); }
+                    
+                    const result = await res.json(); // Obtenemos la respuesta del controlador
+
+                    if (res.ok) { 
+                        alert("⚽ " + (result.message || "Partido programado")); 
+                        cerrarModalCrearPartido(); 
+                        cargarPartidosCards(); 
+                        // Escondemos la agenda para la próxima vez
+                        document.getElementById('agendaCanchaContenedor').classList.add('hidden');
+                    } else {
+                        // AQUÍ SE MUESTRA EL ERROR DEL CONTROLADOR (Cancha ocupada, etc)
+                        alert("🚫 NO SE PUDO CREAR:\n" + (result.error || "Error desconocido"));
+                    }
+                } catch (e) { 
+                    alert("Error de conexión con el servidor"); 
+                }
             });
         }
 
-
-    // --- LISTENER ACTUALIZAR RESULTADO ---
-    const formActualizar = document.getElementById('formActualizarMarcador');
+        // 4. --- LISTENER ACTUALIZAR RESULTADO ---
+        const formActualizar = document.getElementById('formActualizarMarcador');
         if (formActualizar) {
             formActualizar.onsubmit = async (e) => {
                 e.preventDefault();
                 const id = document.getElementById('edit_partido_id').value;
-                
                 const checkFinal = document.getElementById('confirmar_final');
                 const esFinal = checkFinal ? checkFinal.checked : false;
 
                 if (esFinal) {
-                    if (!confirm("⚠️ Estás a punto de CERRAR EL ACTA. Una vez guardado, los goles NO podrán editarse más. ¿El marcador es correcto?")) {
-                        return;
-                    }
+                    if (!confirm("⚠️ Al confirmar como FINALIZADO, el acta se cerrará y no podrás editar los goles después. ¿Proceder?")) return;
                 }
 
-                // SOLO mandamos goles y el check de cierre. 
-                // NO mandamos 'estatus' para que la lógica automática del controlador mande.
                 const data = {
                     goles_local: document.getElementById('goles_local').value,
                     goles_visitante: document.getElementById('goles_visitante').value,
@@ -617,15 +652,18 @@
                     });
 
                     if (res.ok) {
-                        alert(esFinal ? "🔒 Acta cerrada y resultado bloqueado" : "✅ Marcador actualizado");
+                        alert(esFinal ? "🔒 Acta cerrada correctamente" : "✅ Marcador actualizado");
                         cerrarModalMarcador();
                         cargarPartidosCards(); 
+                    } else {
+                        const err = await res.json();
+                        alert("❌ " + (err.error || "Error al actualizar"));
                     }
                 } catch (e) { alert("Error de conexión"); }
             };
         }
 
-        // Carga inicial de datos
+        // 5. Carga inicial de datos
         cargarPartidosCards();
         cargarGestionEquipos();
     });
@@ -784,7 +822,133 @@
             }
         });
     }
+
+        window.llenarSelectsCampos = async function() {
+    try {
+        const res = await fetch('/api/campos');
+        const campos = await res.json();
+        const select = document.getElementById('selectCampos');
+        if(!select) return;
+        select.innerHTML = '<option value="">Selecciona Cancha</option>';
+        for (const id in campos) {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = campos[id].nombre.toUpperCase() + " (" + campos[id].lugar.toUpperCase() + ")";
+            select.appendChild(opt);
+        }
+    } catch (e) { console.error("Error:", e); }
+};
+
+            function abrirModalCampo() { document.getElementById('modalCrearCampo').classList.replace('hidden', 'flex'); }
+            function cerrarModalCampo() { document.getElementById('modalCrearCampo').classList.replace('flex', 'hidden'); document.getElementById('formCrearCampo').reset(); }
+
+    // Guardar Cancha
+document.getElementById('formCrearCampo').onsubmit = async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    const res = await fetch('/api/admin/campos/registrar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+        body: JSON.stringify(data)
+    });
+    if(res.ok) { alert("Cancha registrada"); cerrarModalCampo(); cargarCamposCards(); }
+};
+
+// Cargar Canchas en el Tab
+// Busca donde dice async function cargarCamposCards() y cámbialo a esto:
+window.cargarCamposCards = async function() {
+    const contenedor = document.getElementById('listaCamposCards');
+    if(!contenedor) return;
+    try {
+        const res = await fetch('/api/campos');
+        const campos = await res.json();
+        contenedor.innerHTML = '';
+        for (const id in campos) {
+            contenedor.innerHTML += `
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
+                    <div>
+                        <h4 class="text-white font-bold uppercase text-sm">${campos[id].nombre}</h4>
+                        <p class="text-slate-500 text-[10px] uppercase">${campos[id].lugar}</p>
+                    </div>
+                    <button onclick="eliminarCampo('${id}')" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition">
+                        <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                </div>`;
+        }
+    } catch (e) { console.error("Error:", e); }
+};
     
+    window.verificarConflictosInteligentes = async function() {
+        const campoId = document.getElementById('selectCampos').value;
+        const fecha = document.querySelector('#formCrearPartido input[name="fecha"]').value;
+        const horaNueva = document.querySelector('#formCrearPartido input[name="hora"]').value;
+        const btnSubmit = document.querySelector('#formCrearPartido button[type="submit"]');
+        
+        const contenedor = document.getElementById('agendaCanchaContenedor');
+        const listaAgenda = document.getElementById('listaAgendaCancha');
+        const alerta = document.getElementById('alertaConflicto');
+
+        if (!campoId || !fecha) {
+            if(contenedor) contenedor.classList.add('hidden');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/partidos');
+            const partidos = await res.json();
+            
+            const partidosHoy = Object.values(partidos).filter(p => p.campo_id === campoId && p.fecha === fecha);
+
+            contenedor.classList.remove('hidden');
+            listaAgenda.innerHTML = '';
+
+            if (partidosHoy.length === 0) {
+                listaAgenda.innerHTML = '<p class="text-[10px] text-slate-500 italic text-center py-2">Sede disponible para esta fecha</p>';
+            } else {
+                partidosHoy.sort((a,b) => a.hora.localeCompare(b.hora)).forEach(p => {
+                    // --- LÓGICA PARA CALCULAR HORA FIN (Inicio + 100 min) ---
+                    const [horas, minutos] = p.hora.split(':').map(Number);
+                    let totalMinutosFin = (horas * 60) + minutos + 100;
+                    
+                    const horasFin = Math.floor(totalMinutosFin / 60);
+                    const minutosFin = totalMinutosFin % 60;
+                    
+                    // Formateamos para que siempre tenga 2 dígitos (ej: 09:05)
+                    const horaFinFormateada = `${horasFin.toString().padStart(2, '0')}:${minutosFin.toString().padStart(2, '0')}`;
+
+                    listaAgenda.innerHTML += `
+                        <div class="flex justify-between items-center bg-slate-900 border border-slate-800 p-2 rounded-lg mb-1">
+                            <div class="flex flex-col">
+                                <span class="text-blue-400 font-bold text-xs">${p.hora} - ${horaFinFormateada}</span>
+                                <span class="text-[8px] text-slate-500 uppercase tracking-tighter">Ocupado (100 min)</span>
+                            </div>
+                            <span class="text-[9px] text-slate-400 uppercase truncate ml-4">${p.equipo_local} vs ${p.equipo_visitante}</span>
+                        </div>`;
+                });
+            }
+
+            // VALIDACIÓN DE CHOQUE
+            if (horaNueva) {
+                let choque = false;
+                const totalMinNuevo = (parseInt(horaNueva.split(':')[0]) * 60) + parseInt(horaNueva.split(':')[1]);
+
+                partidosHoy.forEach(p => {
+                    const totalMinPartido = (parseInt(p.hora.split(':')[0]) * 60) + parseInt(p.hora.split(':')[1]);
+                    if (Math.abs(totalMinPartido - totalMinNuevo) < 100) { choque = true; }
+                });
+
+                if (choque) {
+                    btnSubmit.disabled = true;
+                    btnSubmit.classList.add('opacity-50', 'cursor-not-allowed');
+                    alerta.classList.remove('hidden');
+                } else {
+                    btnSubmit.disabled = false;
+                    btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
+                    alerta.classList.add('hidden');
+                }
+            }
+        } catch (e) { console.error("Error agenda:", e); }
+    };
 </script>
 </body>
 </html>

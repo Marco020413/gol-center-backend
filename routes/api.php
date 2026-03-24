@@ -19,6 +19,10 @@ Route::post('/admin/partidos/crear', [App\Http\Controllers\PartidoController::cl
 Route::put('/admin/partidos/actualizar/{id}', [App\Http\Controllers\PartidoController::class, 'actualizarMarcador']);
 Route::delete('/admin/partidos/eliminar/{id}', [App\Http\Controllers\PartidoController::class, 'eliminar']);
 
+// Rutas para Campos
+Route::get('/campos', [App\Http\Controllers\CampoController::class, 'listar']);
+Route::post('/admin/campos/registrar', [App\Http\Controllers\CampoController::class, 'crear']);
+Route::delete('/admin/campos/eliminar/{id}', [App\Http\Controllers\CampoController::class, 'eliminar']);
 
 // Rutas de Administración
 Route::prefix('admin')->group(function () {

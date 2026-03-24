@@ -91,20 +91,64 @@ class PartidoController extends Controller
     // Regla #4: Solo Admin debería crear (por ahora lo metemos al grupo protegido)
     public function crear(Request $request)
     {
-        $id_partido = uniqid('partido_');
-        $this->database->getReference('partidos/' . $id_partido)->set([
-            'equipo_local' => $request->local,
-            'equipo_visitante' => $request->visitante,
-            'goles_local' => 0,
-            'goles_visitante' => 0,
-            'fecha' => $request->fecha,
-            'hora' => $request->hora,
-            'estatus' => 'programado'
-        ]);
+        try {
+            // 1. Validar que vengan todos los campos necesarios
+            if (!$request->campo_id || !$request->local || !$request->visitante || !$request->fecha || !$request->hora) {
+                return response()->json(['error' => 'Faltan datos obligatorios para programar el partido.'], 422);
+            }
 
-        return response()->json(['message' => 'Partido creado', 'id' => $id_partido]);
+            // 2. Obtener datos de los equipos para los escudos
+            $equipos = $this->database->getReference('equipos')->getValue() ?? [];
+            $escudoLocal = '';
+            $escudoVisitante = '';
+
+            foreach ($equipos as $eq) {
+                if ($eq['nombre'] === $request->local) $escudoLocal = $eq['escudo'] ?? '';
+                if ($eq['nombre'] === $request->visitante) $escudoVisitante = $eq['escudo'] ?? '';
+            }
+
+            // 3. Validar choque de horarios en el servidor (Seguridad extra)
+            $nuevoInicio = \Carbon\Carbon::parse($request->fecha . ' ' . $request->hora);
+            $nuevoFin = $nuevoInicio->copy()->addMinutes(100);
+            
+            $partidosExistentes = $this->database->getReference('partidos')->getValue() ?? [];
+
+            foreach ($partidosExistentes as $p) {
+                // Solo comparamos si es el mismo campo y la misma fecha
+                if ($p['campo_id'] === $request->campo_id && $p['fecha'] === $request->fecha) {
+                    $pInicio = \Carbon\Carbon::parse($p['fecha'] . ' ' . $p['hora']);
+                    $pFin = $pInicio->copy()->addMinutes(100);
+
+                    // Verificar si se traslapan
+                    if ($nuevoInicio->lt($pFin) && $nuevoFin->gt($pInicio)) {
+                        return response()->json(['error' => 'La cancha ya está ocupada en ese rango de tiempo.'], 422);
+                    }
+                }
+            }
+
+            // 4. Registrar en Firebase
+            $id_partido = uniqid('partido_');
+            $this->database->getReference('partidos/' . $id_partido)->set([
+                'equipo_local'      => $request->local,
+                'equipo_visitante'  => $request->visitante,
+                'escudo_local'     => $escudoLocal,
+                'escudo_visitante' => $escudoVisitante,
+                'campo_id'          => $request->campo_id,
+                'goles_local'       => 0,
+                'goles_visitante'   => 0,
+                'fecha'             => $request->fecha,
+                'hora'              => $request->hora,
+                'estatus'           => 'programado',
+                'resultado_confirmado' => false
+            ]);
+
+            return response()->json(['message' => 'Partido programado exitosamente']);
+
+        } catch (\Exception $e) {
+            // Esto nos dirá en el log exactamente qué falló
+            return response()->json(['error' => 'Error interno: ' . $e->getMessage()], 500);
+        }
     }
-
 
     public function eliminar($id)
     {
