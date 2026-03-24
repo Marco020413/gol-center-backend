@@ -10,6 +10,7 @@ Route::get('/equipos', [EquipoController::class, 'listar']);
 Route::get('/jugadores', [JugadorController::class, 'listarTodos']);
 Route::delete('/admin/jugadores/eliminar/{telefono}', [App\Http\Controllers\JugadorController::class, 'eliminar']);
 Route::put('/admin/jugadores/actualizar/{telefono}', [App\Http\Controllers\JugadorController::class, 'actualizar']);
+Route::get('/equipos/escudos', [App\Http\Controllers\EquipoController::class, 'listarEscudos']);
 
 // Rutas de Administración
 Route::prefix('admin')->group(function () {

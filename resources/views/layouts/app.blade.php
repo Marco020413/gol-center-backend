@@ -100,16 +100,34 @@
             window.formEquipo.onsubmit = async (e) => {
                 e.preventDefault();
                 const btn = document.getElementById('btnGuardarEquipo');
-                btn.innerText = 'Creando...'; btn.disabled = true;
-                const data = Object.fromEntries(new FormData(window.formEquipo));
+                btn.innerText = 'Subiendo...'; 
+                btn.disabled = true;
+
+                // IMPORTANTE: Usamos FormData directo para que incluya archivos
+                const data = new FormData(window.formEquipo);
+
                 try {
                     const response = await fetch('/api/admin/equipos/registrar', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(data)
+                        body: data, // Enviamos el FormData directamente, NO JSON.stringify
+                        headers: {
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        }
                     });
-                    if (response.ok) { alert('¡Equipo creado!'); location.reload(); }
-                } catch (error) { console.error('Error:', error); }
+
+                    if (response.ok) { 
+                        alert('🏆 Equipo creado exitosamente'); 
+                        location.reload(); 
+                    } else {
+                        alert('❌ Error al crear equipo');
+                        btn.innerText = 'Guardar Equipo';
+                        btn.disabled = false;
+                    }
+                } catch (error) { 
+                    console.error('Error:', error);
+                    alert('❌ Error de conexión');
+                    btn.disabled = false;
+                }
             };
         }
     });
@@ -187,6 +205,57 @@
         if(event.currentTarget) {
             event.currentTarget.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
         }
+    }
+
+    function abrirModalEquipo() { 
+        window.modalEquipo.classList.replace('hidden', 'flex'); 
+        cargarGaleriaEscudos(); 
+    }
+
+    async function cargarGaleriaEscudos() {
+        const contenedor = document.getElementById('contenedorEscudos');
+        if(!contenedor) return;
+
+        try {
+            const response = await fetch('/api/equipos/escudos');
+            const escudos = await response.json();
+            
+            contenedor.innerHTML = ''; 
+
+            if (escudos.length === 0) {
+                contenedor.innerHTML = '<p class="col-span-4 text-[10px] text-slate-500 italic py-4">No hay escudos. ¡Sube el primero!</p>';
+            }
+
+            escudos.forEach((url) => {
+                const nombreArchivo = url.split('/').pop();
+                // Limpiamos los números del nombre para que se vea bien
+                const nombreLimpio = nombreArchivo.includes('_') ? nombreArchivo.split('_').slice(1).join('_') : nombreArchivo;
+
+                const label = document.createElement('label');
+                label.className = 'cursor-pointer group';
+                label.innerHTML = `
+                    <input type="radio" name="escudo_url" value="${url}" class="hidden peer" onchange="mostrarPreview('${url}', '${nombreLimpio}')">
+                    <img src="${url}" class="size-12 mx-auto object-contain peer-checked:border-2 border-blue-500 rounded-lg bg-white/10 hover:scale-110 transition">
+                    <p class="text-[7px] mt-1 uppercase truncate text-slate-500">${nombreLimpio}</p>
+                `;
+                contenedor.appendChild(label);
+            });
+        } catch (e) { 
+            console.error("Error al cargar escudos:", e); 
+            contenedor.innerHTML = '<p class="col-span-4 text-red-500 text-[8px]">Error al conectar con el servidor</p>';
+        }
+    }
+
+    // Nueva función de previsualización
+    function mostrarPreview(url, nombre) {
+        const contenedor = document.getElementById('previewContenedor');
+        const img = document.getElementById('imgPreview');
+        const txt = document.getElementById('namePreview');
+        
+        contenedor.classList.remove('hidden');
+        contenedor.classList.add('flex');
+        img.src = url;
+        txt.innerText = nombre;
     }
 </script>
 </body>

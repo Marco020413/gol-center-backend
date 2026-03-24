@@ -127,34 +127,50 @@
             <h3 class="text-xl font-bold text-white">Nuevo Equipo</h3>
             <button onclick="cerrarModalEquipo()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
         </div>
-        <form id="formRegistroEquipo" class="p-6 space-y-4 text-sm">
+        <form id="formRegistroEquipo" method="POST" enctype="multipart/form-data" class="p-6 space-y-4 text-sm">
+            @csrf
             <div>
                 <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Nombre del Equipo</label>
                 <input type="text" name="nombre" required placeholder="Ej. Real Tecámac" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none">
             </div>
             <div>
-                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-2">Escudo</label>
-                <div class="grid grid-cols-4 gap-3 bg-slate-950/50 p-3 rounded-xl border border-slate-800 text-center text-white font-bold">
-    <label class="cursor-pointer group">
-        <input type="radio" name="escudo_url" value="/img/escudos/cruz-azul.jpg" class="hidden peer" required>
-        <img src="/img/escudos/cruz-azul.jpg" class="size-12 object-contain peer-checked:border-2 border-blue-500 rounded-lg bg-white/10" onerror="this.src='https://cdn-icons-png.flaticon.com/512/5323/5323982.png'">
-        <p class="text-[8px] mt-1">CRUZ AZUL</p>
-    </label>
-
-    <label class="cursor-pointer group">
-        <input type="radio" name="escudo_url" value="/img/escudos/chivas.jpg" class="hidden peer">
-        <img src="/img/escudos/chivas.jpg" class="size-12 object-contain peer-checked:border-2 border-blue-500 rounded-lg bg-white/10" onerror="this.src='https://cdn-icons-png.flaticon.com/512/5323/5323982.png'">
-        <p class="text-[8px] mt-1">CHIVAS</p>
-    </label>
-
-    <label class="cursor-pointer flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-lg hover:border-blue-500 transition h-12">
-        <span class="text-[8px] text-blue-500 font-bold">+ ARCHIVO</span>
-        <input type="file" name="escudo_file" class="hidden" accept="image/*">
-    </label>
-</div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-2">Selecciona Escudo</label>
+                <div id="previewContenedor" class="hidden mb-4 p-4 bg-blue-600/10 border border-blue-500/30 rounded-xl flex items-center gap-4">
+                    <img id="imgPreview" src="" class="size-16 object-contain rounded-lg bg-white/10">
+                    <div>
+                        <p class="text-[10px] text-blue-400 font-bold uppercase">Escudo Seleccionado</p>
+                        <p id="namePreview" class="text-white font-bold text-sm truncate"></p>
+                    </div>
+                </div>
+                <div id="contenedorEscudos" class="grid grid-cols-4 gap-3 bg-slate-950/50 p-3 rounded-xl border border-slate-800 text-center text-white font-bold max-h-40 overflow-y-auto">
+                    </div>
+                
+                <div class="mt-3">
+                    <label class="cursor-pointer flex items-center justify-center border-2 border-dashed border-slate-700 rounded-lg hover:border-blue-500 transition py-2" id="labelFile">
+                        <span class="text-[10px] text-blue-500 font-bold" id="fileName">+ SUBIR NUEVO ESCUDO</span>
+                        <input type="file" name="escudo_file" id="inputEscudo" class="hidden" accept="image/*" onchange="updateFileName(this)">
+                    </label>
+                </div>
             </div>
             <button type="submit" id="btnGuardarEquipo" class="w-full bg-blue-600 font-bold py-3 rounded-xl shadow-lg transition uppercase text-[10px]">Guardar Equipo</button>
         </form>
     </div>
 </div>
 @endsection
+
+<script>
+// Función para que el usuario vea que sí seleccionó un archivo
+function updateFileName(input) {
+    const label = document.getElementById('fileName');
+    if (input.files.length > 0) {
+        const file = input.files[0];
+        label.innerText = "LISTO ✅";
+        
+        // Crear una URL temporal para la previsualización
+        const urlTemp = URL.createObjectURL(file);
+        mostrarPreview(urlTemp, file.name);
+        
+        document.querySelectorAll('input[name="escudo_url"]').forEach(r => r.checked = false);
+    }
+}
+</script>
