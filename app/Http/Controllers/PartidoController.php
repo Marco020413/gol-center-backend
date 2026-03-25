@@ -65,28 +65,65 @@ class PartidoController extends Controller
     }
 
     public function actualizarMarcador(Request $request, $id)
-        {
+    {
+        try {
             $referencia = $this->database->getReference('partidos/' . $id);
             $partido = $referencia->getValue();
+
+            if (!$partido) {
+                return response()->json(['error' => 'Partido no encontrado.'], 404);
+            }
 
             // Regla de Oro: Si ya está confirmado, nadie toca nada
             if ($partido['resultado_confirmado'] ?? false) {
                 return response()->json(['error' => 'El acta de este partido ya ha sido cerrada.'], 403);
             }
 
+            // 1. Preparamos los datos básicos del partido
             $updateData = [
                 'goles_local' => (int)$request->goles_local,
                 'goles_visitante' => (int)$request->goles_visitante,
+                'detalle_jugadores' => $request->detalle_jugadores // Persistencia de la lista
             ];
 
-            // Si el usuario marcó la casilla de confirmar resultado final
+            // 2. Si se marca como FINALIZADO, procesamos las estadísticas de los jugadores
             if ($request->confirmar_final) {
                 $updateData['resultado_confirmado'] = true;
+                $updateData['estatus'] = 'confirmado';
+
+                $detalleJugadores = $request->detalle_jugadores ?? [];
+
+                foreach ($detalleJugadores as $telefono => $stats) {
+                    // Solo procesamos si el admin marcó que el jugador ASISTIÓ
+                    if ($stats['asistio']) {
+                        $jugadorRef = $this->database->getReference('jugadores/' . $telefono);
+                        $datosJugador = $jugadorRef->getValue();
+
+                        if ($datosJugador) {
+                            // Sumamos +1 al total de partidos y sumamos los goles de este encuentro
+                            $nuevosGoles = (int)($datosJugador['goles'] ?? 0) + (int)$stats['goles'];
+                            $nuevosPJ = (int)($datosJugador['partidos_jugados'] ?? 0) + 1;
+
+                            $jugadorRef->update([
+                                'goles' => $nuevosGoles,
+                                'partidos_jugados' => $nuevosPJ
+                            ]);
+                        }
+                    }
+                }
             }
 
+            // 3. Guardamos los cambios en el partido
             $referencia->update($updateData);
-            return response()->json(['message' => 'Actualizado correctamente']);
+
+            return response()->json([
+                'message' => $request->confirmar_final ? 'Acta cerrada y estadísticas procesadas' : 'Marcador actualizado'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Error al actualizar: ' . $e->getMessage()], 500);
         }
+    }
 
     // Regla #4: Solo Admin debería crear (por ahora lo metemos al grupo protegido)
     public function crear(Request $request)

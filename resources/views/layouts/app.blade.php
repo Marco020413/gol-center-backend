@@ -9,6 +9,19 @@
     <style>
         .tab-pane { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        #contenedorCedulaJugadores {
+            scrollbar-width: thin;
+            scrollbar-color: #1e293b transparent;
+        }
+        /* Asegura que el modal no sea más alto que la pantalla del celular */
+        #modalActualizarMarcador > div {
+            max-height: 95vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #formActualizarMarcador {
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
@@ -48,6 +61,7 @@
     let editTelefono = null;
     let cachePartidos = [];
     let cachePartidosLista = []; 
+    
 
     document.addEventListener('DOMContentLoaded', () => {
         window.modalJugador = document.getElementById('modalJugador');
@@ -623,23 +637,54 @@
             });
         }
 
-        // 4. --- LISTENER ACTUALIZAR RESULTADO ---
+        // 4. --- LISTENER Estadisticas---
+        const listaEstadisticas = {};
+            document.querySelectorAll('.fila-jugador-cedula').forEach(fila => {
+                const tel = fila.dataset.telefono;
+                const jugo = fila.querySelector('.check-asistencia').checked;
+                const goles = fila.querySelector('.input-gol').value;
+
+                listaEstadisticas[tel] = {
+                    asistio: jugo,
+                    goles: parseInt(goles)
+                };
+            });
+            
+        // 5. --- LISTENER ACTUALIZAR RESULTADO ---
+        // --- LISTENER ACTUALIZAR RESULTADO (CON RECOLECCIÓN DE CÉDULA) ---
         const formActualizar = document.getElementById('formActualizarMarcador');
         if (formActualizar) {
             formActualizar.onsubmit = async (e) => {
                 e.preventDefault();
+
+                // 1. RECOLECTAR ESTADÍSTICAS (Solo en este momento)
+                const listaEstadisticas = {};
+                // Buscamos todas las filas que generamos dinámicamente en el modal
+                document.querySelectorAll('.fila-jugador-cedula').forEach(fila => {
+                    const tel = fila.dataset.telefono;
+                    const asistio = fila.querySelector('.check-asistencia').checked;
+                    const goles = fila.querySelector('.input-gol-jugador').value;
+
+                    listaEstadisticas[tel] = {
+                        asistio: asistio,
+                        goles: parseInt(goles) || 0
+                    };
+                });
+
+                // 2. OBTENER DATOS DEL FORMULARIO
                 const id = document.getElementById('edit_partido_id').value;
                 const checkFinal = document.getElementById('confirmar_final');
                 const esFinal = checkFinal ? checkFinal.checked : false;
 
                 if (esFinal) {
-                    if (!confirm("⚠️ Al confirmar como FINALIZADO, el acta se cerrará y no podrás editar los goles después. ¿Proceder?")) return;
+                    if (!confirm("⚠️ Al confirmar como FINALIZADO, el acta se cerrará y se sumarán los puntos/goles a los jugadores. ¿Proceder?")) return;
                 }
 
                 const data = {
                     goles_local: document.getElementById('goles_local').value,
                     goles_visitante: document.getElementById('goles_visitante').value,
-                    confirmar_final: esFinal
+                    confirmar_final: esFinal,
+                    detalle_jugadores: listaEstadisticas 
                 };
 
                 try {
@@ -652,15 +697,19 @@
                         body: JSON.stringify(data)
                     });
 
+                    const result = await res.json();
+
                     if (res.ok) {
-                        alert(esFinal ? "🔒 Acta cerrada correctamente" : "✅ Marcador actualizado");
+                        alert(esFinal ? "🔒 Acta cerrada y estadísticas actualizadas" : "✅ Marcador actualizado");
                         cerrarModalMarcador();
                         cargarPartidosCards(); 
                     } else {
-                        const err = await res.json();
-                        alert("❌ " + (err.error || "Error al actualizar"));
+                        alert("❌ " + (result.error || "Error al actualizar"));
                     }
-                } catch (e) { alert("Error de conexión"); }
+                } catch (e) { 
+                    console.error(e);
+                    alert("Error de conexión"); 
+                }
             };
         }
 
@@ -774,44 +823,91 @@
 
     async function abrirActualizarMarcador(id) {
         try {
-            const res = await fetch('/api/partidos');
-            const partidos = await res.json();
+            const resPartidos = await fetch('/api/partidos');
+            const partidos = await resPartidos.json();
             const p = partidos[id];
-            const displayStatus = document.getElementById('display_estatus');
             
-            if(!p) return alert("No se encontró el partido");
+            const resJugadores = await fetch('/api/jugadores');
+            const todosLosJugadores = await resJugadores.json();
+
+            if(!p) return alert("Partido no encontrado");
 
             document.getElementById('edit_partido_id').value = id;
-            
-            // Nombres de equipos
-            const lblLocal = document.getElementById('edit_labelLocal');
-            const lblVisit = document.getElementById('edit_labelVisitante');
-            if(lblLocal) lblLocal.innerText = p.equipo_local.toUpperCase();
-            if(lblVisit) lblVisit.innerText = p.equipo_visitante.toUpperCase();
-
-            // Goles
+            document.getElementById('edit_labelLocal').innerText = p.equipo_local.toUpperCase();
+            document.getElementById('edit_labelVisitante').innerText = p.equipo_visitante.toUpperCase();
             document.getElementById('goles_local').value = p.goles_local || 0;
             document.getElementById('goles_visitante').value = p.goles_visitante || 0;
 
-            if(displayStatus) {
-                let textoEstado = p.estatus.replace('_', ' ').toUpperCase();
-                displayStatus.innerText = textoEstado;
-                
-                if(p.estatus === 'en_curso') {
-                    displayStatus.className = "text-green-500 font-black uppercase text-xs tracking-widest bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20 animate-pulse";
-                } else if(p.estatus === 'finalizado') {
-                    displayStatus.className = "text-amber-500 font-black uppercase text-xs tracking-widest bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20";
-                } else {
-                    displayStatus.className = "text-blue-500 font-black uppercase text-xs tracking-widest bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20";
-                }
-            }
+            // PERSISTENCIA: Recuperar estadísticas ya guardadas en este partido
+            const statsGuardadas = p.detalle_jugadores || {};
 
-            // Reset checkbox
-            const checkFinal = document.getElementById('confirmar_final');
-            if(checkFinal) checkFinal.checked = false;
+            const contenedor = document.getElementById('contenedorCedulaJugadores');
+            contenedor.innerHTML = ''; 
+
+            const equipos = [
+                { nombre: p.equipo_local, tipo: 'local', color: 'blue' },
+                { nombre: p.equipo_visitante, tipo: 'visitante', color: 'red' }
+            ];
+
+            equipos.forEach(eq => {
+                const jugadores = Object.entries(todosLosJugadores)
+                    .filter(([tel, j]) => j.equipo === eq.nombre)
+                    .sort((a,b) => a[1].numero - b[1].numero);
+
+                // Creamos el ACORDEÓN (Desplegable)
+                let htmlSeccion = `
+                    <div class="border border-slate-800 rounded-xl overflow-hidden mb-3">
+                        <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden')" 
+                                class="w-full flex items-center justify-between p-3 bg-slate-900 hover:bg-slate-800 transition">
+                            <div class="flex items-center gap-3">
+                                <div class="size-2 rounded-full bg-${eq.color}-500 shadow-[0_0_8px] shadow-${eq.color}-500/50"></div>
+                                <span class="text-[11px] font-black text-white uppercase tracking-widest">${eq.nombre}</span>
+                                <span class="text-[9px] text-slate-500 bg-slate-950 px-2 py-0.5 rounded-full">${jugadores.length} JUGADORES</span>
+                            </div>
+                            <svg class="size-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </button>
+                        <div class="hidden p-2 space-y-2 bg-slate-950/30">
+                `;
+
+                jugadores.forEach(([tel, j]) => {
+                    // Leemos si ya tenía datos guardados, si no, valores por defecto
+                    const previa = statsGuardadas[tel] || { asistio: true, goles: 0 };
+
+                    htmlSeccion += `
+                        <div class="fila-jugador-cedula flex items-center gap-3 bg-slate-900/60 p-2 rounded-lg border border-slate-800/40 ${!previa.asistio ? 'opacity-30 grayscale' : ''}" 
+                            id="fila_jugador_${tel}" data-telefono="${tel}">
+                            
+                            <input type="checkbox" ${previa.asistio ? 'checked' : ''} 
+                                class="check-asistencia size-4 rounded accent-green-500" 
+                                onchange="window.toggleAsistencia('${tel}', this)">
+                            
+                            <div class="flex-1 min-w-0">
+                                <p class="text-[11px] text-white font-bold truncate uppercase">
+                                    <span class="text-slate-500 mr-1">#${j.numero}</span>${j.nombre}
+                                </p>
+                            </div>
+
+                            <div class="flex items-center gap-1 bg-slate-950 rounded-lg p-1 border border-slate-800">
+                                <button type="button" onclick="window.modificarGolJugador('${tel}', -1, '${eq.tipo}')" 
+                                        class="btn-control-gol size-6 flex items-center justify-center text-slate-400 hover:text-white rounded">-</button>
+                                
+                                <input type="number" value="${previa.goles}" readonly 
+                                    id="goles_jugador_${tel}" 
+                                    class="input-gol-jugador input-gol-${eq.tipo} w-7 bg-transparent text-center text-[11px] font-black text-blue-400 outline-none">
+                                
+                                <button type="button" onclick="window.modificarGolJugador('${tel}', 1, '${eq.tipo}')" 
+                                        class="btn-control-gol size-6 flex items-center justify-center text-white bg-blue-600/20 hover:bg-blue-600 rounded">+</button>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                htmlSeccion += `</div></div>`;
+                contenedor.innerHTML += htmlSeccion;
+            });
 
             window.modalActualizarMarcador.classList.replace('hidden', 'flex');
-        } catch (e) { console.error("Error abriendo gestor:", e); }
+        } catch (e) { console.error("Error:", e); }
     }
 
     function cerrarModalMarcador() { window.modalActualizarMarcador.classList.replace('flex', 'hidden'); }
@@ -991,6 +1087,52 @@ window.cargarCamposCards = async function() {
                 }
             }
         } catch (e) { console.error("Error agenda:", e); }
+    };
+
+
+    // Función para los botones + y -
+    window.modificarGolJugador = function(telefono, cambio) {
+        const input = document.getElementById(`goles_jugador_${telefono}`);
+        let nuevoValor = (parseInt(input.value) || 0) + cambio;
+        if (nuevoValor < 0) nuevoValor = 0;
+        input.value = nuevoValor;
+        recalcularMarcador();
+    }
+
+    // Sumar todos los goles de la lista y actualizar los cuadros grandes de arriba
+    window.recalcularMarcadorGlobal = function() {
+        let sumaLocal = 0;
+        let sumaVisitante = 0;
+
+        document.querySelectorAll('.input-gol-local').forEach(i => sumaLocal += parseInt(i.value) || 0);
+        document.querySelectorAll('.input-gol-visitante').forEach(i => sumaVisitante += parseInt(i.value) || 0);
+
+        document.getElementById('goles_local').value = sumaLocal;
+        document.getElementById('goles_visitante').value = sumaVisitante;
+    };
+
+    window.toggleAsistencia = function(telefono, checkbox) {
+        const fila = document.getElementById(`fila_jugador_${telefono}`);
+        const inputGol = document.getElementById(`goles_jugador_${telefono}`);
+        const botones = fila.querySelectorAll('.btn-control-gol');
+
+        if (checkbox.checked) {
+            fila.classList.remove('opacity-30', 'grayscale');
+            botones.forEach(b => b.disabled = false);
+        } else {
+            fila.classList.add('opacity-30', 'grayscale');
+            inputGol.value = 0; // Si no jugó, 0 goles
+            botones.forEach(b => b.disabled = true);
+            window.recalcularMarcadorGlobal();
+        }
+    };
+
+    window.modificarGolJugador = function(telefono, cambio, tipo) {
+        const input = document.getElementById(`goles_jugador_${telefono}`);
+        let nuevoVal = (parseInt(input.value) || 0) + cambio;
+        if (nuevoVal < 0) nuevoVal = 0;
+        input.value = nuevoVal;
+        window.recalcularMarcadorGlobal();
     };
 </script>
 </body>

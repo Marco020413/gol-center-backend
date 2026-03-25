@@ -303,15 +303,26 @@
                 <span id="display_estatus" class="text-blue-500 font-black uppercase text-xs tracking-widest bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">Cargando...</span>
             </div>
 
-            <div class="flex items-center justify-around gap-4">
+            <div class="flex items-center justify-around gap-4 bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
                 <div class="text-center">
                     <label id="edit_labelLocal" class="block text-[10px] font-bold text-slate-500 uppercase mb-2">LOCAL</label>
-                    <input type="number" id="goles_local" required class="size-16 bg-slate-800 border border-slate-700 rounded-xl text-center text-2xl font-black text-white outline-none focus:border-blue-500">
+                    <input type="number" id="goles_local" value="0" readonly class="size-16 bg-slate-900 border border-slate-700 rounded-xl text-center text-2xl font-black text-white outline-none">
                 </div>
-                <span class="text-slate-700 font-black text-2xl mt-6">VS</span>
+                <span class="text-slate-700 font-black text-2xl">VS</span>
                 <div class="text-center">
                     <label id="edit_labelVisitante" class="block text-[10px] font-bold text-slate-500 uppercase mb-2">VISITANTE</label>
-                    <input type="number" id="goles_visitante" required class="size-16 bg-slate-800 border border-slate-700 rounded-xl text-center text-2xl font-black text-white outline-none focus:border-blue-500">
+                    <input type="number" id="goles_visitante" value="0" readonly class="size-16 bg-slate-900 border border-slate-700 rounded-xl text-center text-2xl font-black text-white outline-none">
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cédula de Jugadores</h4>
+                    <span class="text-[9px] text-slate-500 italic">Desmarca para inasistencia</span>
+                </div>
+                
+                <div id="contenedorCedulaJugadores" class="space-y-6 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                    <p class="text-center text-slate-600 text-xs animate-pulse">Cargando listas de equipos...</p>
                 </div>
             </div>
 
@@ -319,13 +330,17 @@
                 <label class="flex items-center gap-3 cursor-pointer">
                     <input type="checkbox" id="confirmar_final" class="size-4 accent-blue-600">
                     <span class="text-[10px] text-blue-300 font-bold uppercase leading-tight">
-                        Confirmar resultado final y cerrar acta (Bloquea edición)
+                        Confirmar resultado final y cerrar acta (Bloquea edición y suma estadísticas)
                     </span>
                 </label>
             </div>
 
-            <div class="space-y-3 pt-4 border-t border-slate-800">
-                <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-xs hover:bg-blue-500 transition shadow-lg uppercase tracking-widest">Guardar Cambios</button>
+            <div class="grid grid-cols-2 gap-3">
+                <button type="button" onclick="cerrarModalMarcador()" class="bg-slate-800 text-slate-400 font-bold py-3 rounded-xl text-xs uppercase">Cancelar</button>
+                <button type="submit" class="bg-blue-600 text-white font-bold py-3 rounded-xl text-xs uppercase shadow-lg shadow-blue-900/20">Guardar Cambios</button>
+            </div>
+
+            <div class="pt-4 border-t border-slate-800">
                 <button type="button" onclick="eliminarPartido()" class="w-full text-[10px] text-red-500 font-bold py-2 hover:bg-red-500/10 rounded-lg transition uppercase tracking-widest">
                     🗑️ Eliminar Partido
                 </button>
