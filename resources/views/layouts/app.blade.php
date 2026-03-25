@@ -65,17 +65,15 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         window.modalJugador = document.getElementById('modalJugador');
-        window.modalEquipo = document.getElementById('modalEquipo');
         window.formJugador = document.getElementById('formRegistroJugador');
         window.formEquipo = document.getElementById('formRegistroEquipo');
 
-        // UNIFICADO: Procesa tanto Registro como Edición
+        // Lógica de Registro / Edición de Jugadores
         if(window.formJugador) {
-            // 1. Modifica el onsubmit para incluir el número
             window.formJugador.onsubmit = async (e) => {
                 e.preventDefault();
                 const btn = document.getElementById('btnGuardar');
-                const msgError = document.getElementById('mensajeError'); // Usamos tu div de error
+                const msgError = document.getElementById('mensajeError'); 
                 
                 btn.innerText = 'Procesando...'; 
                 btn.disabled = true;
@@ -87,7 +85,8 @@
                     direccion: window.formJugador.direccion.value,
                     telefono: editMode ? editTelefono : window.formJugador.telefono.value,
                     equipo: window.formJugador.equipo.value,
-                    numero: window.formJugador.numero.value
+                    numero: window.formJugador.numero.value,
+                    estatus: document.getElementById('edit_estatus').value // Captura estatus
                 };
 
                 const url = editMode ? `/api/admin/jugadores/actualizar/${editTelefono}` : '/api/admin/jugadores/registrar';
@@ -98,7 +97,6 @@
                         method: method,
                         headers: { 
                             'Content-Type': 'application/json', 
-                            'Accept': 'application/json',
                             'X-CSRF-TOKEN': '{{ csrf_token() }}'
                         },
                         body: JSON.stringify(data)
@@ -107,47 +105,18 @@
                     const result = await response.json();
 
                     if (response.ok) { 
-                        alert(editMode ? '✅ ¡Actualizado correctamente!' : '✅ ¡Jugador registrado!'); 
+                        alert('✅ ¡Guardado con éxito!'); 
                         location.reload(); 
                     } else {
-                        // AQUÍ CAPTURAMOS EL AVISO DE DORSAL OCUPADO
-                        const mensaje = result.error || "Error al procesar la solicitud";
-                        alert("⚠️ " + mensaje);
-                        
-                        // También lo mostramos en el cuadrito rojo del modal si existe
-                        if(msgError) {
-                            msgError.innerText = mensaje;
-                            msgError.classList.remove('hidden');
-                        }
-                        
-                        btn.innerText = editMode ? 'Actualizar Datos' : 'Registrar Jugador :)';
+                        alert("⚠️ " + (result.error || "Error al procesar"));
+                        btn.innerText = editMode ? 'Actualizar Datos' : 'Registrar Jugador';
                         btn.disabled = false;
                     }
                 } catch (error) { 
-                    console.error('Error:', error); 
-                    alert('❌ Error crítico de conexión');
+                    alert('❌ Error de conexión');
                     btn.disabled = false;
                 }
             };
-
-            // 2. Modifica la función editar para recibir el dorsal (#)
-            async function editarJugador(telefono, nombre, equipo, edad, direccion, numero) {
-                editMode = true;
-                editTelefono = telefono;
-                
-                document.querySelector('#modalJugador h3').innerText = 'Editar Jugador';
-                const f = window.formJugador;
-                f.nombre.value = nombre;
-                f.telefono.value = telefono;
-                f.telefono.disabled = true; 
-                f.edad.value = edad;
-                f.direccion.value = direccion;
-                f.numero.value = numero || ''; // <--- CARGA EL DORSAL EN EL MODAL
-
-                await cargarEquipos(); 
-                f.equipo.value = equipo; 
-                abrirModal();
-            }
         }
 
         // Registro de Equipos
@@ -155,64 +124,60 @@
             window.formEquipo.onsubmit = async (e) => {
                 e.preventDefault();
                 const btn = document.getElementById('btnGuardarEquipo');
-                btn.innerText = 'Subiendo...'; 
-                btn.disabled = true;
-
-                // IMPORTANTE: Usamos FormData directo para que incluya archivos
                 const data = new FormData(window.formEquipo);
-
                 try {
                     const response = await fetch('/api/admin/equipos/registrar', {
                         method: 'POST',
-                        body: data, // Enviamos el FormData directamente, NO JSON.stringify
-                        headers: {
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                        }
+                        body: data,
+                        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
                     });
-
-                    if (response.ok) { 
-                        alert('🏆 Equipo creado exitosamente'); 
-                        location.reload(); 
-                    } else {
-                        alert('❌ Error al crear equipo');
-                        btn.innerText = 'Guardar Equipo';
-                        btn.disabled = false;
-                    }
-                } catch (error) { 
-                    console.error('Error:', error);
-                    alert('❌ Error de conexión');
-                    btn.disabled = false;
-                }
+                    if (response.ok) { alert('🏆 Equipo creado'); location.reload(); }
+                } catch (error) { alert('❌ Error de conexión'); }
             };
         }
     });
 
-    // Funciones Globales
-    function abrirModal() { window.modalJugador.classList.replace('hidden', 'flex'); cargarEquipos(); }
+    // --- FUNCIONES DE APERTURA DE MODALES ---
+window.abrirModal = function() { 
+    document.querySelector('#modalJugador h3').innerText = 'Nuevo Jugador';
+    document.getElementById('btnGuardar').innerText = 'Registrar Jugador :)';
+    editMode = false;
     
-    function cerrarModal() { 
-        window.modalJugador.classList.replace('flex', 'hidden'); 
-        editMode = false;
-        window.formJugador.reset();
-        window.formJugador.telefono.disabled = false;
-        document.querySelector('#modalJugador h3').innerText = 'Nuevo Jugador';
-        document.getElementById('btnGuardar').innerText = 'Registrar Jugador :)';
+    // Mostramos el modal
+    const modal = document.getElementById('modalJugador');
+    if(modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
     }
+    // Cargamos los equipos en el select del modal
+    cargarEquipos(); 
+};
 
-    function abrirModalEquipo() { window.modalEquipo.classList.replace('hidden', 'flex'); }
-    function cerrarModalEquipo() { 
-        window.modalEquipo.classList.replace('flex', 'hidden'); 
-        editMode = false; 
-    }
+    window.abrirModalEquipo = function() { 
+        const modal = document.getElementById('modalEquipo');
+        if(modal) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+    };
 
-    async function editarJugador(telefono, nombre, equipo, edad, direccion, numero) {
+    window.cerrarModalEquipo = function() { 
+        const modal = document.getElementById('modalEquipo');
+        if(modal) {
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+        }
+    };
+    // --- FUNCIONES GLOBALES ---
+
+    window.editarJugador = async function(telefono, nombre, equipo, edad, direccion, numero, pj, estatus) {
         editMode = true;
         editTelefono = telefono;
         
         document.querySelector('#modalJugador h3').innerText = 'Editar Jugador';
         document.getElementById('btnGuardar').innerText = 'Actualizar Datos';
         
-        const f = window.formRegistroJugador; // Asegúrate que el ID coincida
+        const f = window.formJugador; 
         f.nombre.value = nombre;
         f.telefono.value = telefono;
         f.telefono.disabled = true; 
@@ -220,26 +185,41 @@
         f.direccion.value = direccion;
         f.numero.value = numero; 
 
+        // Cargar estatus
+        if(document.getElementById('edit_estatus')) {
+            document.getElementById('edit_estatus').value = estatus || 'activo';
+        }
+
+        // Bloqueo de equipo por historial
+        const selectEquipo = document.getElementById('selectEquipos');
+        const aviso = document.getElementById('avisoEquipoBloqueado');
+        if (parseInt(pj) > 0) {
+            selectEquipo.disabled = true;
+            selectEquipo.classList.add('opacity-50');
+            if(aviso) aviso.classList.remove('hidden');
+        } else {
+            selectEquipo.disabled = false;
+            selectEquipo.classList.remove('opacity-50');
+            if(aviso) aviso.classList.add('hidden');
+        }
+
         await cargarEquipos(); 
         f.equipo.value = equipo; 
+        window.modalJugador.classList.replace('hidden', 'flex');
+    };
 
-        abrirModal();
-    }
-
-    async function eliminarJugador(telefono) {
-        if (!confirm('¿Seguro que quieres eliminar?')) return;
-        try {
-            const response = await fetch(`/api/admin/jugadores/eliminar/${telefono}`, {
-                method: 'DELETE',
-                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
-            });
-            if (response.ok) { alert('🗑️ Eliminado'); location.reload(); }
-        } catch (error) { alert('❌ Error'); }
+    function cerrarModal() { 
+        window.modalJugador.classList.replace('flex', 'hidden'); 
+        editMode = false;
+        window.formJugador.reset();
+        window.formJugador.telefono.disabled = false;
+        document.getElementById('selectEquipos').disabled = false;
+        document.getElementById('selectEquipos').classList.remove('opacity-50');
+        if(document.getElementById('avisoEquipoBloqueado')) document.getElementById('avisoEquipoBloqueado').classList.add('hidden');
     }
 
     async function cargarEquipos() {
         const select = document.getElementById('selectEquipos');
-        const selectFiltro = document.getElementById('filtroEquipo');
         if(!select) return;
         try {
             const response = await fetch('/api/equipos');
@@ -491,7 +471,7 @@
 
     function filtrarTabla() {
         const busqueda = document.getElementById('busquedaJugador').value.toLowerCase().trim();
-        const equipoFiltro = document.getElementById('filtroEquipo').value; // "Libre" o nombre del equipo
+        const equipoFiltro = document.getElementById('filtroEquipo').value; 
         const orden = document.getElementById('ordenarPor').value;
         
         const tablaBody = document.querySelector('#content-jugadores tbody');
@@ -500,37 +480,44 @@
         const filas = Array.from(tablaBody.querySelectorAll('tr'));
 
         filas.forEach(fila => {
-            // 1. Extraer datos de los data-fields
-            const nombre = fila.querySelector('[data-field="nombre"]')?.innerText.toLowerCase() || "";
+            // 1. Extraer datos
+            const nombreContenedor = fila.querySelector('[data-field="nombre"]');
+            const nombreCompletoTexto = nombreContenedor?.innerText.toUpperCase() || ""; // Usamos Upper para los badges
+            const nombreSolo = nombreContenedor?.innerText.toLowerCase() || "";
             const telefono = fila.querySelector('[data-field="telefono"]')?.innerText.toLowerCase() || "";
             
-            // LEEMOS EL ATRIBUTO DATA-VALOR QUE PUSIMOS EN EL PASO ANTERIOR
             const equipoCelda = fila.querySelector('[data-field="equipo"]');
             const valorEquipo = equipoCelda ? equipoCelda.getAttribute('data-valor') : "";
 
-            // 2. Lógica de Búsqueda
-            const coincideBusqueda = nombre.includes(busqueda) || telefono.includes(busqueda);
+            // 2. Lógica de Búsqueda (Nombre o Teléfono)
+            const coincideBusqueda = nombreSolo.includes(busqueda) || telefono.includes(busqueda);
             
-            // 3. Lógica de Filtro de Equipo
-            let coincideEquipo = true;
+            // 3. Lógica de Filtros Especiales y Equipos
+            let coincideFiltro = true;
+
             if (equipoFiltro === "Libre") {
-                // Ahora comparamos contra el valor puro "Libre"
-                coincideEquipo = (valorEquipo === "Libre");
+                coincideFiltro = (valorEquipo === "Libre");
+            } else if (equipoFiltro === "SUSPENDIDO") {
+                // Verifica si el texto de la fila contiene la palabra SUSPENDIDO
+                coincideFiltro = nombreCompletoTexto.includes("SUSPENDIDO");
+            } else if (equipoFiltro === "LESIONADO") {
+                // Verifica si el texto de la fila contiene la palabra LESIONADO
+                coincideFiltro = nombreCompletoTexto.includes("LESIONADO");
             } else if (equipoFiltro !== "") {
-                coincideEquipo = (valorEquipo === equipoFiltro);
+                coincideFiltro = (valorEquipo === equipoFiltro);
             }
 
-            fila.style.display = (coincideBusqueda && coincideEquipo) ? "" : "none";
+            fila.style.display = (coincideBusqueda && coincideFiltro) ? "" : "none";
         });
 
-        // --- Mantenemos tu lógica de ordenamiento que ya funcionaba ---
+        // --- Re-ordenamiento de filas visibles ---
         const filasVisibles = filas.filter(f => f.style.display !== "none");
         filasVisibles.sort((a, b) => {
             if (orden === 'goles') return (parseInt(b.cells[3].innerText) || 0) - (parseInt(a.cells[3].innerText) || 0);
             if (orden === 'pj') return (parseInt(b.cells[2].innerText) || 0) - (parseInt(a.cells[2].innerText) || 0);
             if (orden === 'dorsal') {
-                const numA = parseInt(a.querySelector('.bg-blue-600\\/20')?.innerText) || 0;
-                const numB = parseInt(b.querySelector('.bg-blue-600\\/20')?.innerText) || 0;
+                const numA = parseInt(a.querySelector('.size-8')?.innerText) || 0;
+                const numB = parseInt(b.querySelector('.size-8')?.innerText) || 0;
                 return numA - numB;
             }
             return a.querySelector('[data-field="nombre"]').innerText.localeCompare(b.querySelector('[data-field="nombre"]').innerText);
@@ -838,9 +825,7 @@
             document.getElementById('goles_local').value = p.goles_local || 0;
             document.getElementById('goles_visitante').value = p.goles_visitante || 0;
 
-            // PERSISTENCIA: Recuperar estadísticas ya guardadas en este partido
             const statsGuardadas = p.detalle_jugadores || {};
-
             const contenedor = document.getElementById('contenedorCedulaJugadores');
             contenedor.innerHTML = ''; 
 
@@ -850,45 +835,57 @@
             ];
 
             equipos.forEach(eq => {
-                const jugadores = Object.entries(todosLosJugadores)
+                // Contamos bajas para el aviso visual
+                const bajas = Object.values(todosLosJugadores).filter(j => 
+                    j.equipo === eq.nombre && (j.estatus === 'suspendido' || j.estatus === 'lesionado')
+                ).length;
+
+                // Obtenemos a TODOS los jugadores del equipo (incluyendo suspendidos para no perder sus goles)
+                const jugadoresEquipo = Object.entries(todosLosJugadores)
                     .filter(([tel, j]) => j.equipo === eq.nombre)
                     .sort((a,b) => a[1].numero - b[1].numero);
 
-                // Creamos el ACORDEÓN (Desplegable)
                 let htmlSeccion = `
                     <div class="border border-slate-800 rounded-xl overflow-hidden mb-3">
                         <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden')" 
-                                class="w-full flex items-center justify-between p-3 bg-slate-900 hover:bg-slate-800 transition">
-                            <div class="flex items-center gap-3">
-                                <div class="size-2 rounded-full bg-${eq.color}-500 shadow-[0_0_8px] shadow-${eq.color}-500/50"></div>
-                                <span class="text-[11px] font-black text-white uppercase tracking-widest">${eq.nombre}</span>
-                                <span class="text-[9px] text-slate-500 bg-slate-950 px-2 py-0.5 rounded-full">${jugadores.length} JUGADORES</span>
+                                class="w-full flex items-center justify-between p-3 bg-slate-900 hover:bg-slate-800 transition text-left">
+                            <div class="flex flex-col gap-1">
+                                <div class="flex items-center gap-3">
+                                    <div class="size-2 rounded-full bg-${eq.color}-500 shadow-[0_0_8px] shadow-${eq.color}-500/50"></div>
+                                    <span class="text-[11px] font-black text-white uppercase tracking-widest">${eq.nombre}</span>
+                                    <span class="text-[9px] text-slate-500 bg-slate-950 px-2 py-0.5 rounded-full">${jugadoresEquipo.length} REGISTRADOS</span>
+                                </div>
+                                ${bajas > 0 ? `<span class="text-[8px] text-red-400 font-bold ml-5 uppercase italic">⚠️ ${bajas} baja(s) por sanción o lesión</span>` : ''}
                             </div>
                             <svg class="size-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </button>
                         <div class="hidden p-2 space-y-2 bg-slate-950/30">
                 `;
 
-                jugadores.forEach(([tel, j]) => {
-                    // Leemos si ya tenía datos guardados, si no, valores por defecto
+                jugadoresEquipo.forEach(([tel, j]) => {
                     const previa = statsGuardadas[tel] || { asistio: true, goles: 0 };
+                    const esInactivo = (j.estatus === 'suspendido' || j.estatus === 'lesionado');
 
                     htmlSeccion += `
-                        <div class="fila-jugador-cedula flex items-center gap-3 bg-slate-900/60 p-2 rounded-lg border border-slate-800/40 ${!previa.asistio ? 'opacity-30 grayscale' : ''}" 
+                        <div class="fila-jugador-cedula flex items-center gap-3 bg-slate-900/60 p-2 rounded-lg border border-slate-800/40 
+                            ${(esInactivo || !previa.asistio) ? 'opacity-30 grayscale' : ''}" 
                             id="fila_jugador_${tel}" data-telefono="${tel}">
                             
-                            <input type="checkbox" ${previa.asistio ? 'checked' : ''} 
+                            <input type="checkbox" ${previa.asistio && !esInactivo ? 'checked' : ''} 
+                                ${esInactivo ? 'disabled' : ''}
                                 class="check-asistencia size-4 rounded accent-green-500" 
                                 onchange="window.toggleAsistencia('${tel}', this)">
                             
                             <div class="flex-1 min-w-0">
                                 <p class="text-[11px] text-white font-bold truncate uppercase">
                                     <span class="text-slate-500 mr-1">#${j.numero}</span>${j.nombre}
+                                    ${esInactivo ? `<span class="text-[7px] text-red-500 ml-1 font-black">[${j.estatus.toUpperCase()}]</span>` : ''}
                                 </p>
                             </div>
 
                             <div class="flex items-center gap-1 bg-slate-950 rounded-lg p-1 border border-slate-800">
                                 <button type="button" onclick="window.modificarGolJugador('${tel}', -1, '${eq.tipo}')" 
+                                        ${esInactivo ? 'disabled' : ''}
                                         class="btn-control-gol size-6 flex items-center justify-center text-slate-400 hover:text-white rounded">-</button>
                                 
                                 <input type="number" value="${previa.goles}" readonly 
@@ -896,6 +893,7 @@
                                     class="input-gol-jugador input-gol-${eq.tipo} w-7 bg-transparent text-center text-[11px] font-black text-blue-400 outline-none">
                                 
                                 <button type="button" onclick="window.modificarGolJugador('${tel}', 1, '${eq.tipo}')" 
+                                        ${esInactivo ? 'disabled' : ''}
                                         class="btn-control-gol size-6 flex items-center justify-center text-white bg-blue-600/20 hover:bg-blue-600 rounded">+</button>
                             </div>
                         </div>
@@ -912,7 +910,7 @@
 
     function cerrarModalMarcador() { window.modalActualizarMarcador.classList.replace('flex', 'hidden'); }
 
-    // --- FUNCIÓN PARA BORRAR PARTIDO (SEGURIDAD EXTRA) ---
+    // --- FUNCIÓN PARA BORRAR PARTIDO---
     async function eliminarPartido() {
         const id = document.getElementById('edit_partido_id').value;
         if (!confirm("⚠️ ¿Estás COMPLETAMENTE seguro de borrar este partido? Esta acción es irreversible.")) return;

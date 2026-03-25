@@ -103,7 +103,8 @@ class JugadorController extends Controller
                 'numero'    => (int)$request->numero,
                 'equipo'    => $request->equipo,
                 'edad'      => $request->edad,
-                'direccion' => $request->direccion
+                'direccion' => $request->direccion,
+                'estatus'   => $request->estatus ?? 'activo'
             ]);
 
             return response()->json(['message' => '¡Jugador actualizado!']);

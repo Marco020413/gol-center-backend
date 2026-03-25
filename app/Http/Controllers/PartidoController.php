@@ -79,14 +79,14 @@ class PartidoController extends Controller
                 return response()->json(['error' => 'El acta de este partido ya ha sido cerrada.'], 403);
             }
 
-            // 1. Preparamos los datos básicos del partido
+            // 1. Guardar datos actuales para persistencia visual
             $updateData = [
                 'goles_local' => (int)$request->goles_local,
                 'goles_visitante' => (int)$request->goles_visitante,
-                'detalle_jugadores' => $request->detalle_jugadores // Persistencia de la lista
+                'detalle_jugadores' => $request->detalle_jugadores 
             ];
 
-            // 2. Si se marca como FINALIZADO, procesamos las estadísticas de los jugadores
+            // 2. Si se marca como FINALIZADO, procesamos estadísticas permanentes
             if ($request->confirmar_final) {
                 $updateData['resultado_confirmado'] = true;
                 $updateData['estatus'] = 'confirmado';
@@ -94,13 +94,13 @@ class PartidoController extends Controller
                 $detalleJugadores = $request->detalle_jugadores ?? [];
 
                 foreach ($detalleJugadores as $telefono => $stats) {
-                    // Solo procesamos si el admin marcó que el jugador ASISTIÓ
-                    if ($stats['asistio']) {
+                    // Si el admin marcó asistencia, procesamos aunque esté suspendido/lesionado
+                    if (isset($stats['asistio']) && $stats['asistio']) {
                         $jugadorRef = $this->database->getReference('jugadores/' . $telefono);
                         $datosJugador = $jugadorRef->getValue();
 
                         if ($datosJugador) {
-                            // Sumamos +1 al total de partidos y sumamos los goles de este encuentro
+                            // Sumamos goles y PJ (Partido Jugado)
                             $nuevosGoles = (int)($datosJugador['goles'] ?? 0) + (int)$stats['goles'];
                             $nuevosPJ = (int)($datosJugador['partidos_jugados'] ?? 0) + 1;
 
@@ -113,7 +113,7 @@ class PartidoController extends Controller
                 }
             }
 
-            // 3. Guardamos los cambios en el partido
+            // 3. Aplicamos todos los cambios al partido
             $referencia->update($updateData);
 
             return response()->json([

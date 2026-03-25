@@ -23,8 +23,10 @@
                     </div>
                     
                     <select id="filtroEquipo" onchange="filtrarTabla()" class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white outline-none focus:border-blue-500">
-                        <option value="">Todos los equipos</option>
+                        <option value="">Todos los jugadores</option>
                         <option value="Libre">Agentes Libres (Sin Equipo)</option>
+                        <option value="SUSPENDIDO">Jugadores Sancionados 🚫</option>
+                        <option value="LESIONADO">Jugadores Lesionados 🚑</option>
                     </select>
 
                     <select id="ordenarPor" onchange="filtrarTabla()" class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white outline-none focus:border-blue-500">
@@ -55,7 +57,15 @@
                                             {{ $j['numero'] ?? '00' }}
                                         </div>
                                         <div class="text-left">
-                                            <div class="font-medium text-white" data-field="nombre">{{ $j['nombre'] ?? 'Sin Nombre' }}</div>
+                                            <div class="font-medium text-white flex items-center gap-2" data-field="nombre">
+                                                {{ $j['nombre'] ?? 'Sin Nombre' }}
+                                                @if(($j['estatus'] ?? 'activo') === 'suspendido')
+                                                    <span class="bg-red-500 text-[8px] px-1.5 py-0.5 rounded text-white font-black animate-pulse">SUSPENDIDO</span>
+                                                @elseif(($j['estatus'] ?? 'activo') === 'lesionado')
+                                                    <span class="bg-amber-500 text-[8px] px-1.5 py-0.5 rounded text-white font-black">LESIONADO</span>
+                                                @endif
+                                            </div>    
+
                                             <div class="text-[10px] text-slate-500" data-field="telefono">{{ $telefono }}</div>
                                         </div>
                                     </div>
@@ -76,7 +86,7 @@
                                 </td>
                                 <td class="px-6 py-4 text-center font-bold text-white">{{ $j['goles'] ?? 0 }}</td>
                                 <td class="px-6 py-4 text-center flex justify-center gap-2">
-                                    <button onclick="editarJugador('{{ $telefono }}', '{{ $j['nombre'] ?? '' }}', '{{ $j['equipo'] ?? '' }}', '{{ $j['edad'] ?? 0 }}', '{{ $j['direccion'] ?? '' }}', '{{ $j['numero'] ?? 0 }}')" class="text-blue-500 hover:text-blue-400 p-1 transition">
+                                    <button onclick="editarJugador('{{ $telefono }}', '{{ $j['nombre'] ?? '' }}', '{{ $j['equipo'] ?? '' }}', '{{ $j['edad'] ?? 0 }}', '{{ $j['direccion'] ?? '' }}', '{{ $j['numero'] ?? 0 }}', '{{ $j['partidos_jugados'] ?? 0 }}', '{{ $j['estatus'] ?? 'activo' }}')" class="text-blue-500 hover:text-blue-400 p-1 transition">                                        
                                         <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                     </button>
                                     <button onclick="eliminarJugador('{{ $telefono }}')" class="text-red-500 hover:text-red-400 p-1 transition">
@@ -192,6 +202,17 @@
                     <option value="">Selecciona un equipo</option>
                 </select>
             </div>
+            <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Estado del Jugador</label>
+                <select name="estatus" id="edit_estatus" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                    <option value="activo">ACTIVO ✅</option>
+                    <option value="suspendido">SUSPENDIDO 🚫</option>
+                    <option value="lesionado">LESIONADO 🚑</option>
+                </select>
+            </div>
+            <p id="avisoEquipoBloqueado" class="hidden text-[9px] text-amber-500 italic font-bold mt-1">
+                ⚠️ El equipo está bloqueado porque el jugador ya tiene historial de partidos.
+            </p>
             <div id="mensajeError" class="hidden text-red-500 text-[10px] bg-red-500/10 p-2 rounded border border-red-500/20 text-center uppercase font-bold"></div>
             <button type="submit" id="btnGuardar" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition">GUARDAR JUGADOR</button>
         </form>
