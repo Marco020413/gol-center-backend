@@ -47,6 +47,7 @@
     let editMode = false;
     let editTelefono = null;
     let cachePartidos = [];
+    let cachePartidosLista = []; 
 
     document.addEventListener('DOMContentLoaded', () => {
         window.modalJugador = document.getElementById('modalJugador');
@@ -671,62 +672,104 @@
     // --- FUNCIONES GLOBALES ---
 
     async function cargarPartidosCards() {
+    const contenedor = document.getElementById('contenedorListaPartidos');
+    if (!contenedor) return;
+
+    try {
+        const res = await fetch('/api/partidos');
+        const partidos = await res.json();
+        
+        // Guardamos en la variable global convirtiendo el objeto a Array con su ID
+        cachePartidosLista = Object.keys(partidos).map(id => ({
+            id: id,
+            ...partidos[id]
+        }));
+
+        // Mandamos a dibujar con los filtros aplicados (por defecto "todos")
+        aplicarFiltrosPartidos();
+    } catch (e) { console.error("Error cargando partidos:", e); }
+}
+
+    window.aplicarFiltrosPartidos = function() {
         const contenedor = document.getElementById('contenedorListaPartidos');
-        if (!contenedor) return;
+        const busqueda = document.getElementById('filtroEquipoPartido').value.toLowerCase().trim();
+        const estatus = document.getElementById('filtroEstatusPartido').value;
+        const orden = document.getElementById('ordenarPartidos').value;
 
-        try {
-            const res = await fetch('/api/partidos');
-            const partidos = await res.json();
-            contenedor.innerHTML = '';
+        // 1. Filtrar los datos que tenemos en memoria
+        let partidosFiltrados = cachePartidosLista.filter(p => {
+            const coincideNombre = p.equipo_local.toLowerCase().includes(busqueda) || 
+                                p.equipo_visitante.toLowerCase().includes(busqueda);
             
-            for (const id in partidos) {
-                const p = partidos[id];
-                
-                // Colores dinámicos según el estatus real del servidor
-                let statusHTML = '';
-                if(p.resultado_confirmado) {
-                    statusHTML = '<span class="text-white bg-slate-700 px-2 py-0.5 rounded text-[8px] font-black">ACTA CERRADA 🔒</span>';
-                } else if(p.estatus === 'en_curso') {
-                    statusHTML = '<span class="text-green-500 animate-pulse font-black">EN CURSO 🟢</span>';
-                } else if(p.estatus === 'finalizado') {
-                    statusHTML = '<span class="text-amber-500 font-black">POR SUBIR RESULTADO ⚠️</span>';
-                } else {
-                    statusHTML = '<span class="text-slate-500 font-black uppercase">PROGRAMADO</span>';
-                }
+            let coincideEstatus = true;
+            if (estatus === 'programado') coincideEstatus = (p.estatus === 'programado');
+            if (estatus === 'en_curso') coincideEstatus = (p.estatus === 'en_curso');
+            if (estatus === 'finalizado') coincideEstatus = (p.estatus === 'finalizado' && !p.resultado_confirmado);
+            if (estatus === 'confirmado') coincideEstatus = (p.resultado_confirmado === true);
 
-                // Solo bloqueamos el botón si el acta está CERRADA
-                const botonGestionar = !p.resultado_confirmado 
-                    ? `<button onclick="abrirActualizarMarcador('${id}')" class="mt-2 w-full text-[10px] bg-blue-600/10 text-blue-500 border border-blue-500/20 px-2 py-1 rounded hover:bg-blue-600 hover:text-white transition uppercase font-black">Gestionar</button>` 
-                    : `<span class="text-[9px] text-slate-500 italic block mt-2">Resultado Inamovible</span>`;
+            return coincideNombre && coincideEstatus;
+        });
 
-                contenedor.innerHTML += `
-                    <div class="bg-slate-900 border ${p.resultado_confirmado ? 'border-slate-800' : 'border-blue-500/20'} rounded-xl p-4 flex items-center justify-between shadow-lg mb-4">
-                        <div class="flex-1 space-y-3">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <img src="${p.escudo_local}" class="size-7 object-contain">
-                                    <span class="font-bold text-slate-200 text-sm uppercase">${p.equipo_local}</span>
-                                </div>
-                                <span class="text-xl font-black text-white">${p.goles_local}</span>
+        // 2. Ordenar por Fecha y Hora (Combinadas para precisión)
+        partidosFiltrados.sort((a, b) => {
+            const datetimeA = new Date(`${a.fecha}T${a.hora || '00:00'}`);
+            const datetimeB = new Date(`${b.fecha}T${b.hora || '00:00'}`);
+            return orden === 'recientes' ? datetimeB - datetimeA : datetimeA - datetimeB;
+        });
+
+        // 3. Dibujar en el contenedor
+        contenedor.innerHTML = '';
+        
+        if (partidosFiltrados.length === 0) {
+            contenedor.innerHTML = '<p class="text-center text-slate-600 py-10 italic">No se encontraron partidos.</p>';
+            return;
+        }
+
+        partidosFiltrados.forEach(p => {
+            // Lógica de colores de estatus (Tu diseño original)
+            let statusHTML = '';
+            if(p.resultado_confirmado) {
+                statusHTML = '<span class="text-white bg-slate-700 px-2 py-0.5 rounded text-[8px] font-black uppercase">Acta Cerrada 🔒</span>';
+            } else if(p.estatus === 'en_curso') {
+                statusHTML = '<span class="text-green-500 animate-pulse font-black uppercase text-[9px]">En Curso 🟢</span>';
+            } else if(p.estatus === 'finalizado') {
+                statusHTML = '<span class="text-amber-500 font-black uppercase text-[9px]">Por Subir Acta ⚠️</span>';
+            } else {
+                statusHTML = '<span class="text-slate-500 font-black uppercase text-[9px]">Programado</span>';
+            }
+
+            const botonGestionar = !p.resultado_confirmado 
+                ? `<button onclick="abrirActualizarMarcador('${p.id}')" class="mt-2 w-full text-[10px] bg-blue-600/10 text-blue-500 border border-blue-500/20 px-2 py-1 rounded hover:bg-blue-600 hover:text-white transition uppercase font-black">Gestionar</button>` 
+                : `<span class="text-[9px] text-slate-500 italic block mt-2">Resultado Inamovible</span>`;
+
+            // Insertar la tarjeta con tu diseño original
+            contenedor.innerHTML += `
+                <div class="bg-slate-900 border ${p.resultado_confirmado ? 'border-slate-800' : 'border-blue-500/20'} rounded-xl p-4 flex items-center justify-between shadow-lg mb-4">
+                    <div class="flex-1 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <img src="${p.escudo_local}" class="size-7 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/5323/5323982.png'">
+                                <span class="font-bold text-slate-200 text-sm uppercase">${p.equipo_local}</span>
                             </div>
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <img src="${p.escudo_visitante}" class="size-7 object-contain">
-                                    <span class="font-bold text-slate-200 text-sm uppercase">${p.equipo_visitante}</span>
-                                </div>
-                                <span class="text-xl font-black text-white">${p.goles_visitante}</span>
-                            </div>
+                            <span class="text-xl font-black text-white">${p.goles_local}</span>
                         </div>
-                        <div class="w-px h-10 bg-slate-800 mx-4"></div>
-                        <div class="text-right min-w-[110px]">
-                            <p class="text-[9px] mb-1">${statusHTML}</p>
-                            <p class="text-[10px] text-slate-500 font-bold">${p.fecha_formateada}</p>
-                            ${botonGestionar}
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <img src="${p.escudo_visitante}" class="size-7 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/5323/5323982.png'">
+                                <span class="font-bold text-slate-200 text-sm uppercase">${p.equipo_visitante}</span>
+                            </div>
+                            <span class="text-xl font-black text-white">${p.goles_visitante}</span>
                         </div>
                     </div>
-                `;
-            }
-        } catch (e) { console.error(e); }
+                    <div class="w-px h-10 bg-slate-800 mx-4"></div>
+                    <div class="text-right min-w-[120px]">
+                        <div class="mb-1">${statusHTML}</div>
+                        <p class="text-[10px] text-slate-500 font-bold">${p.fecha} | ${p.hora || '--:--'}</p>
+                        ${botonGestionar}
+                    </div>
+                </div>
+            `;
+        });
     }
 
     async function abrirActualizarMarcador(id) {

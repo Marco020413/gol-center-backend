@@ -1,10 +1,9 @@
 @extends('layouts.app')
 
 @section('content')
-<main class="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
-    
+<main class="max-w-7xl mx-auto px-4 sm:px-6 py-4 lg:py-10 grid grid-cols-1 lg:grid-cols-3 gap-6">    
     <div class="lg:col-span-2">
-        <div class="flex border-b border-slate-800 mb-6 gap-8 overflow-x-auto">
+        <div class="flex border-b border-slate-800 mb-6 gap-4 overflow-x-auto pb-1 scrollbar-hide whitespace-nowrap">
             <button onclick="changeTab('posiciones')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Posiciones</button>
             <button onclick="changeTab('equipos_gest')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Gestionar Equipos</button>
             <button onclick="changeTab('partidos')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Partidos</button>
@@ -106,6 +105,26 @@
                         + PROGRAMAR PARTIDO
                     </button>
                 </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="relative">
+                        <input type="text" id="filtroEquipoPartido" onkeyup="aplicarFiltrosPartidos()" placeholder="Filtrar por equipo..." class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-xs text-white outline-none focus:border-blue-500">
+                    </div>
+                    
+                    <select id="filtroEstatusPartido" onchange="aplicarFiltrosPartidos()" class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-xs text-white outline-none focus:border-blue-500">
+                        <option value="todos">Todos</option>
+                        <option value="programado">Próximos Partidos</option>
+                        <option value="en_curso">En Vivo 🟢</option>
+                        <option value="finalizado">Por Subir Acta ⚠️</option>
+                        <option value="confirmado">Actas Cerradas 🔒</option>
+                    </select>
+
+                    <select id="ordenarPartidos" onchange="aplicarFiltrosPartidos()" class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-xs text-white outline-none focus:border-blue-500">
+                        <option value="recientes">Más Recientes primero</option>
+                        <option value="antiguos">Más Antiguos primero</option>
+                    </select>
+                </div>
+
                 <div id="contenedorListaPartidos"></div>
             </div>
 
