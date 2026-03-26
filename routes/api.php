@@ -20,7 +20,7 @@ Route::put('/admin/partidos/actualizar/{id}', [App\Http\Controllers\PartidoContr
 Route::delete('/admin/partidos/eliminar/{id}', [App\Http\Controllers\PartidoController::class, 'eliminar']);
 
 // Rutas para Campos
-Route::get('/campos', [App\Http\Controllers\CampoController::class, 'listar']);
+Route::get('/campos', [App\Http\Controllers\CampoController::class, 'index']);
 Route::post('/admin/campos/registrar', [App\Http\Controllers\CampoController::class, 'crear']);
 Route::delete('/admin/campos/eliminar/{id}', [App\Http\Controllers\CampoController::class, 'eliminar']);
 

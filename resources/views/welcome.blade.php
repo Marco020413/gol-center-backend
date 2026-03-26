@@ -4,12 +4,12 @@
 <main class="max-w-7xl mx-auto px-4 sm:px-6 py-4 lg:py-10 grid grid-cols-1 lg:grid-cols-3 gap-6">    
     <div class="lg:col-span-2">
         <div class="flex border-b border-slate-800 mb-6 gap-4 overflow-x-auto pb-1 scrollbar-hide whitespace-nowrap">
+            <button onclick="changeTab('jugadores')" class="tab-btn pb-4 text-blue-500 border-b-2 border-blue-500 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Jugadores</button>
             <button onclick="changeTab('posiciones')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Posiciones</button>
             <button onclick="changeTab('equipos_gest')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Gestionar Equipos</button>
             <button onclick="changeTab('partidos')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Partidos</button>
             <button onclick="changeTab('campos'); cargarCamposCards();" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Canchas</button>
             <button onclick="changeTab('general')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">General</button>
-            <button onclick="changeTab('jugadores')" class="tab-btn pb-4 text-blue-500 border-b-2 border-blue-500 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Jugadores</button>
         </div>
 
         <div id="tab-content">
@@ -53,16 +53,20 @@
                             <tr class="hover:bg-blue-900/5 transition">
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-3">
-                                        <div class="size-8 bg-blue-600/20 text-blue-500 rounded-full flex items-center justify-center font-bold text-xs border border-blue-500/30">
+                                        <div class="size-8 bg-blue-600/20 text-blue-500 rounded-full flex items-center justify-center font-bold text-xs border border-blue-500/30 flex-shrink-0">
                                             {{ $j['numero'] ?? '00' }}
                                         </div>
-                                        <div class="text-left">
-                                            <div class="font-medium text-white flex items-center gap-2" data-field="nombre">
-                                                {{ $j['nombre'] ?? 'Sin Nombre' }}
+                                        
+                                        <div class="text-left overflow-hidden">
+                                            <div class="font-medium text-white flex items-center gap-2" title="{{ $j['nombre'] ?? '' }}">
+                                                <span class="truncate max-w-[100px] md:max-w-[180px] block" data-field="nombre">
+                                                    {{ $j['nombre'] ?? 'Sin Nombre' }}
+                                                </span>
+                                                
                                                 @if(($j['estatus'] ?? 'activo') === 'suspendido')
-                                                    <span class="bg-red-500 text-[8px] px-1.5 py-0.5 rounded text-white font-black animate-pulse">SUSPENDIDO</span>
+                                                    <span class="bg-red-500 text-[8px] px-1.5 py-0.5 rounded text-white font-black animate-pulse flex-shrink-0">SUSPENDIDO</span>
                                                 @elseif(($j['estatus'] ?? 'activo') === 'lesionado')
-                                                    <span class="bg-amber-500 text-[8px] px-1.5 py-0.5 rounded text-white font-black">LESIONADO</span>
+                                                    <span class="bg-amber-500 text-[8px] px-1.5 py-0.5 rounded text-white font-black flex-shrink-0">LESIONADO</span>
                                                 @endif
                                             </div>    
 
@@ -138,7 +142,31 @@
                 <div id="contenedorListaPartidos"></div>
             </div>
 
-            <div id="content-posiciones" class="tab-pane hidden p-10 text-center border-2 border-dashed border-slate-800 rounded-xl text-slate-600">Posiciones...</div>
+            <div id="content-posiciones" class="tab-pane hjidden">
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-950/50 text-[10px] text-slate-500 uppercase tracking-widest border-b border-slate-800">
+                                    <th class="px-4 py-4 text-center w-12">#</th>
+                                    <th class="px-4 py-4">Club</th>
+                                    <th class="px-2 py-4 text-center">PJ</th>
+                                    <th class="px-2 py-4 text-center hidden md:table-cell">G</th>
+                                    <th class="px-2 py-4 text-center hidden md:table-cell">E</th>
+                                    <th class="px-2 py-4 text-center hidden md:table-cell">P</th>
+                                    <th class="px-3 py-4 text-center font-black text-white">Pts</th>
+                                    <th class="px-2 py-4 text-center">GF</th>
+                                    <th class="px-2 py-4 text-center">GC</th>
+                                    <th class="px-2 py-4 text-center">DG</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaCuerpoPosiciones" class="divide-y divide-slate-800/50">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <div id="content-general" class="tab-pane hidden p-10 text-center border-2 border-dashed border-slate-800 rounded-xl text-slate-600">General...</div>
 
             <div id="content-campos" class="tab-pane hidden space-y-4">
@@ -175,26 +203,26 @@
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Nombre</label>
-                    <input type="text" name="nombre" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                    <input type="text" name="nombre" oninput="if(this.value.length > 55) this.value = this.value.slice(0, 55);" placeholder="Máx 55 Caracteres"  required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
                 </div>
                 <div>
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Dorsal (#)</label>
-                    <input type="number" name="numero" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                    <input type="number" name="numero" min="1" max="99" oninput="if(this.value > 99) this.value = 99;" placeholder="Máx 99" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
                 </div>
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Edad</label>
-                    <input type="number" name="edad" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                    <input type="number" name="edad" min="1" max="99" oninput="if(this.value > 99) this.value = 99;" placeholder="Máx 99" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
                 </div>
                 <div>
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Teléfono</label>
-                    <input type="number" name="telefono" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                    <input type="number" name="telefono" oninput="if(this.value.length > 10) this.value = this.value.slice(0, 10);" placeholder="10 dígitos" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
                 </div>
             </div>
             <div>
                 <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Dirección</label>
-                <input type="text" name="direccion" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                <input type="text" name="direccion" oninput="if(this.value.length > 255) this.value = this.value.slice(0, 255);" placeholder="Máx 255 Caracteres" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
             </div>
             <div>
                 <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Equipo</label>
@@ -389,6 +417,91 @@
                 <button type="submit" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl text-xs uppercase">REGISTRAR</button>
             </div>
         </form>
+    </div>
+</div>
+
+<div id="modalDetallePartido" class="fixed inset-0 bg-slate-950/90 backdrop-blur-sm hidden items-center justify-center z-[150] p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+            <div class="flex flex-col">
+                <span id="det_fecha" class="text-[10px] text-slate-300 font-black uppercase tracking-widest"></span>
+                <span id="det_rango_hora" class="text-[9px] text-slate-500 font-bold"></span>
+            </div>
+            <button onclick="cerrarDetalle()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
+        </div>
+
+        <div class="overflow-y-auto custom-scrollbar p-6 space-y-6">
+            <div class="grid grid-cols-3 items-center">
+                <div class="text-center space-y-2">
+                    <img id="det_escudo_local" src="" class="size-16 mx-auto object-contain drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
+                    <h3 id="det_nombre_local" class="text-xs font-black text-white uppercase tracking-tighter"></h3>
+                </div>
+                
+                <div class="text-center">
+                    <div class="flex items-center justify-center gap-3">
+                        <span id="det_goles_local" class="text-5xl font-black text-white"></span>
+                        <span class="text-slate-700 text-2xl font-light">-</span>
+                        <span id="det_goles_visitante" class="text-5xl font-black text-white"></span>
+                    </div>
+                    <div class="mt-2">
+                        <span id="det_estatus" class="text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest"></span>
+                    </div>
+                </div>
+
+                <div class="text-center space-y-2">
+                    <img id="det_escudo_visitante" src="" class="size-16 mx-auto object-contain drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
+                    <h3 id="det_nombre_visitante" class="text-xs font-black text-white uppercase tracking-tighter"></h3>
+                </div>
+            </div>
+
+            <div class="bg-slate-950/30 rounded-2xl border border-slate-800/50 p-4">
+                <p class="text-center text-[8px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Anotadores del encuentro</p>
+                <div class="grid grid-cols-2 gap-4 relative">
+                    <div class="absolute inset-y-0 left-1/2 w-px bg-slate-800/50"></div>
+                    
+                    <div id="lista_goleadores_local" class="space-y-3 pr-2"></div>
+                    <div id="lista_goleadores_visitante" class="space-y-3 pl-2"></div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4 bg-blue-600/5 rounded-2xl p-4 border border-blue-500/20">
+                <div class="size-10 rounded-xl bg-blue-600/10 flex items-center justify-center text-blue-500">
+                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" stroke-width="2"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-width="2"/></svg>
+                </div>
+                <div class="flex-1 text-left">
+                    <p class="text-[8px] text-slate-500 uppercase font-black tracking-widest">Sede del encuentro</p>
+                    <p id="det_cancha" class="text-xs text-white font-bold uppercase"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="modalReasignarSede" class="fixed inset-0 bg-slate-950/90 backdrop-blur-sm hidden items-center justify-center z-[200] p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
+        <div class="p-6 border-b border-slate-800">
+            <h3 class="text-white font-black uppercase tracking-tighter text-lg">⚠️ Reasignación Obligatoria</h3>
+            <p class="text-slate-500 text-xs mt-1">Esta sede tiene partidos pendientes que deben moverse antes de eliminarla.</p>
+        </div>
+        
+        <div class="p-6 space-y-4">
+            <div class="space-y-2">
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Partidos afectados:</label>
+                <div id="listaPartidosAfectados" class="max-h-32 overflow-y-auto bg-slate-950/50 rounded-xl p-3 border border-slate-800 space-y-2 custom-scrollbar">
+                    </div>
+            </div>
+
+            <div class="space-y-2">
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mover a nueva sede:</label>
+                <select id="selectNuevaSedeBorrado" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 text-sm">
+                    </select>
+            </div>
+        </div>
+
+        <div class="p-4 bg-slate-950/50 flex gap-3">
+            <button onclick="cerrarModalReasignar()" class="flex-1 px-4 py-3 text-slate-400 font-bold text-xs uppercase hover:text-white transition">Cancelar</button>
+            <button id="btnConfirmarBorradoEspecial" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold text-xs py-3 rounded-xl uppercase transition shadow-lg shadow-red-900/20">Reasignar y Borrar</button>
+        </div>
     </div>
 </div>
 

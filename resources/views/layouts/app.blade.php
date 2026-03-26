@@ -61,23 +61,53 @@
     let editTelefono = null;
     let cachePartidos = [];
     let cachePartidosLista = []; 
-    
 
     document.addEventListener('DOMContentLoaded', () => {
+    // 2. INICIALIZAR REFERENCIAS GLOBALES
         window.modalJugador = document.getElementById('modalJugador');
+        window.modalEquipo = document.getElementById('modalEquipo');
+        window.modalCrearPartido = document.getElementById('modalCrearPartido');
+        window.modalActualizarMarcador = document.getElementById('modalActualizarMarcador');
+        
         window.formJugador = document.getElementById('formRegistroJugador');
         window.formEquipo = document.getElementById('formRegistroEquipo');
+        window.formPartidos = document.getElementById('formCrearPartido');
+        window.formActualizar = document.getElementById('formActualizarMarcador');
 
-        // Lógica de Registro / Edición de Jugadores
+        // 3. FUNCIÓN PARA ABRIR MODAL CREAR PARTIDO
+        window.abrirModalCrearPartido = function() {
+            if (window.modalCrearPartido) {
+                window.modalCrearPartido.classList.replace('hidden', 'flex');
+                if (typeof llenarSelectsEquipos === 'function') llenarSelectsEquipos(); 
+                if (typeof llenarSelectsCampos === 'function') llenarSelectsCampos(); 
+            }
+        };
+
+        // 4. ACTIVAR SENSORES DE AGENDA (CONFLICTOS INTELIGENTES)
+        const selectCampos = document.getElementById('selectCampos');
+        const inputFecha = document.querySelector('#formCrearPartido input[name="fecha"]');
+        const inputHora = document.querySelector('#formCrearPartido input[name="hora"]');
+
+        if(selectCampos) selectCampos.addEventListener('change', window.verificarConflictosInteligentes);
+        if(inputFecha) inputFecha.addEventListener('change', window.verificarConflictosInteligentes);
+        if(inputHora) inputHora.addEventListener('change', window.verificarConflictosInteligentes);
+
+        // 5. LÓGICA DE FORMULARIO: REGISTRO / EDICIÓN JUGADORES
         if(window.formJugador) {
             window.formJugador.onsubmit = async (e) => {
                 e.preventDefault();
                 const btn = document.getElementById('btnGuardar');
                 const msgError = document.getElementById('mensajeError'); 
-                
                 btn.innerText = 'Procesando...'; 
                 btn.disabled = true;
                 if(msgError) msgError.classList.add('hidden');
+
+                if (window.formJugador.telefono.value.length !== 10 && !editMode) {
+                    alert("⚠️ El teléfono debe tener 10 dígitos");
+                    btn.disabled = false;
+                    btn.innerText = 'Registrar Jugador';
+                    return;
+                }
 
                 const data = {
                     nombre: window.formJugador.nombre.value,
@@ -86,7 +116,7 @@
                     telefono: editMode ? editTelefono : window.formJugador.telefono.value,
                     equipo: window.formJugador.equipo.value,
                     numero: window.formJugador.numero.value,
-                    estatus: document.getElementById('edit_estatus').value // Captura estatus
+                    estatus: document.getElementById('edit_estatus').value 
                 };
 
                 const url = editMode ? `/api/admin/jugadores/actualizar/${editTelefono}` : '/api/admin/jugadores/registrar';
@@ -95,15 +125,10 @@
                 try {
                     const response = await fetch(url, {
                         method: method,
-                        headers: { 
-                            'Content-Type': 'application/json', 
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                        },
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                         body: JSON.stringify(data)
                     });
-
                     const result = await response.json();
-
                     if (response.ok) { 
                         alert('✅ ¡Guardado con éxito!'); 
                         location.reload(); 
@@ -119,7 +144,7 @@
             };
         }
 
-        // Registro de Equipos
+        // 6. LÓGICA DE FORMULARIO: REGISTRO DE EQUIPOS
         if(window.formEquipo) {
             window.formEquipo.onsubmit = async (e) => {
                 e.preventDefault();
@@ -135,6 +160,91 @@
                 } catch (error) { alert('❌ Error de conexión'); }
             };
         }
+
+        // 7. LÓGICA DE FORMULARIO: CREAR PARTIDO (VERSION INTELIGENTE)
+        if (window.formPartidos) {
+            window.formPartidos.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const data = {
+                    local: document.getElementById('selectLocal').value,
+                    visitante: document.getElementById('selectVisitante').value,
+                    campo_id: document.getElementById('selectCampos').value,
+                    fecha: window.formPartidos.fecha.value,
+                    hora: window.formPartidos.hora.value
+                };
+
+                if (data.local === data.visitante) return alert("❌ No pueden jugar contra el mismo equipo");
+                
+                try {
+                    const res = await fetch('/api/admin/partidos/crear', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                        body: JSON.stringify(data)
+                    });
+                    const result = await res.json();
+                    if (res.ok) { 
+                        alert("⚽ " + (result.message || "Partido programado")); 
+                        if(window.modalCrearPartido) window.modalCrearPartido.classList.replace('flex', 'hidden');
+                        cargarPartidosCards(); 
+                        if(document.getElementById('agendaCanchaContenedor')) document.getElementById('agendaCanchaContenedor').classList.add('hidden');
+                    } else {
+                        alert("🚫 NO SE PUDO CREAR:\n" + (result.error || "Error desconocido"));
+                    }
+                } catch (e) { alert("Error de conexión con el servidor"); }
+            });
+        }
+
+        // 8. LÓGICA DE FORMULARIO: ACTUALIZAR MARCADOR Y CÉDULA
+        if (window.formActualizar) {
+            window.formActualizar.onsubmit = async (e) => {
+                e.preventDefault();
+                const listaEstadisticas = {};
+                document.querySelectorAll('.fila-jugador-cedula').forEach(fila => {
+                    const tel = fila.dataset.telefono;
+                    const asistio = fila.querySelector('.check-asistencia').checked;
+                    const goles = fila.querySelector('.input-gol-jugador').value;
+                    listaEstadisticas[tel] = {
+                        asistio: asistio,
+                        goles: parseInt(goles) || 0
+                    };
+                });
+
+                const id = document.getElementById('edit_partido_id').value;
+                const esFinal = document.getElementById('confirmar_final')?.checked || false;
+
+                if (esFinal && !confirm("⚠️ Al confirmar como FINALIZADO, el acta se cerrará. ¿Proceder?")) return;
+
+                const data = {
+                    goles_local: document.getElementById('goles_local').value,
+                    goles_visitante: document.getElementById('goles_visitante').value,
+                    confirmar_final: esFinal,
+                    detalle_jugadores: listaEstadisticas 
+                };
+
+                try {
+                    const res = await fetch(`/api/admin/partidos/actualizar/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                        body: JSON.stringify(data)
+                    });
+                    const result = await res.json();
+                    if (res.ok) {
+                        alert(esFinal ? "🔒 Acta cerrada" : "✅ Marcador actualizado");
+                        if(window.modalActualizarMarcador) window.modalActualizarMarcador.classList.replace('flex', 'hidden');
+                        cargarPartidosCards(); 
+                    } else {
+                        alert("❌ " + (result.error || "Error al actualizar"));
+                    }
+                } catch (e) { alert("Error de conexión"); }
+            };
+        }
+
+        // 9. CARGA INICIAL DE DATOS
+        if (typeof window.cargarTablaPosiciones === 'function') {
+            window.cargarTablaPosiciones();
+        }
+        cargarPartidosCards(); 
+        cargarGestionEquipos();
     });
 
     // --- FUNCIONES DE APERTURA DE MODALES ---
@@ -237,23 +347,32 @@ window.abrirModal = function() {
     }
     
     function changeTab(tabName) {
+        // 1. Ocultar todos los paneles
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+        
+        // 2. Resetear estilos de todos los botones
         document.querySelectorAll('.tab-btn').forEach(b => {
             b.classList.remove('text-blue-500', 'border-b-2', 'border-blue-500');
             b.classList.add('text-slate-500');
         });
 
+        // 3. Mostrar el panel objetivo
         const target = document.getElementById('content-' + tabName);
         if(target) target.classList.remove('hidden');
 
-        // Usamos window.event para mayor compatibilidad o verificamos si existe
+        // 4. Activar el estilo del botón clickeado
         if(window.event && window.event.currentTarget) {
             window.event.currentTarget.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
         }
 
-        // Disparar carga de datos según la pestaña
-        if(tabName === 'partidos') cargarPartidosCards();
-        if(tabName === 'equipos_gest') cargarGestionEquipos();
+        // 5. DISPARAR CARGAS (Aquí estaba el error)
+        if(tabName === 'partidos') {
+            cargarPartidosCards(); 
+        } else if(tabName === 'posiciones') {
+            window.cargarTablaPosiciones(); 
+        } else if(tabName === 'equipos_gest') {
+            if(typeof cargarGestionEquipos === 'function') cargarGestionEquipos();
+        }
     }
 
     function abrirModalEquipo() { 
@@ -363,7 +482,7 @@ window.abrirModal = function() {
             window.modalEquipo.classList.replace('hidden', 'flex'); 
             cargarGaleriaEscudos(); 
         }
-
+    
     // 1. CARGAR LISTA (Actualizado para que el botón de editar funcione con tu HTML)
     async function cargarGestionEquipos() {
         const contenedor = document.getElementById('listaEquiposCards');
@@ -429,46 +548,38 @@ window.abrirModal = function() {
     }
 
 
-    // Modifica tu función changeTab para cargar los equipos al entrar al tab
-    function changeTab(tabName) {
-        document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
-        document.querySelectorAll('.tab-btn').forEach(b => {
-            b.classList.remove('text-blue-500', 'border-b-2', 'border-blue-500');
-            b.classList.add('text-slate-500');
-        });
+    
 
-        const target = document.getElementById('content-' + tabName);
-        if(target) target.classList.remove('hidden');
+    
 
-        // Resaltar el botón presionado de forma segura
-        if(window.event && window.event.currentTarget) {
-            window.event.currentTarget.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
+    window.eliminarJugador = async function(telefono) {
+        // 1. Confirmación de seguridad
+        if (!confirm('⚠️ ¿Estás seguro de eliminar a este jugador? Se borrarán sus estadísticas permanentemente.')) {
+            return;
         }
 
-        // DISPARAR CARGAS AUTOMÁTICAS
-        if(tabName === 'partidos') cargarPartidosCards();
-        if(tabName === 'equipos_gest') cargarGestionEquipos();
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        window.modalJugador = document.getElementById('modalJugador');
-        window.modalEquipo = document.getElementById('modalEquipo');
-        window.abrirModalCrearPartido = function() {
-            const modal = document.getElementById('modalCrearPartido');
-            if (modal) {
-                modal.classList.replace('hidden', 'flex');
-                llenarSelectsEquipos(); 
-                if (typeof llenarSelectsCampos === 'function') {
-                    llenarSelectsCampos(); 
+        try {
+            const response = await fetch(`/api/admin/jugadores/eliminar/${telefono}`, {
+                method: 'DELETE',
+                headers: { 
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
                 }
+            });
+
+            if (response.ok) {
+                alert('🗑️ Jugador eliminado correctamente');
+                location.reload(); // Recargamos para actualizar la tabla
+            } else {
+                const result = await response.json();
+                alert('❌ Error: ' + (result.error || 'No se pudo eliminar al jugador'));
             }
-        };
-
-        // CARGA INICIAL: Traemos los partidos de una vez para que estén listos
-        cargarPartidosCards();
-        cargarGestionEquipos();
-    });
-
+        } catch (error) {
+            console.error('Error:', error);
+            alert('❌ Error de conexión con el servidor');
+        }
+    };
+    
     function filtrarTabla() {
         const busqueda = document.getElementById('busquedaJugador').value.toLowerCase().trim();
         const equipoFiltro = document.getElementById('filtroEquipo').value; 
@@ -561,252 +672,114 @@ window.abrirModal = function() {
         } catch (e) { console.error("Error llenando selects:", e); }
     }
 
-    // Usamos addEventListener en lugar de onsubmit directo para mayor estabilidad
-
-    document.addEventListener('DOMContentLoaded', () => {
-        // 1. Inicializar referencias de modales
-        window.modalJugador = document.getElementById('modalJugador');
-        window.modalEquipo = document.getElementById('modalEquipo');
-        window.modalCrearPartido = document.getElementById('modalCrearPartido');
-        window.modalActualizarMarcador = document.getElementById('modalActualizarMarcador');
-
-        // 2. ACTIVAR SENSORES DE AGENDA 
-        // Escuchamos cambios en Campo, Fecha y Hora para actualizar la tabla visual
-        const selectCampos = document.getElementById('selectCampos');
-        const inputFecha = document.querySelector('#formCrearPartido input[name="fecha"]');
-        const inputHora = document.querySelector('#formCrearPartido input[name="hora"]');
-
-        if(selectCampos) selectCampos.addEventListener('change', window.verificarConflictosInteligentes);
-        if(inputFecha) inputFecha.addEventListener('change', window.verificarConflictosInteligentes);
-        if(inputHora) inputHora.addEventListener('change', window.verificarConflictosInteligentes);
-
-        // 3. --- LISTENER CREAR PARTIDO (VERSION INTELIGENTE) ---
-        const formPartidos = document.getElementById('formCrearPartido');
-        if (formPartidos) {
-            formPartidos.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                
-                const data = {
-                    local: document.getElementById('selectLocal').value,
-                    visitante: document.getElementById('selectVisitante').value,
-                    campo_id: document.getElementById('selectCampos').value,
-                    fecha: formPartidos.fecha.value,
-                    hora: formPartidos.hora.value
-                };
-
-                if (data.local === data.visitante) return alert("❌ No pueden jugar contra el mismo equipo");
-                
-                try {
-                    const res = await fetch('/api/admin/partidos/crear', {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json', 
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}' 
-                        },
-                        body: JSON.stringify(data)
-                    });
-                    
-                    const result = await res.json(); // Obtenemos la respuesta del controlador
-
-                    if (res.ok) { 
-                        alert("⚽ " + (result.message || "Partido programado")); 
-                        cerrarModalCrearPartido(); 
-                        cargarPartidosCards(); 
-                        // Escondemos la agenda para la próxima vez
-                        document.getElementById('agendaCanchaContenedor').classList.add('hidden');
-                    } else {
-                        // AQUÍ SE MUESTRA EL ERROR DEL CONTROLADOR (Cancha ocupada, etc)
-                        alert("🚫 NO SE PUDO CREAR:\n" + (result.error || "Error desconocido"));
-                    }
-                } catch (e) { 
-                    alert("Error de conexión con el servidor"); 
-                }
-            });
-        }
-
-        // 4. --- LISTENER Estadisticas---
-        const listaEstadisticas = {};
-            document.querySelectorAll('.fila-jugador-cedula').forEach(fila => {
-                const tel = fila.dataset.telefono;
-                const jugo = fila.querySelector('.check-asistencia').checked;
-                const goles = fila.querySelector('.input-gol').value;
-
-                listaEstadisticas[tel] = {
-                    asistio: jugo,
-                    goles: parseInt(goles)
-                };
-            });
-            
-        // 5. --- LISTENER ACTUALIZAR RESULTADO ---
-        // --- LISTENER ACTUALIZAR RESULTADO (CON RECOLECCIÓN DE CÉDULA) ---
-        const formActualizar = document.getElementById('formActualizarMarcador');
-        if (formActualizar) {
-            formActualizar.onsubmit = async (e) => {
-                e.preventDefault();
-
-                // 1. RECOLECTAR ESTADÍSTICAS (Solo en este momento)
-                const listaEstadisticas = {};
-                // Buscamos todas las filas que generamos dinámicamente en el modal
-                document.querySelectorAll('.fila-jugador-cedula').forEach(fila => {
-                    const tel = fila.dataset.telefono;
-                    const asistio = fila.querySelector('.check-asistencia').checked;
-                    const goles = fila.querySelector('.input-gol-jugador').value;
-
-                    listaEstadisticas[tel] = {
-                        asistio: asistio,
-                        goles: parseInt(goles) || 0
-                    };
-                });
-
-                // 2. OBTENER DATOS DEL FORMULARIO
-                const id = document.getElementById('edit_partido_id').value;
-                const checkFinal = document.getElementById('confirmar_final');
-                const esFinal = checkFinal ? checkFinal.checked : false;
-
-                if (esFinal) {
-                    if (!confirm("⚠️ Al confirmar como FINALIZADO, el acta se cerrará y se sumarán los puntos/goles a los jugadores. ¿Proceder?")) return;
-                }
-
-                const data = {
-                    goles_local: document.getElementById('goles_local').value,
-                    goles_visitante: document.getElementById('goles_visitante').value,
-                    confirmar_final: esFinal,
-                    detalle_jugadores: listaEstadisticas 
-                };
-
-                try {
-                    const res = await fetch(`/api/admin/partidos/actualizar/${id}`, {
-                        method: 'PUT',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}' 
-                        },
-                        body: JSON.stringify(data)
-                    });
-
-                    const result = await res.json();
-
-                    if (res.ok) {
-                        alert(esFinal ? "🔒 Acta cerrada y estadísticas actualizadas" : "✅ Marcador actualizado");
-                        cerrarModalMarcador();
-                        cargarPartidosCards(); 
-                    } else {
-                        alert("❌ " + (result.error || "Error al actualizar"));
-                    }
-                } catch (e) { 
-                    console.error(e);
-                    alert("Error de conexión"); 
-                }
-            };
-        }
-
-        // 5. Carga inicial de datos
-        cargarPartidosCards();
-        cargarGestionEquipos();
-    });
+    
 
     // --- FUNCIONES GLOBALES ---
 
     async function cargarPartidosCards() {
-    const contenedor = document.getElementById('contenedorListaPartidos');
-    if (!contenedor) return;
+        const contenedor = document.getElementById('contenedorListaPartidos');
+        if (!contenedor) return;
 
-    try {
-        const res = await fetch('/api/partidos');
-        const partidos = await res.json();
-        
-        // Guardamos en la variable global convirtiendo el objeto a Array con su ID
-        cachePartidosLista = Object.keys(partidos).map(id => ({
-            id: id,
-            ...partidos[id]
-        }));
+        try {
+            const res = await fetch('/api/partidos');
+            const partidos = await res.json();
+            
+            // FORZAMOS LA VARIABLE GLOBAL
+            window.cachePartidosLista = Object.keys(partidos).map(id => ({
+                id: id,
+                ...partidos[id]
+            }));
 
-        // Mandamos a dibujar con los filtros aplicados (por defecto "todos")
-        aplicarFiltrosPartidos();
-    } catch (e) { console.error("Error cargando partidos:", e); }
-}
+            console.log("Caché actualizada:", window.cachePartidosLista.length, "partidos.");
+
+            aplicarFiltrosPartidos();
+        } catch (e) { 
+            console.error("Error cargando partidos:", e); 
+        }
+    }
 
     window.aplicarFiltrosPartidos = function() {
         const contenedor = document.getElementById('contenedorListaPartidos');
+        if (!contenedor) return;
+
         const busqueda = document.getElementById('filtroEquipoPartido').value.toLowerCase().trim();
-        const estatus = document.getElementById('filtroEstatusPartido').value;
+        const estatusFiltro = document.getElementById('filtroEstatusPartido').value;
         const orden = document.getElementById('ordenarPartidos').value;
 
-        // 1. Filtrar los datos que tenemos en memoria
-        let partidosFiltrados = cachePartidosLista.filter(p => {
-            const coincideNombre = p.equipo_local.toLowerCase().includes(busqueda) || 
-                                p.equipo_visitante.toLowerCase().includes(busqueda);
+        // 1. Filtrar
+        let filtrados = window.cachePartidosLista.filter(p => {
+            const nombreMatch = (p.equipo_local || "").toLowerCase().includes(busqueda) || 
+                                (p.equipo_visitante || "").toLowerCase().includes(busqueda);
             
-            let coincideEstatus = true;
-            if (estatus === 'programado') coincideEstatus = (p.estatus === 'programado');
-            if (estatus === 'en_curso') coincideEstatus = (p.estatus === 'en_curso');
-            if (estatus === 'finalizado') coincideEstatus = (p.estatus === 'finalizado' && !p.resultado_confirmado);
-            if (estatus === 'confirmado') coincideEstatus = (p.resultado_confirmado === true);
-
-            return coincideNombre && coincideEstatus;
+            let estatusMatch = false;
+            if (estatusFiltro === 'todos') {
+                estatusMatch = true;
+            } else {
+                estatusMatch = (p.estatus === estatusFiltro);
+            }
+            return nombreMatch && estatusMatch;
         });
 
-        // 2. Ordenar por Fecha y Hora (Combinadas para precisión)
-        partidosFiltrados.sort((a, b) => {
-            const datetimeA = new Date(`${a.fecha}T${a.hora || '00:00'}`);
-            const datetimeB = new Date(`${b.fecha}T${b.hora || '00:00'}`);
-            return orden === 'recientes' ? datetimeB - datetimeA : datetimeA - datetimeB;
+        // 2. Ordenar
+        filtrados.sort((a, b) => {
+            const fechaA = new Date(`${a.fecha}T${a.hora || '00:00'}`);
+            const fechaB = new Date(`${b.fecha}T${b.hora || '00:00'}`);
+            return orden === 'recientes' ? fechaB - fechaA : fechaA - fechaB;
         });
 
-        // 3. Dibujar en el contenedor
-        contenedor.innerHTML = '';
-        
-        if (partidosFiltrados.length === 0) {
-            contenedor.innerHTML = '<p class="text-center text-slate-600 py-10 italic">No se encontraron partidos.</p>';
+        // 3. Dibujar HTML
+        let html = '';
+        if (filtrados.length === 0) {
+            contenedor.innerHTML = '<p class="text-center text-slate-600 py-10 italic">No se encontraron partidos con estos filtros.</p>';
             return;
         }
 
-        partidosFiltrados.forEach(p => {
-            // Lógica de colores de estatus (Tu diseño original)
-            let statusHTML = '';
-            if(p.resultado_confirmado) {
-                statusHTML = '<span class="text-white bg-slate-700 px-2 py-0.5 rounded text-[8px] font-black uppercase">Acta Cerrada 🔒</span>';
-            } else if(p.estatus === 'en_curso') {
-                statusHTML = '<span class="text-green-500 animate-pulse font-black uppercase text-[9px]">En Curso 🟢</span>';
-            } else if(p.estatus === 'finalizado') {
-                statusHTML = '<span class="text-amber-500 font-black uppercase text-[9px]">Por Subir Acta ⚠️</span>';
+        filtrados.forEach(p => {
+            let badgeEstatus = '';
+            if (p.resultado_confirmado || p.estatus === 'confirmado') {
+                badgeEstatus = `<span class="bg-slate-800 text-slate-400 text-[10px] px-3 py-1 rounded-lg font-black uppercase flex items-center gap-2">ACTA CERRADA 🔒</span>`;
+            } else if (p.estatus === 'finalizado') {
+                badgeEstatus = `<span class="bg-amber-600/20 text-amber-500 text-[10px] px-3 py-1 rounded-lg font-black uppercase flex items-center gap-2 animate-pulse">POR SUBIR ACTA ⚠️</span>`;
+            } else if (p.estatus === 'en_curso') {
+                badgeEstatus = `<span class="bg-green-600/20 text-green-500 text-[10px] px-3 py-1 rounded-lg font-black uppercase flex items-center gap-2">EN CURSO 🟢</span>`;
             } else {
-                statusHTML = '<span class="text-slate-500 font-black uppercase text-[9px]">Programado</span>';
+                badgeEstatus = `<span class="bg-blue-600/20 text-blue-500 text-[10px] px-3 py-1 rounded-lg font-black uppercase flex items-center gap-2">PROGRAMADO 📅</span>`;
             }
 
-            const botonGestionar = !p.resultado_confirmado 
-                ? `<button onclick="abrirActualizarMarcador('${p.id}')" class="mt-2 w-full text-[10px] bg-blue-600/10 text-blue-500 border border-blue-500/20 px-2 py-1 rounded hover:bg-blue-600 hover:text-white transition uppercase font-black">Gestionar</button>` 
-                : `<span class="text-[9px] text-slate-500 italic block mt-2">Resultado Inamovible</span>`;
-
-            // Insertar la tarjeta con tu diseño original
-            contenedor.innerHTML += `
-                <div class="bg-slate-900 border ${p.resultado_confirmado ? 'border-slate-800' : 'border-blue-500/20'} rounded-xl p-4 flex items-center justify-between shadow-lg mb-4">
-                    <div class="flex-1 space-y-3">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <img src="${p.escudo_local}" class="size-7 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/5323/5323982.png'">
-                                <span class="font-bold text-slate-200 text-sm uppercase">${p.equipo_local}</span>
+            html += `
+                <div onclick="window.verDetallePartido('${p.id}')" 
+                    class="cursor-pointer bg-slate-900 border border-slate-800 p-5 rounded-3xl mb-4 transition-all hover:border-slate-700 group relative">
+                    <div class="flex justify-between items-center">
+                        <div class="flex flex-col gap-4 w-2/3">
+                            <div class="flex items-center gap-4">
+                                <img src="${p.escudo_local}" class="size-10 object-contain">
+                                <span class="text-white font-black uppercase tracking-tighter text-lg">${p.equipo_local}</span>
+                                <span class="text-2xl font-black text-white ml-auto">${p.goles_local}</span>
                             </div>
-                            <span class="text-xl font-black text-white">${p.goles_local}</span>
+                            <div class="flex items-center gap-4">
+                                <img src="${p.escudo_visitante}" class="size-10 object-contain">
+                                <span class="text-white font-black uppercase tracking-tighter text-lg">${p.equipo_visitante}</span>
+                                <span class="text-2xl font-black text-white ml-auto">${p.goles_visitante}</span>
+                            </div>
                         </div>
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <img src="${p.escudo_visitante}" class="size-7 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/5323/5323982.png'">
-                                <span class="font-bold text-slate-200 text-sm uppercase">${p.equipo_visitante}</span>
-                            </div>
-                            <span class="text-xl font-black text-white">${p.goles_visitante}</span>
+                        <div class="flex flex-col items-end gap-2 border-l border-slate-800 pl-6">
+                            ${badgeEstatus}
+                            <span class="text-[11px] text-slate-500 font-bold">${p.fecha_formateada || p.fecha}</span>
+                            ${!(p.resultado_confirmado || p.estatus === 'confirmado') ? `
+                                <button onclick="event.stopPropagation(); abrirActualizarMarcador('${p.id}')" 
+                                        class="mt-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black px-6 py-2 rounded-xl transition-all uppercase tracking-widest shadow-lg shadow-blue-900/20">
+                                    GESTIONAR
+                                </button>
+                            ` : `
+                                <span class="text-[10px] text-slate-600 italic mt-2 uppercase tracking-widest">Resultado Inamovible</span>
+                            `}
                         </div>
                     </div>
-                    <div class="w-px h-10 bg-slate-800 mx-4"></div>
-                    <div class="text-right min-w-[120px]">
-                        <div class="mb-1">${statusHTML}</div>
-                        <p class="text-[10px] text-slate-500 font-bold">${p.fecha} | ${p.hora || '--:--'}</p>
-                        ${botonGestionar}
-                    </div>
-                </div>
-            `;
+                </div>`;
         });
-    }
+
+        contenedor.innerHTML = html;
+    };
 
     async function abrirActualizarMarcador(id) {
         try {
@@ -928,18 +901,7 @@ window.abrirModal = function() {
         } catch (e) { alert("Error al eliminar"); }
     }
 
-    // Funciones de Pestañas y creación (Mantenlas igual)
-    function changeTab(tabName) {
-        document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
-        document.querySelectorAll('.tab-btn').forEach(b => {
-            b.classList.remove('text-blue-500', 'border-b-2', 'border-blue-500');
-            b.classList.add('text-slate-500');
-        });
-        const target = document.getElementById('content-' + tabName);
-        if(target) target.classList.remove('hidden');
-        if(window.event && window.event.currentTarget) window.event.currentTarget.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
-        if(tabName === 'partidos') cargarPartidosCards();
-    }
+   
     
     function abrirModalCrearPartido() { window.modalCrearPartido.classList.replace('hidden', 'flex'); llenarSelectsEquipos(); }
     function cerrarModalCrearPartido() { window.modalCrearPartido.classList.replace('flex', 'hidden'); }
@@ -992,28 +954,123 @@ document.getElementById('formCrearCampo').onsubmit = async (e) => {
 };
 
 // Cargar Canchas en el Tab
-// Busca donde dice async function cargarCamposCards() y cámbialo a esto:
-window.cargarCamposCards = async function() {
-    const contenedor = document.getElementById('listaCamposCards');
-    if(!contenedor) return;
-    try {
-        const res = await fetch('/api/campos');
-        const campos = await res.json();
-        contenedor.innerHTML = '';
-        for (const id in campos) {
-            contenedor.innerHTML += `
-                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
-                    <div>
-                        <h4 class="text-white font-bold uppercase text-sm">${campos[id].nombre}</h4>
-                        <p class="text-slate-500 text-[10px] uppercase">${campos[id].lugar}</p>
-                    </div>
-                    <button onclick="eliminarCampo('${id}')" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition">
-                        <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                </div>`;
+    window.cargarCamposCards = async function() {
+        const contenedor = document.getElementById('listaCamposCards');
+        if(!contenedor) return;
+        try {
+            const res = await fetch('/api/campos');
+            const campos = await res.json();
+            contenedor.innerHTML = '';
+            for (const id in campos) {
+                contenedor.innerHTML += `
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
+                        <div>
+                            <h4 class="text-white font-bold uppercase text-sm">${campos[id].nombre}</h4>
+                            <p class="text-slate-500 text-[10px] uppercase">${campos[id].lugar}</p>
+                        </div>
+                        <button onclick="eliminarCampo('${id}')" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition">
+                            <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </button>
+                    </div>`;
+            }
+        } catch (e) { console.error("Error:", e); }
+    };
+    
+    window.cargarPartidosCards = async function() {
+        const contenedor = document.getElementById('contenedorListaPartidos');
+        if(!contenedor) return;
+
+        try {
+            const res = await fetch('/api/partidos');
+            const partidos = await res.json();
+
+            window.cachePartidosLista = Object.keys(partidos).map(id => ({
+                id: id,
+                ...partidos[id]
+            }));
+            aplicarFiltrosPartidos();
+            
+        } catch (e) { 
+            console.error("Error cargando partidos:", e);
         }
-    } catch (e) { console.error("Error:", e); }
-};
+    };
+
+    
+    window.verDetallePartido = async function(id) {
+        try {
+            const res = await fetch('/api/partidos');
+            const partidos = await res.json();
+            const p = partidos[id];
+            if(!p) return;
+
+            // 1. Info básica y cálculo de hora
+            document.getElementById('det_fecha').innerText = p.fecha_formateada || p.fecha;
+            
+            // Calcular hora de fin (100 min después)
+            const [h, m] = p.hora.split(':').map(Number);
+            const fin = new Date(); fin.setHours(h, m + 100);
+            const horaFinStr = fin.getHours().toString().padStart(2, '0') + ':' + fin.getMinutes().toString().padStart(2, '0');
+            document.getElementById('det_rango_hora').innerText = `HORARIO: ${p.hora} HRS - ${horaFinStr} HRS`;
+
+            document.getElementById('det_nombre_local').innerText = p.equipo_local;
+            document.getElementById('det_nombre_visitante').innerText = p.equipo_visitante;
+            document.getElementById('det_goles_local').innerText = p.goles_local;
+            document.getElementById('det_goles_visitante').innerText = p.goles_visitante;
+            document.getElementById('det_escudo_local').src = p.escudo_local;
+            document.getElementById('det_escudo_visitante').src = p.escudo_visitante;
+            
+            const resCampos = await fetch('/api/campos');
+            const campos = await resCampos.json();
+            const infoCampo = campos[p.campo_id];
+            document.getElementById('det_cancha').innerText = infoCampo ? `${infoCampo.nombre} (${infoCampo.lugar})` : "Sede por confirmar";
+
+            const est = document.getElementById('det_estatus');
+            const actaCerrada = p.resultado_confirmado;
+            est.innerText = (actaCerrada ? 'Finalizado' : p.estatus).toUpperCase();
+            est.className = actaCerrada ? "text-[8px] font-black px-3 py-1 rounded-full bg-slate-800 text-slate-500 border border-slate-700" : "text-[8px] font-black px-3 py-1 rounded-full bg-green-500/10 text-green-500 border border-green-500/20 animate-pulse";
+
+            // 2. Goleadores con números y mejor distribución
+            const listaLocal = document.getElementById('lista_goleadores_local');
+            const listaVisitante = document.getElementById('lista_goleadores_visitante');
+            listaLocal.innerHTML = ''; listaVisitante.innerHTML = '';
+
+            if(p.detalle_jugadores) {
+                const resJ = await fetch('/api/jugadores');
+                const jugadores = await resJ.json();
+
+                Object.entries(p.detalle_jugadores).forEach(([tel, stats]) => {
+                    if(stats.goles > 0) {
+                        const infoJ = jugadores[tel];
+                        const nombre = infoJ ? infoJ.nombre : "Jugador";
+                        const esLocal = infoJ && infoJ.equipo === p.equipo_local;
+                        
+                        // Formato: Nombre + Balón + Número (si es más de 1)
+                        const item = `
+                            <div class="flex items-center gap-2 ${esLocal ? 'justify-end' : 'justify-start'}">
+                                ${esLocal ? `<span class="text-[10px] text-white font-bold uppercase">${nombre}</span>` : ''}
+                                <div class="flex items-center bg-slate-900 px-2 py-1 rounded-lg border border-slate-800">
+                                    <span class="text-[10px]">⚽</span>
+                                    ${stats.goles > 1 ? `<span class="text-[10px] ml-1 font-black text-blue-500">${stats.goles}</span>` : ''}
+                                </div>
+                                ${!esLocal ? `<span class="text-[10px] text-white font-bold uppercase">${nombre}</span>` : ''}
+                            </div>`;
+                        
+                        if(esLocal) listaLocal.innerHTML += item;
+                        else listaVisitante.innerHTML += item;
+                    }
+                });
+            }
+
+            if(listaLocal.innerHTML === '') listaLocal.innerHTML = '<span class="text-[8px] text-slate-700 uppercase block text-right">Sin anotaciones</span>';
+            if(listaVisitante.innerHTML === '') listaVisitante.innerHTML = '<span class="text-[8px] text-slate-700 uppercase block text-left">Sin anotaciones</span>';
+
+            document.getElementById('modalDetallePartido').classList.replace('hidden', 'flex');
+        } catch (e) { console.error(e); }
+    };
+
+    window.cerrarDetalle = function() {
+        document.getElementById('modalDetallePartido').classList.replace('flex', 'hidden');
+    };
     
     window.verificarConflictosInteligentes = async function() {
         const campoId = document.getElementById('selectCampos').value;
@@ -1131,6 +1188,219 @@ window.cargarCamposCards = async function() {
         if (nuevoVal < 0) nuevoVal = 0;
         input.value = nuevoVal;
         window.recalcularMarcadorGlobal();
+    };
+
+
+
+    //Tabla de Posiciones
+
+    window.cargarTablaPosiciones = async function() {
+        const cuerpo = document.getElementById('tablaCuerpoPosiciones');
+            if(!cuerpo) return;
+
+            try {
+                const [resE, resP] = await Promise.all([
+                    fetch('/api/equipos'),
+                    fetch('/api/partidos')
+                ]);
+                
+                const equipos = await resE.json();
+                const partidos = await resP.json();
+
+                // 1. Inicializar objeto de estadísticas para cada equipo
+                let stats = {};
+                for (const id in equipos) {
+                    stats[equipos[id].nombre] = {
+                        nombre: equipos[id].nombre,
+                        escudo: equipos[id].escudo,
+                        pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0
+                    };
+                }
+
+                // 2. Procesar partidos (Solo los que tienen acta cerrada)
+                Object.values(partidos).forEach(partido => {
+                    if (partido.resultado_confirmado) {
+                        const loc = partido.equipo_local;
+                        const vis = partido.equipo_visitante;
+                        const gl = parseInt(partido.goles_local);
+                        const gv = parseInt(partido.goles_visitante);
+
+                        if (stats[loc] && stats[vis]) {
+                            stats[loc].pj++; stats[vis].pj++;
+                            stats[loc].gf += gl; stats[loc].gc += gv;
+                            stats[vis].gf += gv; stats[vis].gc += gl;
+
+                            if (gl > gv) {
+                                stats[loc].g++; stats[loc].pts += 3;
+                                stats[vis].p++;
+                            } else if (gl < gv) {
+                                stats[vis].g++; stats[vis].pts += 3;
+                                stats[loc].p++;
+                            } else {
+                                stats[loc].e++; stats[vis].e++;
+                                stats[loc].pts += 1; stats[vis].pts += 1;
+                            }
+                        }
+                    }
+                });
+
+                // 3. Convertir a Array y Ordenar (Pts > Diferencia Goles > GF)
+                const tablaOrdenada = Object.values(stats).sort((a, b) => {
+                    if (b.pts !== a.pts) return b.pts - a.pts;
+                    const difA = a.gf - a.gc;
+                    const difB = b.gf - b.gc;
+                    if (difB !== difA) return difB - difA;
+                    return b.gf - a.gf;
+                });
+
+                // 4. Dibujar la tabla
+                cuerpo.innerHTML = '';
+                tablaOrdenada.forEach((team, index) => {
+                    const difG = team.gf - team.gc;
+                    cuerpo.innerHTML += `
+                        <tr class="hover:bg-blue-500/5 transition-colors">
+                            <td class="px-4 py-4 text-center text-slate-500 font-bold text-xs">${index + 1}</td>
+                            <td class="px-4 py-4">
+                                <div class="flex items-center gap-3">
+                                    <img src="${team.escudo}" class="size-6 object-contain">
+                                    <span class="text-white font-bold text-xs uppercase tracking-tight">${team.nombre}</span>
+                                </div>
+                            </td>
+                            <td class="px-2 py-4 text-center text-slate-300 text-xs">${team.pj}</td>
+                            <td class="px-2 py-4 text-center text-slate-400 text-xs hidden md:table-cell">${team.g}</td>
+                            <td class="px-2 py-4 text-center text-slate-400 text-xs hidden md:table-cell">${team.e}</td>
+                            <td class="px-2 py-4 text-center text-slate-400 text-xs hidden md:table-cell">${team.p}</td>
+                            <td class="px-3 py-4 text-center font-black text-white text-sm">${team.pts}</td>
+                            <td class="px-2 py-4 text-center text-slate-400 text-xs">${team.gf}</td>
+                            <td class="px-2 py-4 text-center text-slate-400 text-xs">${team.gc}</td>
+                            <td class="px-2 py-4 text-center font-bold ${difG > 0 ? 'text-green-500' : difG < 0 ? 'text-red-500' : 'text-slate-500'} text-xs">
+                                ${difG > 0 ? '+' + difG : difG}
+                            </td>
+                        </tr>
+                    `;
+                });
+
+            } catch (e) { console.error("Error tabla posiciones:", e); }
+        };
+
+    window.eliminarCampo = async function(campoId, nuevaSedeId = null) {
+        try {
+            const options = {
+                method: 'DELETE',
+                headers: { 
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            };
+
+            if(nuevaSedeId) options.body = JSON.stringify({ nueva_sede_id: nuevaSedeId });
+
+            const response = await fetch(`/api/admin/campos/eliminar/${campoId}`, options);
+            const result = await response.json();
+
+            if (response.ok) {
+                alert('✅ Sede eliminada correctamente.');
+                if(nuevaSedeId) cerrarModalReasignar();
+                window.cargarCamposCards();
+            } else if (result.error === 'conflictos_detectados') {
+                abrirModalReasignacion(campoId, result.partidos);
+            } else {
+                alert('❌ ' + result.error);
+            }
+        } catch (e) { console.error(e); }
+    };
+
+    window.abrirModalReasignacion = async function(campoId, partidosAfectados) {
+        const modal = document.getElementById('modalReasignarSede');
+        const lista = document.getElementById('listaPartidosAfectados');
+        const select = document.getElementById('selectNuevaSedeBorrado');
+        const btnConfirmar = document.getElementById('btnConfirmarBorradoEspecial');
+
+        // 1. Mostrar partidos afectados con su hora
+        lista.innerHTML = partidosAfectados.map(p => `
+            <div class="flex items-center justify-between text-[10px] text-slate-300 bg-slate-800/50 p-2 rounded-lg border border-slate-700/50">
+                <span><span class="text-blue-500">⚽</span> ${p.resumen}</span>
+                <span class="font-bold text-blue-400">${p.fecha} | ${p.hora}</span>
+            </div>
+        `).join('');
+
+        try {
+            // 2. Cargar datos con manejo de error 500
+            const [resC, resP] = await Promise.all([
+                fetch('/api/campos'), 
+                fetch('/api/partidos')
+            ]);
+
+            if (!resC.ok || !resP.ok) throw new Error("Error en la comunicación con el servidor");
+
+            const campos = await resC.json();
+            const partidosData = await resP.json();
+            const todosLosPartidos = Object.values(partidosData);
+
+            select.innerHTML = '<option value="">Selecciona nueva sede...</option>';
+            
+            let hayOtrasSedes = false;
+
+            Object.entries(campos).forEach(([id, c]) => {
+                if(id === campoId) return; // Saltamos la que se va a borrar
+
+                let tieneConflicto = false;
+                let mensajeConflicto = "";
+
+                // Validar choques de horario
+                partidosAfectados.forEach(pAfectado => {
+                    const choque = todosLosPartidos.find(pExistente => 
+                        pExistente.campo_id === id && 
+                        pExistente.fecha === pAfectado.fecha &&
+                        Math.abs(
+                            ((parseInt(pExistente.hora.split(':')[0]) * 60) + parseInt(pExistente.hora.split(':')[1])) - 
+                            ((parseInt(pAfectado.hora.split(':')[0]) * 60) + parseInt(pAfectado.hora.split(':')[1]))
+                        ) < 100
+                    );
+
+                    if(choque) {
+                        tieneConflicto = true;
+                        mensajeConflicto = `(OCUPADA ${pAfectado.fecha} ${pAfectado.hora})`;
+                    }
+                });
+
+                const option = document.createElement('option');
+                option.value = id;
+                option.innerText = tieneConflicto ? ` ${c.nombre} ${mensajeConflicto}` : ` ${c.nombre} (Disponible)`;
+                
+                if(tieneConflicto) {
+                    option.disabled = true;
+                    option.className = "text-slate-500 bg-slate-900";
+                } else {
+                    option.className = "text-green-400";
+                    hayOtrasSedes = true;
+                }
+                select.appendChild(option);
+            });
+
+            if(!hayOtrasSedes && Object.keys(campos).length > 1) {
+                alert("⚠️ Todas las demás sedes están ocupadas en esos horarios. Reagenda los partidos manualmente antes de borrar.");
+                return;
+            }
+
+            btnConfirmar.onclick = () => {
+                const nuevaSede = select.value;
+                if(!nuevaSede) return alert("Selecciona una sede válida");
+                window.eliminarCampo(campoId, nuevaSede);
+            };
+
+            modal.classList.replace('hidden', 'flex');
+
+        } catch (err) {
+            console.error(err);
+            alert("❌ Error: No se pudieron cargar las sedes. Revisa que el método en CampoController se llame 'index'.");
+        }
+    };
+
+    window.cerrarModalReasignar = () => {
+        const modal = document.getElementById('modalReasignarSede');
+        if(modal) modal.classList.replace('flex', 'hidden');
     };
 </script>
 </body>

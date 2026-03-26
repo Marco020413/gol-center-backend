@@ -135,54 +135,69 @@ class PartidoController extends Controller
             }
 
             // 2. Obtener datos de los equipos para los escudos
-            $equipos = $this->database->getReference('equipos')->getValue() ?? [];
+            $equiposRef = $this->database->getReference('equipos')->getValue() ?? [];
             $escudoLocal = '';
             $escudoVisitante = '';
 
-            foreach ($equipos as $eq) {
+            foreach ($equiposRef as $eq) {
                 if ($eq['nombre'] === $request->local) $escudoLocal = $eq['escudo'] ?? '';
                 if ($eq['nombre'] === $request->visitante) $escudoVisitante = $eq['escudo'] ?? '';
             }
 
-            // 3. Validar choque de horarios en el servidor (Seguridad extra)
+            // 3. Lógica de tiempos para validación
             $nuevoInicio = \Carbon\Carbon::parse($request->fecha . ' ' . $request->hora);
             $nuevoFin = $nuevoInicio->copy()->addMinutes(100);
             
             $partidosExistentes = $this->database->getReference('partidos')->getValue() ?? [];
 
             foreach ($partidosExistentes as $p) {
-                // Solo comparamos si es el mismo campo y la misma fecha
-                if ($p['campo_id'] === $request->campo_id && $p['fecha'] === $request->fecha) {
+                // Solo validamos partidos de la misma fecha
+                if ($p['fecha'] === $request->fecha) {
                     $pInicio = \Carbon\Carbon::parse($p['fecha'] . ' ' . $p['hora']);
                     $pFin = $pInicio->copy()->addMinutes(100);
 
-                    // Verificar si se traslapan
-                    if ($nuevoInicio->lt($pFin) && $nuevoFin->gt($pInicio)) {
-                        return response()->json(['error' => 'La cancha ya está ocupada en ese rango de tiempo.'], 422);
+                    // Verificar si el horario se traslapa
+                    $hayTraslape = ($nuevoInicio->lt($pFin) && $nuevoFin->gt($pInicio));
+
+                    if ($hayTraslape) {
+                        // REGLA A: Validación de Cancha (La que ya tenías)
+                        if ($p['campo_id'] === $request->campo_id) {
+                            return response()->json(['error' => 'La cancha ya está ocupada en ese rango de tiempo.'], 422);
+                        }
+
+                        // REGLA B: Validación de Equipos (La nueva)
+                        $equiposEnConflicto = [$p['equipo_local'], $p['equipo_visitante']];
+                        
+                        if (in_array($request->local, $equiposEnConflicto)) {
+                            return response()->json(['error' => "El equipo {$request->local} ya tiene un partido programado a esta hora."], 422);
+                        }
+
+                        if (in_array($request->visitante, $equiposEnConflicto)) {
+                            return response()->json(['error' => "El equipo {$request->visitante} ya tiene un partido programado a esta hora."], 422);
+                        }
                     }
                 }
             }
 
-            // 4. Registrar en Firebase
+            // 4. Registrar en Firebase si todo está bien
             $id_partido = uniqid('partido_');
             $this->database->getReference('partidos/' . $id_partido)->set([
-                'equipo_local'      => $request->local,
-                'equipo_visitante'  => $request->visitante,
+                'equipo_local'       => $request->local,
+                'equipo_visitante'   => $request->visitante,
                 'escudo_local'     => $escudoLocal,
                 'escudo_visitante' => $escudoVisitante,
-                'campo_id'          => $request->campo_id,
-                'goles_local'       => 0,
-                'goles_visitante'   => 0,
-                'fecha'             => $request->fecha,
-                'hora'              => $request->hora,
-                'estatus'           => 'programado',
+                'campo_id'           => $request->campo_id,
+                'goles_local'        => 0,
+                'goles_visitante'    => 0,
+                'fecha'              => $request->fecha,
+                'hora'               => $request->hora,
+                'estatus'            => 'programado',
                 'resultado_confirmado' => false
             ]);
 
             return response()->json(['message' => 'Partido programado exitosamente']);
 
         } catch (\Exception $e) {
-            // Esto nos dirá en el log exactamente qué falló
             return response()->json(['error' => 'Error interno: ' . $e->getMessage()], 500);
         }
     }

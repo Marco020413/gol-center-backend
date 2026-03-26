@@ -16,16 +16,20 @@ class JugadorController extends Controller
 
     public function registrar(Request $request) {
         $validator = Validator::make($request->all(), [
-            'nombre'   => 'required|string',
-            'telefono' => 'required|numeric',
-            'equipo'   => 'required|string|not_in:Libre',
-            'numero'   => 'required|numeric', 
-            'edad'     => 'required|numeric',
-            'direccion'=> 'required|string',
+            'nombre'    => 'required|string|max:55',
+            'telefono'  => 'required|digits:10',   
+            'equipo'    => 'required|string|not_in:Selecciona un equipo',
+            'numero'    => 'required|integer|between:1,99',
+            'edad'      => 'required|integer|between:5,99',
+            'direccion' => 'required|string|max:255',
+        ], [
+            'telefono.digits' => 'El teléfono debe tener exactamente 10 dígitos.',
+            'numero.between'  => 'El dorsal debe ser un número entre 1 y 99.',
+            'nombre.max'      => 'El nombre no puede exceder los 55 caracteres.',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['error' => 'Faltan datos obligatorios'], 400);
+            return response()->json(['error' => $validator->errors()->first()], 422);
         }
 
         try {
