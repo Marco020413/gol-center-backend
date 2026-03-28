@@ -23,6 +23,7 @@ Route::delete('/admin/partidos/eliminar/{id}', [App\Http\Controllers\PartidoCont
 Route::get('/campos', [App\Http\Controllers\CampoController::class, 'index']);
 Route::post('/admin/campos/registrar', [App\Http\Controllers\CampoController::class, 'crear']);
 Route::delete('/admin/campos/eliminar/{id}', [App\Http\Controllers\CampoController::class, 'eliminar']);
+Route::put('/admin/campos/actualizar/{id}', [App\Http\Controllers\CampoController::class, 'actualizar']);
 
 // Rutas de Administración
 Route::prefix('admin')->group(function () {

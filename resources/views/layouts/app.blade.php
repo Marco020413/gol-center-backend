@@ -61,9 +61,12 @@
     let editTelefono = null;
     let cachePartidos = [];
     let cachePartidosLista = []; 
+    let editCampoId = null;
 
+
+    //LISTENERS Y CONFIGURACIONES INICIALES
     document.addEventListener('DOMContentLoaded', () => {
-    // 2. INICIALIZAR REFERENCIAS GLOBALES
+  
         window.modalJugador = document.getElementById('modalJugador');
         window.modalEquipo = document.getElementById('modalEquipo');
         window.modalCrearPartido = document.getElementById('modalCrearPartido');
@@ -922,78 +925,55 @@ window.abrirModal = function() {
         });
     }
 
-        window.llenarSelectsCampos = async function() {
-    try {
-        const res = await fetch('/api/campos');
-        const campos = await res.json();
-        const select = document.getElementById('selectCampos');
-        if(!select) return;
-        select.innerHTML = '<option value="">Selecciona Cancha</option>';
-        for (const id in campos) {
-            const opt = document.createElement('option');
-            opt.value = id;
-            opt.textContent = campos[id].nombre.toUpperCase() + " (" + campos[id].lugar.toUpperCase() + ")";
-            select.appendChild(opt);
-        }
-    } catch (e) { console.error("Error:", e); }
-};
-
-            function abrirModalCampo() { document.getElementById('modalCrearCampo').classList.replace('hidden', 'flex'); }
-            function cerrarModalCampo() { document.getElementById('modalCrearCampo').classList.replace('flex', 'hidden'); document.getElementById('formCrearCampo').reset(); }
-
-    // Guardar Cancha
-document.getElementById('formCrearCampo').onsubmit = async (e) => {
-    e.preventDefault();
-    const data = Object.fromEntries(new FormData(e.target));
-    const res = await fetch('/api/admin/campos/registrar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-        body: JSON.stringify(data)
-    });
-    if(res.ok) { alert("Cancha registrada"); cerrarModalCampo(); cargarCamposCards(); }
-};
-
-// Cargar Canchas en el Tab
-    window.cargarCamposCards = async function() {
-        const contenedor = document.getElementById('listaCamposCards');
-        if(!contenedor) return;
+    window.llenarSelectsCampos = async function() {
         try {
             const res = await fetch('/api/campos');
             const campos = await res.json();
-            contenedor.innerHTML = '';
+            const select = document.getElementById('selectCampos');
+            if(!select) return;
+
+            select.innerHTML = '<option value="">Selecciona Cancha</option>';
+
             for (const id in campos) {
-                contenedor.innerHTML += `
-                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
-                        <div>
-                            <h4 class="text-white font-bold uppercase text-sm">${campos[id].nombre}</h4>
-                            <p class="text-slate-500 text-[10px] uppercase">${campos[id].lugar}</p>
-                        </div>
-                        <button onclick="eliminarCampo('${id}')" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition">
-                            <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </button>
-                    </div>`;
+                const campo = campos[id];
+                const isMantenimiento = campo.estado === 'mantenimiento';
+                const opt = document.createElement('option');
+                
+                opt.value = id;
+                
+                // Si está en mantenimiento, le ponemos un aviso visual
+                if (isMantenimiento) {
+                    opt.textContent = "🚧 " + campo.nombre.toUpperCase() + " (EN MANTENIMIENTO)";
+                    opt.disabled = true; // ESTA ES LA CLAVE: No permite hacer click
+                    opt.className = "text-slate-500 bg-slate-900 italic"; // Estilo visual de bloqueado
+                } else {
+                    opt.textContent = "✅ " + campo.nombre.toUpperCase() + " (" + campo.lugar.toUpperCase() + ")";
+                    opt.className = "text-white";
+                }
+                
+                select.appendChild(opt);
             }
-        } catch (e) { console.error("Error:", e); }
-    };
-    
-    window.cargarPartidosCards = async function() {
-        const contenedor = document.getElementById('contenedorListaPartidos');
-        if(!contenedor) return;
-
-        try {
-            const res = await fetch('/api/partidos');
-            const partidos = await res.json();
-
-            window.cachePartidosLista = Object.keys(partidos).map(id => ({
-                id: id,
-                ...partidos[id]
-            }));
-            aplicarFiltrosPartidos();
-            
         } catch (e) { 
-            console.error("Error cargando partidos:", e);
+            console.error("Error al llenar select de campos:", e); 
         }
     };
+
+    function abrirModalCampo() { 
+        document.getElementById('modalCrearCampo').classList.replace('hidden', 'flex'); 
+        }
+
+    function cerrarModalCampo() { 
+    // Corregido: de flex a hidden
+        document.getElementById('modalCrearCampo').classList.replace('flex', 'hidden'); 
+        document.getElementById('formCrearCampo').reset();
+                
+        // Limpiamos variables de edición para que la próxima vez que abras sea "Nuevo" y no "Editar"
+        window.editCampoId = null; 
+        document.querySelector('#modalCrearCampo h3').innerText = 'Registrar Sede';
+        document.getElementById('estadoCampoContainer').classList.add('hidden');
+        }
+
+   
 
     
     window.verDetallePartido = async function(id) {
@@ -1283,7 +1263,65 @@ document.getElementById('formCrearCampo').onsubmit = async (e) => {
             } catch (e) { console.error("Error tabla posiciones:", e); }
         };
 
+   
+   window.ejecutarGuardadoCancha = async function(id, data, nuevaSedeId = null) {
+        if(nuevaSedeId) data.nueva_sede_id = nuevaSedeId;
+
+        // Si hay un ID, es actualización (PUT), si no, es registro (POST)
+        const url = id ? `/api/admin/campos/actualizar/${id}` : '/api/admin/campos/registrar';
+        const method = id ? 'PUT' : 'POST';
+
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+
+            const result = await res.json();
+
+            if (res.ok) {
+                alert('✅ Operación exitosa');
+                if(window.modalReasignarSede) window.cerrarModalReasignar();
+                cerrarModalCampo();
+                window.cargarCamposCards();
+                window.editCampoId = null; // Limpiamos el ID después del éxito
+                return;
+            } 
+            
+            // MANEJO DE CONFLICTOS POR MANTENIMIENTO (422)
+            if (res.status === 422 && result.error === 'conflictos_mantenimiento') {
+                
+                // Abrimos modal pasando TRUE para modo mantenimiento
+                window.abrirModalReasignacion(id, result.partidos, true);
+                
+                // Re-vinculamos el botón del modal para que use el MISMO ID
+                const btnConfirmar = document.getElementById('btnConfirmarBorradoEspecial');
+                btnConfirmar.onclick = () => {
+                    const sedeDestino = document.getElementById('selectNuevaSedeBorrado').value;
+                    if(!sedeDestino) return alert("⚠️ Selecciona una sede de destino");
+                    
+                    // IMPORTANTE: Pasamos el 'id' original para que no cree uno nuevo
+                    window.ejecutarGuardadoCancha(id, data, sedeDestino);
+                };
+            } else {
+                alert("❌ " + (result.error || "Error al procesar la solicitud"));
+            }
+        } catch (e) { 
+            console.error("Error en el guardado:", e);
+        }
+    };
+
     window.eliminarCampo = async function(campoId, nuevaSedeId = null) {
+        // Si no es una confirmación de reasignación, pedimos confirmación básica primero
+        if (!nuevaSedeId) {
+            if (!confirm("¿Estás seguro de eliminar esta sede? Esta acción no se puede deshacer.")) return;
+        }
+
         try {
             const options = {
                 method: 'DELETE',
@@ -1301,23 +1339,150 @@ document.getElementById('formCrearCampo').onsubmit = async (e) => {
 
             if (response.ok) {
                 alert('✅ Sede eliminada correctamente.');
-                if(nuevaSedeId) cerrarModalReasignar();
+                if(window.modalReasignarSede) cerrarModalReasignar();
                 window.cargarCamposCards();
-            } else if (result.error === 'conflictos_detectados') {
-                abrirModalReasignacion(campoId, result.partidos);
-            } else {
-                alert('❌ ' + result.error);
+            } 
+            else if (result.error === 'conflictos_detectados' || response.status === 422) {
+                // 1. Personalizar el Modal específicamente para ELIMINACIÓN
+                document.getElementById('reasignarTitulo').innerText = "⚠️ Reasignación Obligatoria";
+                document.getElementById('reasignarDesc').innerText = "Esta sede tiene partidos pendientes que deben moverse antes de eliminarla permanentemente.";
+                
+                const btnConfirmar = document.getElementById('btnConfirmarBorradoEspecial');
+                btnConfirmar.innerText = "Reasignar y Eliminar Sede";
+                // Color ROJO para eliminación
+                btnConfirmar.className = "flex-1 bg-red-600 hover:bg-red-500 text-white font-bold text-xs py-3 rounded-xl uppercase transition shadow-lg shadow-red-900/20";
+
+                // 2. Abrir el modal (usa tu función existente que carga las sedes disponibles)
+                window.abrirModalReasignacion(campoId, result.partidos);
+
+                // 3. Re-configurar el botón para que al confirmar llame de nuevo a eliminarCampo
+                btnConfirmar.onclick = () => {
+                    const sedeDestino = document.getElementById('selectNuevaSedeBorrado').value;
+                    if(!sedeDestino) return alert("⚠️ Selecciona una sede destino para los partidos.");
+                    window.eliminarCampo(campoId, sedeDestino);
+                };
+            } 
+            else {
+                alert('❌ ' + (result.error || "Error al eliminar"));
             }
-        } catch (e) { console.error(e); }
+        } catch (e) { 
+            console.error("Error en eliminación:", e);
+            alert("❌ Error de conexión");
+        }
     };
 
-    window.abrirModalReasignacion = async function(campoId, partidosAfectados) {
+    // Cargar Canchas en el Tab
+    window.cargarCamposCards = async function() {
+        const contenedor = document.getElementById('listaCamposCards');
+        if(!contenedor) return;
+        try {
+            const res = await fetch('/api/campos');
+            const campos = await res.json();
+            contenedor.innerHTML = '';
+            for (const id in campos) {
+                const c = campos[id];
+                const isMantenimiento = c.estado === 'mantenimiento';
+                
+                contenedor.innerHTML += `
+                    <div class="bg-slate-900 border ${isMantenimiento ? 'border-amber-500/50' : 'border-slate-800'} p-4 rounded-xl flex justify-between items-center transition-all">
+                        <div class="flex items-center gap-3">
+                            <div class="size-2 rounded-full ${isMantenimiento ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}"></div>
+                            <div>
+                                <h4 class="text-white font-bold uppercase text-sm">${c.nombre}</h4>
+                                <p class="text-slate-500 text-[10px] uppercase">${c.lugar} ${isMantenimiento ? '• <span class="text-amber-500 text-[8px] font-black">MANTENIMIENTO</span>' : ''}</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-1">
+                            <button onclick="prepararEdicionCampo('${id}', '${c.nombre}', '${c.lugar}', '${c.estado}')" class="text-blue-500 hover:bg-blue-500/10 p-2 rounded-lg transition">
+                                <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                            <button onclick="eliminarCampo('${id}')" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition">
+                                <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                        </div>
+                    </div>`;
+            }
+        } catch (e) { console.error("Error:", e); }
+    };
+
+        // Funciones para el Modal de Edición
+    window.prepararEdicionCampo = function(id, nombre, lugar, estado) {
+        window.editCampoId = id; // Asignación global
+        const form = document.getElementById('formCrearCampo');
+        form.nombre.value = nombre;
+        form.lugar.value = lugar;
+        
+        const containerEstado = document.getElementById('estadoCampoContainer');
+        if(containerEstado) containerEstado.classList.remove('hidden');
+        
+        document.getElementById('selectEstadoCampo').value = estado || 'disponible';
+        document.querySelector('#modalCrearCampo h3').innerText = 'Editar Sede';
+        
+        // Cambiar el texto del botón a "GUARDAR CAMBIOS"
+        document.querySelector('#formCrearCampo button[type="submit"]').innerText = "GUARDAR CAMBIOS";
+        
+        abrirModalCampo();
+    };
+
+    document.getElementById('formCrearCampo').onsubmit = async (e) => {
+        e.preventDefault();
+        
+        // Aseguramos que tomamos el ID correcto de la variable global
+        const idAEditar = window.editCampoId; 
+
+        const data = {
+            nombre: e.target.nombre.value,
+            lugar: e.target.lugar.value,
+            estado: document.getElementById('selectEstadoCampo').value || 'disponible'
+        };
+
+        console.log("Intentando guardar campo con ID:", idAEditar); // Para debug
+
+        // Llamamos a la función inteligente
+        window.ejecutarGuardadoCancha(idAEditar, data);
+    };
+    
+    window.cargarPartidosCards = async function() {
+        const contenedor = document.getElementById('contenedorListaPartidos');
+        if(!contenedor) return;
+
+        try {
+            const res = await fetch('/api/partidos');
+            const partidos = await res.json();
+
+            window.cachePartidosLista = Object.keys(partidos).map(id => ({
+                id: id,
+                ...partidos[id]
+            }));
+            aplicarFiltrosPartidos();
+            
+        } catch (e) { 
+            console.error("Error cargando partidos:", e);
+        }
+    };
+
+    window.abrirModalReasignacion = async function(campoId, partidosAfectados, esMantenimiento = false) {
         const modal = document.getElementById('modalReasignarSede');
         const lista = document.getElementById('listaPartidosAfectados');
         const select = document.getElementById('selectNuevaSedeBorrado');
         const btnConfirmar = document.getElementById('btnConfirmarBorradoEspecial');
 
-        // 1. Mostrar partidos afectados con su hora
+        if (!modal || !lista || !select) return console.error("Faltan elementos del modal en el HTML");
+
+        // 1. CONFIGURACIÓN DINÁMICA DE TEXTOS Y ESTILOS
+        if (esMantenimiento) {
+            document.getElementById('reasignarTitulo').innerText = "🚧 Mantenimiento Urgente";
+            document.getElementById('reasignarDesc').innerText = "Hay partidos programados en esta sede. Debes moverlos a otra cancha para poder iniciar el mantenimiento.";
+            btnConfirmar.innerText = "Reasignar y Cerrar para Mantenimiento";
+            btnConfirmar.className = "flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] py-3 rounded-xl uppercase transition shadow-lg shadow-blue-900/20";
+        } else {
+            document.getElementById('reasignarTitulo').innerText = "⚠️ Reasignación Obligatoria";
+            document.getElementById('reasignarDesc').innerText = "Esta sede tiene partidos pendientes que deben moverse a otra ubicación antes de eliminarla permanentemente.";
+            btnConfirmar.innerText = "Reasignar y Eliminar Sede";
+            btnConfirmar.className = "flex-1 bg-red-600 hover:bg-red-500 text-white font-bold text-[10px] py-3 rounded-xl uppercase transition shadow-lg shadow-red-900/20";
+        }
+
+        // 2. MOSTRAR PARTIDOS AFECTADOS
         lista.innerHTML = partidosAfectados.map(p => `
             <div class="flex items-center justify-between text-[10px] text-slate-300 bg-slate-800/50 p-2 rounded-lg border border-slate-700/50">
                 <span><span class="text-blue-500">⚽</span> ${p.resumen}</span>
@@ -1326,82 +1491,67 @@ document.getElementById('formCrearCampo').onsubmit = async (e) => {
         `).join('');
 
         try {
-            // 2. Cargar datos con manejo de error 500
-            const [resC, resP] = await Promise.all([
-                fetch('/api/campos'), 
-                fetch('/api/partidos')
-            ]);
-
-            if (!resC.ok || !resP.ok) throw new Error("Error en la comunicación con el servidor");
-
+            // 3. CARGAR SEDES DISPONIBLES (Validando estado y agenda)
+            const [resC, resP] = await Promise.all([fetch('/api/campos'), fetch('/api/partidos')]);
             const campos = await resC.json();
-            const partidosData = await resP.json();
-            const todosLosPartidos = Object.values(partidosData);
+            const todosLosPartidos = Object.values(await resP.json());
 
             select.innerHTML = '<option value="">Selecciona nueva sede...</option>';
-            
-            let hayOtrasSedes = false;
 
             Object.entries(campos).forEach(([id, c]) => {
-                if(id === campoId) return; // Saltamos la que se va a borrar
+                if(id === campoId) return; // Saltamos la sede origen
 
-                let tieneConflicto = false;
-                let mensajeConflicto = "";
+                const campoEnMantenimiento = c.estado === 'mantenimiento';
+                let tieneConflictoAgenda = false;
 
-                // Validar choques de horario
-                partidosAfectados.forEach(pAfectado => {
-                    const choque = todosLosPartidos.find(pExistente => 
-                        pExistente.campo_id === id && 
-                        pExistente.fecha === pAfectado.fecha &&
-                        Math.abs(
-                            ((parseInt(pExistente.hora.split(':')[0]) * 60) + parseInt(pExistente.hora.split(':')[1])) - 
-                            ((parseInt(pAfectado.hora.split(':')[0]) * 60) + parseInt(pAfectado.hora.split(':')[1]))
-                        ) < 100
+                // Validar conflictos de horario
+                partidosAfectados.forEach(pA => {
+                    const choque = todosLosPartidos.find(pE => 
+                        pE.campo_id === id && pE.fecha === pA.fecha &&
+                        Math.abs(((parseInt(pE.hora.split(':')[0])*60)+parseInt(pE.hora.split(':')[1])) - ((parseInt(pA.hora.split(':')[0])*60)+parseInt(pA.hora.split(':')[1]))) < 100
                     );
-
-                    if(choque) {
-                        tieneConflicto = true;
-                        mensajeConflicto = `(OCUPADA ${pAfectado.fecha} ${pAfectado.hora})`;
-                    }
+                    if(choque) tieneConflictoAgenda = true;
                 });
 
                 const option = document.createElement('option');
                 option.value = id;
-                option.innerText = tieneConflicto ? ` ${c.nombre} ${mensajeConflicto}` : ` ${c.nombre} (Disponible)`;
-                
-                if(tieneConflicto) {
+
+                // Lógica de visualización y bloqueo en el select
+                if (campoEnMantenimiento) {
+                    option.innerText = `🚧 ${c.nombre} (MANTENIMIENTO)`;
+                    option.disabled = true;
+                    option.className = "text-slate-500 bg-slate-900 italic";
+                } else if (tieneConflictoAgenda) {
+                    option.innerText = `🚫 ${c.nombre} (OCUPADA)`;
                     option.disabled = true;
                     option.className = "text-slate-500 bg-slate-900";
                 } else {
-                    option.className = "text-green-400";
-                    hayOtrasSedes = true;
+                    option.innerText = `✅ ${c.nombre} (Disponible)`;
+                    option.className = "text-green-400 font-bold";
                 }
+                
                 select.appendChild(option);
             });
 
-            if(!hayOtrasSedes && Object.keys(campos).length > 1) {
-                alert("⚠️ Todas las demás sedes están ocupadas en esos horarios. Reagenda los partidos manualmente antes de borrar.");
-                return;
-            }
-
-            btnConfirmar.onclick = () => {
-                const nuevaSede = select.value;
-                if(!nuevaSede) return alert("Selecciona una sede válida");
-                window.eliminarCampo(campoId, nuevaSede);
-            };
-
+            // 4. ABRIR EL MODAL
+            const modalCrear = document.getElementById('modalCrearCampo');
+            if(modalCrear) modalCrear.classList.replace('flex', 'hidden');
+            
             modal.classList.replace('hidden', 'flex');
 
-        } catch (err) {
-            console.error(err);
-            alert("❌ Error: No se pudieron cargar las sedes. Revisa que el método en CampoController se llame 'index'.");
+        } catch (e) { 
+            console.error("Error al abrir reasignación:", e);
+            alert("Error al cargar sedes disponibles.");
         }
     };
 
-    window.cerrarModalReasignar = () => {
-        const modal = document.getElementById('modalReasignarSede');
-        if(modal) modal.classList.replace('flex', 'hidden');
-    };
+    window.cerrarModalReasignar = function() {
+    const modal = document.getElementById('modalReasignarSede');
+    if (modal) {
+        modal.classList.replace('flex', 'hidden');
+    }
+};
+
 </script>
 </body>
 </html>

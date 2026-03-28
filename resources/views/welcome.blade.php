@@ -398,28 +398,6 @@
     </div>
 </div>
 
-<div id="modalCrearCampo" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center z-[140] p-4">
-    <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
-        <div class="p-6 border-b border-slate-800 bg-blue-600/10">
-            <h3 class="text-lg font-bold text-white uppercase tracking-tighter">Registrar Sede</h3>
-        </div>
-        <form id="formCrearCampo" class="p-6 space-y-4">
-            <div>
-                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Nombre</label>
-                <input type="text" name="nombre" required placeholder="Ej. Campo Central" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
-            </div>
-            <div>
-                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Ubicación</label>
-                <input type="text" name="lugar" required placeholder="Ej. Sector Norte" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
-            </div>
-            <div class="flex gap-3">
-                <button type="button" onclick="cerrarModalCampo()" class="flex-1 bg-slate-800 text-slate-400 font-bold py-3 rounded-xl text-xs">CANCELAR</button>
-                <button type="submit" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl text-xs uppercase">REGISTRAR</button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <div id="modalDetallePartido" class="fixed inset-0 bg-slate-950/90 backdrop-blur-sm hidden items-center justify-center z-[150] p-4">
     <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
@@ -477,30 +455,62 @@
     </div>
 </div>
 
+
+<div id="modalCrearCampo" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center z-[140] p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+        <div class="p-6 border-b border-slate-800 bg-blue-600/10">
+            <h3 class="text-lg font-bold text-white uppercase tracking-tighter">Registrar Sede</h3>
+        </div>
+        <form id="formCrearCampo" class="p-6 space-y-4">
+            <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Nombre</label>
+                <input type="text" name="nombre" required placeholder="Ej. Campo Central" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+            </div>
+            <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Ubicación</label>
+                <input type="text" name="lugar" required placeholder="Ej. Sector Norte" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+            </div>
+
+            <div id="estadoCampoContainer" class="hidden">
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Estado de la Cancha</label>
+                <select id="selectEstadoCampo" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500 text-xs">
+                    <option value="disponible"> DISPONIBLE</option>
+                    <option value="mantenimiento"> EN MANTENIMIENTO</option>
+                </select>
+            </div>
+
+            <div class="flex gap-3">
+                <button type="button" onclick="cerrarModalCampo()" class="flex-1 bg-slate-800 text-slate-400 font-bold py-3 rounded-xl text-xs">CANCELAR</button>
+                <button type="submit" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl text-xs uppercase">REGISTRAR</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div id="modalReasignarSede" class="fixed inset-0 bg-slate-950/90 backdrop-blur-sm hidden items-center justify-center z-[200] p-4">
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
-        <div class="p-6 border-b border-slate-800">
-            <h3 class="text-white font-black uppercase tracking-tighter text-lg">⚠️ Reasignación Obligatoria</h3>
-            <p class="text-slate-500 text-xs mt-1">Esta sede tiene partidos pendientes que deben moverse antes de eliminarla.</p>
+        <div class="p-6 border-b border-slate-800 bg-slate-950/50">
+            <h3 id="reasignarTitulo" class="text-white font-black uppercase tracking-tighter text-lg">⚠️ Reasignación Obligatoria</h3>
+            <p id="reasignarDesc" class="text-slate-500 text-[10px] mt-1 italic">...</p>
         </div>
         
         <div class="p-6 space-y-4">
             <div class="space-y-2">
-                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Partidos afectados:</label>
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Partidos que deben moverse:</label>
                 <div id="listaPartidosAfectados" class="max-h-32 overflow-y-auto bg-slate-950/50 rounded-xl p-3 border border-slate-800 space-y-2 custom-scrollbar">
                     </div>
             </div>
 
             <div class="space-y-2">
-                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mover a nueva sede:</label>
-                <select id="selectNuevaSedeBorrado" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 text-sm">
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Nueva sede de destino:</label>
+                <select id="selectNuevaSedeBorrado" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 text-sm italic">
                     </select>
             </div>
         </div>
 
         <div class="p-4 bg-slate-950/50 flex gap-3">
-            <button onclick="cerrarModalReasignar()" class="flex-1 px-4 py-3 text-slate-400 font-bold text-xs uppercase hover:text-white transition">Cancelar</button>
-            <button id="btnConfirmarBorradoEspecial" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold text-xs py-3 rounded-xl uppercase transition shadow-lg shadow-red-900/20">Reasignar y Borrar</button>
+            <button onclick="window.cerrarModalReasignar()" class="flex-1 px-4 py-3 text-slate-400 font-bold text-[10px] uppercase hover:text-white transition">Cancelar</button>
+            <button id="btnConfirmarBorradoEspecial" class="flex-1 font-bold text-[10px] py-3 rounded-xl uppercase transition shadow-lg"></button>
         </div>
     </div>
 </div>
