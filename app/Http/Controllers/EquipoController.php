@@ -130,4 +130,15 @@ class EquipoController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+
+    // En tu controlador de Laravel:
+    public function listarEquipos() {
+        try {
+            $equipos = $this->database->getReference('equipos')->getValue() ?? [];
+            return response()->json($equipos);
+        } catch (\Exception $e) {
+            // Esto evita que Laravel mande la pantalla naranja de error y mande un JSON limpio
+            return response()->json(['error' => 'Error de Firebase'], 500);
+        }
+    }
 }

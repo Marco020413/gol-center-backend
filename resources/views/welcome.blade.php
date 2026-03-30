@@ -167,7 +167,32 @@
                 </div>
             </div>
 
-            <div id="content-general" class="tab-pane hidden p-10 text-center border-2 border-dashed border-slate-800 rounded-xl text-slate-600">General...</div>
+            <div id="content-general" class="tab-pane hidden space-y-6">
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-4 shadow-2xl">
+                    <div class="size-16 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="size-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h2 class="text-2xl font-black text-white uppercase tracking-tighter">Generador de Rol de Juegos</h2>
+                    <p class="text-slate-400 text-xs max-w-sm mx-auto leading-relaxed">
+                        Esta herramienta creará automáticamente los enfrentamientos entre todos los equipos registrados usando el sistema <b>"Todos contra Todos"</b>.
+                    </p>
+                    
+                    <div class="pt-4">
+                        <button onclick="window.generarTorneoAleatorio()" class="bg-blue-600 hover:bg-blue-500 text-white font-black py-4 px-8 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20 active:scale-95">
+                            🎲 Sortear y Generar Jornadas
+                        </button>
+
+                        <button onclick="window.limpiarTodo()" class="bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white font-black py-4 px-8 rounded-2xl text-xs uppercase tracking-widest transition-all active:scale-95">
+                            🗑️ Limpiar Torneo
+                        </button>
+                    </div>
+                </div>
+
+                <div id="contenedorFixture" class="space-y-8 pb-10">
+                    </div>
+            </div>
 
             <div id="content-campos" class="tab-pane hidden space-y-4">
                 <div class="flex justify-between items-center mb-6">

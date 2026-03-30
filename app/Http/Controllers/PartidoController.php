@@ -20,41 +20,45 @@ class PartidoController extends Controller
             $partidos = $this->database->getReference('partidos')->getValue() ?? [];
             $equipos = $this->database->getReference('equipos')->getValue() ?? [];
             
-            // FORZAMOS LA HORA DE MÉXICO PARA COMPARAR CORRECTAMENTE
             $ahora = \Carbon\Carbon::now('America/Mexico_City'); 
-
             $listadoFormateado = [];
             $escudoDefault = 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png';
 
             foreach ($partidos as $id => $p) {
+                // Limpieza de IDs para buscar escudos
                 $idLocal = str_replace(['.', '#', '$', '[', ']', ' '], '-', $p['equipo_local'] ?? '');
                 $idVisitante = str_replace(['.', '#', '$', '[', ']', ' '], '-', $p['equipo_visitante'] ?? '');
 
-                // Convertimos la fecha y hora del partido a un objeto Carbon (Hora México)
-                $fechaPartido = \Carbon\Carbon::parse($p['fecha'] . ' ' . ($p['hora'] ?? '00:00'), 'America/Mexico_City');
-                
-                // Definimos el fin del partido (Hora inicio + 100 minutos)
-                $finPartido = $fechaPartido->copy()->addMinutes(100);
-
-                // LÓGICA DE ESTADOS AUTOMÁTICOS
-                if (!($p['resultado_confirmado'] ?? false)) {
-                    if ($ahora->lt($fechaPartido)) {
-                        // Si la hora actual es MENOR a la del partido
-                        $p['estatus'] = 'programado';
-                    } elseif ($ahora->between($fechaPartido, $finPartido)) {
-                        // Si estamos entre el inicio y el fin
-                        $p['estatus'] = 'en_curso';
-                    } else {
-                        // Si ya pasaron los 100 minutos
-                        $p['estatus'] = 'finalizado';
-                    }
+                // --- LÓGICA PARA MANEJAR PARTIDOS GENERADOS (PENDIENTES) ---
+                if (($p['fecha'] ?? '') === 'PENDIENTE') {
+                    $p['estatus'] = 'programado';
+                    $p['fecha_formateada'] = 'POR ASIGNAR';
                 } else {
-                    $p['estatus'] = 'confirmado';
+                    try {
+                        $fechaPartido = \Carbon\Carbon::parse($p['fecha'] . ' ' . ($p['hora'] ?? '00:00'), 'America/Mexico_City');
+                        $finPartido = $fechaPartido->copy()->addMinutes(100);
+
+                        if (!($p['resultado_confirmado'] ?? false)) {
+                            if ($ahora->lt($fechaPartido)) {
+                                $p['estatus'] = 'programado';
+                            } elseif ($ahora->between($fechaPartido, $finPartido)) {
+                                $p['estatus'] = 'en_curso';
+                            } else {
+                                $p['estatus'] = 'finalizado';
+                            }
+                        } else {
+                            $p['estatus'] = 'confirmado';
+                        }
+                        $p['fecha_formateada'] = $fechaPartido->format('d/m') . ' - ' . ($p['hora'] ?? '00:00');
+                    } catch (\Exception $e) {
+                        // Si falla el parseo por alguna razón, fallback seguro
+                        $p['estatus'] = 'programado';
+                        $p['fecha_formateada'] = $p['fecha'] ?? 'S/F';
+                    }
                 }
 
                 $p['escudo_local'] = $equipos[$idLocal]['escudo'] ?? $escudoDefault;
                 $p['escudo_visitante'] = $equipos[$idVisitante]['escudo'] ?? $escudoDefault;
-                $p['fecha_formateada'] = $fechaPartido->format('d/m') . ' - ' . ($p['hora'] ?? '00:00');
                 
                 $listadoFormateado[$id] = $p;
             }
@@ -192,6 +196,7 @@ class PartidoController extends Controller
                 'fecha'              => $request->fecha,
                 'hora'               => $request->hora,
                 'estatus'            => 'programado',
+                'updated_at' => now()->timestamp,
                 'resultado_confirmado' => false
             ]);
 
@@ -206,5 +211,63 @@ class PartidoController extends Controller
     {
         $this->database->getReference('partidos/' . $id)->remove();
         return response()->json(['message' => 'Partido borrado']);
+    }
+
+    public function generarTorneo(Request $request) {
+        try {
+            $partidos = $request->partidos; // Recibimos el array completo
+            $equiposRef = $this->database->getReference('equipos')->getValue() ?? [];
+
+            foreach ($partidos as $p) {
+                $escudoLocal = '';
+                $escudoVisitante = '';
+
+                // Buscamos los escudos para que el rol ya aparezca con logos
+                foreach ($equiposRef as $eq) {
+                    if ($eq['nombre'] === $p['equipo_local']) $escudoLocal = $eq['escudo'] ?? '';
+                    if ($eq['nombre'] === $p['equipo_visitante']) $escudoVisitante = $eq['escudo'] ?? '';
+                }
+
+                $id_partido = uniqid('partido_');
+                $this->database->getReference('partidos/' . $id_partido)->set([
+                    'equipo_local'     => $p['equipo_local'],
+                    'equipo_visitante' => $p['equipo_visitante'],
+                    'escudo_local'     => $escudoLocal,
+                    'escudo_visitante' => $escudoVisitante,
+                    'jornada'          => $p['jornada'],
+                    'campo_id'         => 'sin_asignar',
+                    'fecha'            => 'PENDIENTE',
+                    'hora'             => '00:00',
+                    'goles_local'      => 0,
+                    'goles_visitante'  => 0,
+                    'estatus'          => 'programado',
+                    'resultado_confirmado' => false
+                ]);
+            }
+
+            return response()->json(['message' => 'Torneo generado exitosamente']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function limpiarTodo() {
+        $this->database->getReference('partidos')->remove();
+        return response()->json(['message' => 'DB Limpia']);
+    }
+
+    public function actualizarDatosSorteo(Request $request, $id) {
+        try {
+            $this->database->getReference('partidos/' . $id)->update([
+                'campo_id' => $request->campo_id,
+                'fecha'    => $request->fecha,
+                'hora'     => $request->hora,
+                'estatus'  => 'programado'
+            ]);
+
+            return response()->json(['message' => 'Partido programado correctamente']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Error en servidor: ' . $e->getMessage()], 500);
+        }
     }
 }

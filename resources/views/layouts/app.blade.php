@@ -62,7 +62,11 @@
     let cachePartidos = [];
     let cachePartidosLista = []; 
     let editCampoId = null;
-
+    let ultimaCarga = {};
+    let equiposCargados = false; 
+    let limitePartidos = 5;
+    let cacheEquiposData = null;
+    let cacheCamposData = null;
 
     //LISTENERS Y CONFIGURACIONES INICIALES
     document.addEventListener('DOMContentLoaded', () => {
@@ -76,6 +80,9 @@
         window.formEquipo = document.getElementById('formRegistroEquipo');
         window.formPartidos = document.getElementById('formCrearPartido');
         window.formActualizar = document.getElementById('formActualizarMarcador');
+        window.recuperarFixtureGuardado();
+        window.llenarSelectsEquipos();
+        window.llenarSelectsCampos();
 
         // 3. FUNCIÓN PARA ABRIR MODAL CREAR PARTIDO
         window.abrirModalCrearPartido = function() {
@@ -84,6 +91,18 @@
                 if (typeof llenarSelectsEquipos === 'function') llenarSelectsEquipos(); 
                 if (typeof llenarSelectsCampos === 'function') llenarSelectsCampos(); 
             }
+        };
+        // 4. FUNCIÓN PARA GUARDAD TABLA DE TORNEO
+        window.recuperarFixtureGuardado = async function() {
+            try {
+                const res = await fetch('/api/partidos');
+                const partidosData = await res.json();
+                const partidos = Object.keys(partidosData).map(id => ({ id, ...partidosData[id] }));
+
+                if (partidos.length > 0) {
+                    window.pintarFixtureVisual(partidos);
+                }
+            } catch (e) { console.error("Error recuperando fixture:", e); }
         };
 
         // 4. ACTIVAR SENSORES DE AGENDA (CONFLICTOS INTELIGENTES)
@@ -168,6 +187,12 @@
         if (window.formPartidos) {
             window.formPartidos.addEventListener('submit', async (e) => {
                 e.preventDefault();
+                
+                // REGLA DE ORO: Si tenemos idPartidoSorteo, usamos la ruta de actualizar
+                const idSorteo = window.idPartidoSorteo;
+                const url = idSorteo ? `/api/admin/partidos/actualizar-datos/${idSorteo}` : '/api/admin/partidos/crear';
+                const metodo = idSorteo ? 'PUT' : 'POST';
+
                 const data = {
                     local: document.getElementById('selectLocal').value,
                     visitante: document.getElementById('selectVisitante').value,
@@ -176,24 +201,22 @@
                     hora: window.formPartidos.hora.value
                 };
 
-                if (data.local === data.visitante) return alert("❌ No pueden jugar contra el mismo equipo");
-                
                 try {
-                    const res = await fetch('/api/admin/partidos/crear', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                    const res = await fetch(url, {
+                        method: metodo,
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}' 
+                        },
                         body: JSON.stringify(data)
                     });
-                    const result = await res.json();
-                    if (res.ok) { 
-                        alert("⚽ " + (result.message || "Partido programado")); 
-                        if(window.modalCrearPartido) window.modalCrearPartido.classList.replace('flex', 'hidden');
-                        cargarPartidosCards(); 
-                        if(document.getElementById('agendaCanchaContenedor')) document.getElementById('agendaCanchaContenedor').classList.add('hidden');
-                    } else {
-                        alert("🚫 NO SE PUDO CREAR:\n" + (result.error || "Error desconocido"));
+
+                    if (res.ok) {
+                        alert("✅ ¡Partido programado con éxito!");
+                        window.idPartidoSorteo = null; 
+                        location.reload(); 
                     }
-                } catch (e) { alert("Error de conexión con el servidor"); }
+                } catch (e) { alert("Error de conexión"); }
             });
         }
 
@@ -248,23 +271,24 @@
         }
         cargarPartidosCards(); 
         cargarGestionEquipos();
+        
     });
 
     // --- FUNCIONES DE APERTURA DE MODALES ---
-window.abrirModal = function() { 
-    document.querySelector('#modalJugador h3').innerText = 'Nuevo Jugador';
-    document.getElementById('btnGuardar').innerText = 'Registrar Jugador :)';
-    editMode = false;
-    
-    // Mostramos el modal
-    const modal = document.getElementById('modalJugador');
-    if(modal) {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    }
-    // Cargamos los equipos en el select del modal
-    cargarEquipos(); 
-};
+    window.abrirModal = function() { 
+        document.querySelector('#modalJugador h3').innerText = 'Nuevo Jugador';
+        document.getElementById('btnGuardar').innerText = 'Registrar Jugador :)';
+        editMode = false;
+        
+        // Mostramos el modal
+        const modal = document.getElementById('modalJugador');
+        if(modal) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        // Cargamos los equipos en el select del modal
+        cargarEquipos(); 
+    };
 
     window.abrirModalEquipo = function() { 
         const modal = document.getElementById('modalEquipo');
@@ -349,11 +373,11 @@ window.abrirModal = function() {
         } catch (e) { console.error("Error:", e); }
     }
     
-    function changeTab(tabName) {
+    window.changeTab = function(tabName) {
         // 1. Ocultar todos los paneles
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
         
-        // 2. Resetear estilos de todos los botones
+        // 2. Resetear estilos de botones
         document.querySelectorAll('.tab-btn').forEach(b => {
             b.classList.remove('text-blue-500', 'border-b-2', 'border-blue-500');
             b.classList.add('text-slate-500');
@@ -363,20 +387,39 @@ window.abrirModal = function() {
         const target = document.getElementById('content-' + tabName);
         if(target) target.classList.remove('hidden');
 
-        // 4. Activar el estilo del botón clickeado
-        if(window.event && window.event.currentTarget) {
-            window.event.currentTarget.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
+        // 4. Activar estilo del botón
+        const btnActivo = event ? event.currentTarget : null;
+        if(btnActivo) btnActivo.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
+
+        // --- REGLA DE RENDIMIENTO: Resetear paginación al cambiar ---
+        if (tabName === 'partidos') {
+            window.limitePartidos = 5; 
+            // Llamamos a la carga de datos
+            if(typeof cargarPartidosCards === 'function') cargarPartidosCards();
         }
 
-        // 5. DISPARAR CARGAS (Aquí estaba el error)
-        if(tabName === 'partidos') {
-            cargarPartidosCards(); 
-        } else if(tabName === 'posiciones') {
-            window.cargarTablaPosiciones(); 
-        } else if(tabName === 'equipos_gest') {
-            if(typeof cargarGestionEquipos === 'function') cargarGestionEquipos();
+        // 5. CARGA INTELIGENTE (Lazy Loading)
+        const ahora = Date.now();
+        const necesitaCarga = !ultimaCarga[tabName] || (ahora - ultimaCarga[tabName] > 10000);
+
+        if (necesitaCarga) {
+            switch(tabName) {
+                case 'partidos':
+                    cargarPartidosCards(); 
+                    break;
+                case 'posiciones':
+                    window.cargarTablaPosiciones(); 
+                    break;
+                case 'equipos_gest':
+                    if(typeof cargarGestionEquipos === 'function') cargarGestionEquipos();
+                    break;
+                case 'general':
+                    if(typeof recuperarFixtureGuardado === 'function') recuperarFixtureGuardado();
+                    break;
+            }
+            ultimaCarga[tabName] = ahora;
         }
-    }
+    };
 
     function abrirModalEquipo() { 
         window.modalEquipo.classList.replace('hidden', 'flex'); 
@@ -648,33 +691,52 @@ window.abrirModal = function() {
         }
     }
 
-    function cerrarModalCrearPartido() {
+    window.cerrarModalCrearPartido = function() {
         const modal = document.getElementById('modalCrearPartido');
         if (modal) {
             modal.classList.replace('flex', 'hidden');
-            document.getElementById('formCrearPartido').reset();
-        }
-    }
-
-    async function llenarSelectsEquipos() {
-        try {
-            const res = await fetch('/api/equipos');
-            const equipos = await res.json();
-            const selects = [document.getElementById('selectLocal'), document.getElementById('selectVisitante')];
+            const form = document.getElementById('formCrearPartido');
+            form.reset();
             
+            const selLocal = document.getElementById('selectLocal');
+            const selVisitante = document.getElementById('selectVisitante');
+            
+            selLocal.disabled = false;
+            selVisitante.disabled = false;
+            selLocal.classList.remove('opacity-50', 'cursor-not-allowed');
+            selVisitante.classList.remove('opacity-50', 'cursor-not-allowed');
+            
+            window.idPartidoSorteo = null;
+        }
+    };
+
+    window.llenarSelectsEquipos = async function() {
+        const selectLocal = document.getElementById('selectLocal');
+        const selectVisitante = document.getElementById('selectVisitante');
+        
+        if (!selectLocal || !selectVisitante) return;
+
+        try {
+            // SI NO HAY CACHÉ, HACEMOS EL FETCH UNA SOLA VEZ
+            if (!cacheEquiposData) {
+                const res = await fetch('/api/equipos');
+                cacheEquiposData = await res.json();
+            }
+
+            const selects = [selectLocal, selectVisitante];
             selects.forEach(s => {
-                if (!s) return;
+                const currentVal = s.value;
                 s.innerHTML = '<option value="">Selecciona un club</option>';
-                for (const id in equipos) {
+                for (const id in cacheEquiposData) {
                     const opt = document.createElement('option');
-                    opt.value = equipos[id].nombre;
-                    opt.textContent = equipos[id].nombre.toUpperCase();
+                    opt.value = cacheEquiposData[id].nombre;
+                    opt.textContent = cacheEquiposData[id].nombre.toUpperCase();
                     s.appendChild(opt);
                 }
+                if(currentVal) s.value = currentVal;
             });
-        } catch (e) { console.error("Error llenando selects:", e); }
-    }
-
+        } catch (e) { console.error("Error al llenar selects:", e); }
+    };
     
 
     // --- FUNCIONES GLOBALES ---
@@ -683,107 +745,216 @@ window.abrirModal = function() {
         const contenedor = document.getElementById('contenedorListaPartidos');
         if (!contenedor) return;
 
+        // Feedback visual inmediato para mejorar la percepción de velocidad
+        contenedor.innerHTML = `
+            <div class="col-span-full py-20 text-center animate-pulse">
+                <div class="text-blue-500 font-black text-xs uppercase tracking-[0.3em]">Sincronizando Calendario...</div>
+            </div>
+        `;
+
         try {
             const res = await fetch('/api/partidos');
+            
+            // Si el servidor falla (Error 500), lanzamos error para el catch
+            if (!res.ok) throw new Error("Error en servidor");
+
             const partidos = await res.json();
             
-            // FORZAMOS LA VARIABLE GLOBAL
+            // Protección contra datos vacíos
+            if (!partidos || Object.keys(partidos).length === 0) {
+                contenedor.innerHTML = '<p class="text-slate-500 italic text-center py-10">No hay partidos programados.</p>';
+                return;
+            }
+
             window.cachePartidosLista = Object.keys(partidos).map(id => ({
                 id: id,
                 ...partidos[id]
             }));
 
-            console.log("Caché actualizada:", window.cachePartidosLista.length, "partidos.");
-
             aplicarFiltrosPartidos();
         } catch (e) { 
-            console.error("Error cargando partidos:", e); 
+            console.error("Error cargando partidos:", e);
+            contenedor.innerHTML = '<p class="text-red-500 text-[10px] text-center uppercase font-black py-10">⚠️ Error de conexión con la liga</p>';
         }
     }
 
     window.aplicarFiltrosPartidos = function() {
         const contenedor = document.getElementById('contenedorListaPartidos');
-        if (!contenedor) return;
+        if (!contenedor || !window.cachePartidosLista) return;
 
         const busqueda = document.getElementById('filtroEquipoPartido').value.toLowerCase().trim();
         const estatusFiltro = document.getElementById('filtroEstatusPartido').value;
         const orden = document.getElementById('ordenarPartidos').value;
 
-        // 1. Filtrar
+        // 1. FILTRAR
         let filtrados = window.cachePartidosLista.filter(p => {
-            const nombreMatch = (p.equipo_local || "").toLowerCase().includes(busqueda) || 
-                                (p.equipo_visitante || "").toLowerCase().includes(busqueda);
-            
-            let estatusMatch = false;
-            if (estatusFiltro === 'todos') {
-                estatusMatch = true;
-            } else {
-                estatusMatch = (p.estatus === estatusFiltro);
-            }
+            const local = (p.equipo_local || "Equipo").toLowerCase();
+            const visitante = (p.equipo_visitante || "Equipo").toLowerCase();
+            const nombreMatch = local.includes(busqueda) || visitante.includes(busqueda);
+            const estatusMatch = (estatusFiltro === 'todos') ? true : (p.estatus === estatusFiltro);
             return nombreMatch && estatusMatch;
         });
 
-        // 2. Ordenar
+        // 2. ORDENAR (Programados arriba, Pendientes abajo)
         filtrados.sort((a, b) => {
-            const fechaA = new Date(`${a.fecha}T${a.hora || '00:00'}`);
-            const fechaB = new Date(`${b.fecha}T${b.hora || '00:00'}`);
-            return orden === 'recientes' ? fechaB - fechaA : fechaA - fechaB;
+            const tieneFechaA = a.fecha && a.fecha !== 'PENDIENTE';
+            const tieneFechaB = b.fecha && b.fecha !== 'PENDIENTE';
+            if (tieneFechaA && !tieneFechaB) return -1;
+            if (!tieneFechaA && tieneFechaB) return 1;
+            const timeA = new Date(`${a.fecha}T${a.hora || '00:00'}`).getTime();
+            const timeB = new Date(`${b.fecha}T${b.hora || '00:00'}`).getTime();
+            return orden === 'recientes' ? timeB - timeA : timeA - timeB;
         });
 
-        // 3. Dibujar HTML
-        let html = '';
-        if (filtrados.length === 0) {
-            contenedor.innerHTML = '<p class="text-center text-slate-600 py-10 italic">No se encontraron partidos con estos filtros.</p>';
+        // 3. PAGINACIÓN
+        const totalEncontrados = filtrados.length;
+        const partidosAMostrar = filtrados.slice(0, window.limitePartidos);
+
+        if (totalEncontrados === 0) {
+            contenedor.innerHTML = '<p class="text-center text-slate-600 py-10 italic">No se encontraron partidos.</p>';
             return;
         }
 
-        filtrados.forEach(p => {
+        let html = '';
+        const escudoDefault = 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png';
+        let yaPuseSeparadorPendientes = false;
+
+        // 4. GENERAR CARDS
+        partidosAMostrar.forEach((p, index) => {
+            const nomLocal = (p.equipo_local || "POR DEFINIR").toUpperCase();
+            const nomVis = (p.equipo_visitante || "POR DEFINIR").toUpperCase();
+            const tieneFecha = p.fecha && p.fecha !== 'PENDIENTE';
+
+            // Separador visual de Pendientes
+            if (!tieneFecha && !yaPuseSeparadorPendientes && index > 0) {
+                html += `
+                    <div class="col-span-full flex items-center gap-4 my-6 opacity-60">
+                        <span class="text-[9px] font-black text-amber-500 uppercase tracking-[0.2em] whitespace-nowrap">Partidos por programar</span>
+                        <div class="h-px bg-amber-500/30 w-full"></div>
+                    </div>`;
+                yaPuseSeparadorPendientes = true;
+            }
+
+            // LÓGICA DE BADGE DE ESTADO (CENTRAL)
             let badgeEstatus = '';
             if (p.resultado_confirmado || p.estatus === 'confirmado') {
-                badgeEstatus = `<span class="bg-slate-800 text-slate-400 text-[10px] px-3 py-1 rounded-lg font-black uppercase flex items-center gap-2">ACTA CERRADA 🔒</span>`;
-            } else if (p.estatus === 'finalizado') {
-                badgeEstatus = `<span class="bg-amber-600/20 text-amber-500 text-[10px] px-3 py-1 rounded-lg font-black uppercase flex items-center gap-2 animate-pulse">POR SUBIR ACTA ⚠️</span>`;
+                badgeEstatus = `<span class="bg-slate-800 text-slate-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">CERRADA 🔒</span>`;
             } else if (p.estatus === 'en_curso') {
-                badgeEstatus = `<span class="bg-green-600/20 text-green-500 text-[10px] px-3 py-1 rounded-lg font-black uppercase flex items-center gap-2">EN CURSO 🟢</span>`;
+                badgeEstatus = `<span class="bg-green-600/20 text-green-500 text-[8px] px-2 py-1 rounded-md font-black uppercase animate-pulse">EN VIVO 🟢</span>`;
+            } else if (p.estatus === 'finalizado') {
+                badgeEstatus = `<span class="bg-amber-600/20 text-amber-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">POR SUBIR ACTA ⚠️</span>`;
+            } else if (!tieneFecha) {
+                badgeEstatus = `<span class="bg-red-600/20 text-red-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">SIN FECHA</span>`;
             } else {
-                badgeEstatus = `<span class="bg-blue-600/20 text-blue-500 text-[10px] px-3 py-1 rounded-lg font-black uppercase flex items-center gap-2">PROGRAMADO 📅</span>`;
+                badgeEstatus = `<span class="bg-blue-600/20 text-blue-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">PROGRAMADO</span>`;
             }
 
             html += `
                 <div onclick="window.verDetallePartido('${p.id}')" 
-                    class="cursor-pointer bg-slate-900 border border-slate-800 p-5 rounded-3xl mb-4 transition-all hover:border-slate-700 group relative">
-                    <div class="flex justify-between items-center">
-                        <div class="flex flex-col gap-4 w-2/3">
+                    class="cursor-pointer bg-slate-900 border ${!tieneFecha ? 'border-red-900/30' : 'border-slate-800'} p-5 rounded-3xl mb-4 transition-all hover:border-blue-500 hover:bg-slate-800/50 shadow-lg relative overflow-hidden group">
+                    
+                    <div class="flex justify-between items-center gap-4">
+                        
+                        <div class="flex flex-col gap-4 flex-1">
                             <div class="flex items-center gap-4">
-                                <img src="${p.escudo_local}" class="size-10 object-contain">
-                                <span class="text-white font-black uppercase tracking-tighter text-lg">${p.equipo_local}</span>
-                                <span class="text-2xl font-black text-white ml-auto">${p.goles_local}</span>
+                                <img src="${p.escudo_local || escudoDefault}" class="size-8 object-contain">
+                                <span class="text-white font-black uppercase tracking-tighter text-sm truncate">${nomLocal}</span>
+                                <span class="text-xl font-black text-white ml-auto">${p.goles_local || 0}</span>
                             </div>
+                            
+                            <div class="flex items-center gap-2">
+                                <div class="h-px bg-slate-800 flex-1"></div>
+                                ${badgeEstatus}
+                                <div class="h-px bg-slate-800 flex-1"></div>
+                            </div>
+
                             <div class="flex items-center gap-4">
-                                <img src="${p.escudo_visitante}" class="size-10 object-contain">
-                                <span class="text-white font-black uppercase tracking-tighter text-lg">${p.equipo_visitante}</span>
-                                <span class="text-2xl font-black text-white ml-auto">${p.goles_visitante}</span>
+                                <img src="${p.escudo_visitante || escudoDefault}" class="size-8 object-contain">
+                                <span class="text-white font-black uppercase tracking-tighter text-sm truncate">${nomVis}</span>
+                                <span class="text-xl font-black text-white ml-auto">${p.goles_visitante || 0}</span>
                             </div>
                         </div>
-                        <div class="flex flex-col items-end gap-2 border-l border-slate-800 pl-6">
-                            ${badgeEstatus}
-                            <span class="text-[11px] text-slate-500 font-bold">${p.fecha_formateada || p.fecha}</span>
+
+                        <div class="flex flex-col items-end gap-2 border-l border-slate-800 pl-6 min-w-[140px]">
+                            <span class="text-[10px] ${!tieneFecha ? 'text-red-500 font-black' : 'text-slate-500 font-bold'}">
+                                ${p.fecha || 'FECHA PENDIENTE'}
+                            </span>
+
+                            <button onclick="event.stopPropagation(); window.abrirAsignacionRapida('${p.equipo_local}', '${p.equipo_visitante}', '${p.id}')" 
+                                    class="w-full bg-slate-800 hover:bg-slate-700 text-white text-[9px] font-black py-2 rounded-xl transition-all uppercase border border-slate-700 active:scale-95">
+                                📅 LOGÍSTICA
+                            </button>
+
                             ${!(p.resultado_confirmado || p.estatus === 'confirmado') ? `
-                                <button onclick="event.stopPropagation(); abrirActualizarMarcador('${p.id}')" 
-                                        class="mt-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black px-6 py-2 rounded-xl transition-all uppercase tracking-widest shadow-lg shadow-blue-900/20">
-                                    GESTIONAR
+                                <button onclick="event.stopPropagation(); window.abrirActualizarMarcador('${p.id}')" 
+                                        class="w-full bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black py-2 rounded-xl transition-all uppercase shadow-lg shadow-blue-900/20 active:scale-95">
+                                    ⚽ ESTADÍSTICAS
                                 </button>
                             ` : `
-                                <span class="text-[10px] text-slate-600 italic mt-2 uppercase tracking-widest">Resultado Inamovible</span>
+                                <div class="w-full text-center py-2 bg-slate-950/50 rounded-xl">
+                                    <span class="text-[8px] text-slate-600 italic uppercase">🔒 Finalizado</span>
+                                </div>
                             `}
                         </div>
+                    </div>
+
+                    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span class="text-[7px] text-blue-500 font-black tracking-[0.3em] uppercase">Toca para ver detalle</span>
                     </div>
                 </div>`;
         });
 
+        // 5. SECCIONAMIENTO VISUAL (Botones de navegación)
+        if (totalEncontrados > 10) {
+            html += `<div class="col-span-full flex flex-col items-center gap-4 py-10 border-t border-slate-800/50 mt-6">`;
+            
+            if (totalEncontrados > window.limitePartidos) {
+                html += `
+                    <p class="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-2">
+                        Mostrando ${window.limitePartidos} de ${totalEncontrados} partidos
+                    </p>
+                    <button onclick="window.cargarMasPartidos()" 
+                            class="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-2xl text-[10px] font-black uppercase transition-all shadow-xl shadow-blue-900/20 active:scale-95 flex items-center justify-center gap-3">
+                        <span>➕ Cargar siguientes 5</span>
+                        <span class="bg-blue-400/30 px-2 py-0.5 rounded-lg text-[8px]">${totalEncontrados - window.limitePartidos} restantes</span>
+                    </button>
+                `;
+            }
+
+            if (window.limitePartidos > 10) {
+                html += `
+                    <button onclick="window.verMenosPartidos()" 
+                            class="text-slate-500 hover:text-white text-[9px] font-bold uppercase tracking-widest hover:underline decoration-blue-500 underline-offset-4 transition-all mt-2">
+                        ⬆️ Volver al inicio
+                    </button>
+                `;
+            }
+
+            html += `</div>`;
+        }
+
         contenedor.innerHTML = html;
     };
 
+    // Funciones de control global
+    window.cargarMasPartidos = function() {
+        window.limitePartidos += 5;
+        aplicarFiltrosPartidos();
+    };
+
+    window.verMenosPartidos = function() {
+        window.limitePartidos = 5;
+        aplicarFiltrosPartidos();
+        document.getElementById('content-partidos').scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.cerrarModalDetalle = function() {
+        const modal = document.getElementById('modalDetallePartido');
+        if (modal) {
+            modal.classList.replace('flex', 'hidden');
+        }
+    };
+    
     async function abrirActualizarMarcador(id) {
         try {
             const resPartidos = await fetch('/api/partidos');
@@ -897,6 +1068,8 @@ window.abrirModal = function() {
                 headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
             });
             if (res.ok) {
+                cacheCamposData = null;
+                window.cargarCamposCards(true);
                 alert("🗑️ Partido eliminado");
                 cerrarModalMarcador();
                 cargarPartidosCards();
@@ -908,6 +1081,7 @@ window.abrirModal = function() {
     
     function abrirModalCrearPartido() { window.modalCrearPartido.classList.replace('hidden', 'flex'); llenarSelectsEquipos(); }
     function cerrarModalCrearPartido() { window.modalCrearPartido.classList.replace('flex', 'hidden'); }
+    
     
     async function llenarSelectsEquipos() {
         const res = await fetch('/api/equipos');
@@ -924,39 +1098,6 @@ window.abrirModal = function() {
             }
         });
     }
-
-    window.llenarSelectsCampos = async function() {
-        try {
-            const res = await fetch('/api/campos');
-            const campos = await res.json();
-            const select = document.getElementById('selectCampos');
-            if(!select) return;
-
-            select.innerHTML = '<option value="">Selecciona Cancha</option>';
-
-            for (const id in campos) {
-                const campo = campos[id];
-                const isMantenimiento = campo.estado === 'mantenimiento';
-                const opt = document.createElement('option');
-                
-                opt.value = id;
-                
-                // Si está en mantenimiento, le ponemos un aviso visual
-                if (isMantenimiento) {
-                    opt.textContent = "🚧 " + campo.nombre.toUpperCase() + " (EN MANTENIMIENTO)";
-                    opt.disabled = true; // ESTA ES LA CLAVE: No permite hacer click
-                    opt.className = "text-slate-500 bg-slate-900 italic"; // Estilo visual de bloqueado
-                } else {
-                    opt.textContent = "✅ " + campo.nombre.toUpperCase() + " (" + campo.lugar.toUpperCase() + ")";
-                    opt.className = "text-white";
-                }
-                
-                select.appendChild(opt);
-            }
-        } catch (e) { 
-            console.error("Error al llenar select de campos:", e); 
-        }
-    };
 
     function abrirModalCampo() { 
         document.getElementById('modalCrearCampo').classList.replace('hidden', 'flex'); 
@@ -978,45 +1119,68 @@ window.abrirModal = function() {
     
     window.verDetallePartido = async function(id) {
         try {
-            const res = await fetch('/api/partidos');
-            const partidos = await res.json();
-            const p = partidos[id];
+            const p = window.cachePartidosLista.find(item => item.id === id);
             if(!p) return;
 
-            // 1. Info básica y cálculo de hora
-            document.getElementById('det_fecha').innerText = p.fecha_formateada || p.fecha;
+            const modal = document.getElementById('modalDetallePartido');
+            modal.classList.replace('hidden', 'flex');
+
+            // 1. LLENAR DATOS BÁSICOS
+            document.getElementById('det_fecha').innerText = p.fecha || 'PENDIENTE';
             
-            // Calcular hora de fin (100 min después)
-            const [h, m] = p.hora.split(':').map(Number);
-            const fin = new Date(); fin.setHours(h, m + 100);
-            const horaFinStr = fin.getHours().toString().padStart(2, '0') + ':' + fin.getMinutes().toString().padStart(2, '0');
-            document.getElementById('det_rango_hora').innerText = `HORARIO: ${p.hora} HRS - ${horaFinStr} HRS`;
+            if (p.hora && p.hora !== '00:00') {
+                const [h, m] = p.hora.split(':').map(Number);
+                const fin = new Date(); fin.setHours(h, m + 100);
+                const horaFinStr = fin.getHours().toString().padStart(2, '0') + ':' + fin.getMinutes().toString().padStart(2, '0');
+                document.getElementById('det_rango_hora').innerText = `HORARIO: ${p.hora} HRS - ${horaFinStr} HRS`;
+            } else {
+                document.getElementById('det_rango_hora').innerText = "HORARIO POR DEFINIR";
+            }
 
             document.getElementById('det_nombre_local').innerText = p.equipo_local;
             document.getElementById('det_nombre_visitante').innerText = p.equipo_visitante;
-            document.getElementById('det_goles_local').innerText = p.goles_local;
-            document.getElementById('det_goles_visitante').innerText = p.goles_visitante;
-            document.getElementById('det_escudo_local').src = p.escudo_local;
-            document.getElementById('det_escudo_visitante').src = p.escudo_visitante;
+            document.getElementById('det_goles_local').innerText = p.goles_local || 0;
+            document.getElementById('det_goles_visitante').innerText = p.goles_visitante || 0;
+            document.getElementById('det_escudo_local').src = p.escudo_local || escudoDefault;
+            document.getElementById('det_escudo_visitante').src = p.escudo_visitante || escudoDefault;
             
-            const resCampos = await fetch('/api/campos');
-            const campos = await resCampos.json();
-            const infoCampo = campos[p.campo_id];
-            document.getElementById('det_cancha').innerText = infoCampo ? `${infoCampo.nombre} (${infoCampo.lugar})` : "Sede por confirmar";
+
+            if (!window.cacheCamposData) {
+                const resC = await fetch('/api/campos');
+                window.cacheCamposData = await resC.json();
+            }
+
+            const infoCampo = window.cacheCamposData ? window.cacheCamposData[p.campo_id] : null;
+            const detCanchaElement = document.getElementById('det_cancha');
+            
+            if (infoCampo) {
+                detCanchaElement.innerText = `${infoCampo.nombre.toUpperCase()} (${infoCampo.lugar.toUpperCase()})`;
+            } else {
+                detCanchaElement.innerText = "SEDE POR CONFIRMAR";
+            }
+
 
             const est = document.getElementById('det_estatus');
-            const actaCerrada = p.resultado_confirmado;
+            const actaCerrada = p.resultado_confirmado || p.estatus === 'confirmado';
             est.innerText = (actaCerrada ? 'Finalizado' : p.estatus).toUpperCase();
-            est.className = actaCerrada ? "text-[8px] font-black px-3 py-1 rounded-full bg-slate-800 text-slate-500 border border-slate-700" : "text-[8px] font-black px-3 py-1 rounded-full bg-green-500/10 text-green-500 border border-green-500/20 animate-pulse";
+            est.className = actaCerrada 
+                ? "text-[8px] font-black px-3 py-1 rounded-full bg-slate-800 text-slate-500 border border-slate-700" 
+                : "text-[8px] font-black px-3 py-1 rounded-full bg-green-500/10 text-green-500 border border-green-500/20";
 
-            // 2. Goleadores con números y mejor distribución
+            // 2. GOLEADORES
             const listaLocal = document.getElementById('lista_goleadores_local');
             const listaVisitante = document.getElementById('lista_goleadores_visitante');
-            listaLocal.innerHTML = ''; listaVisitante.innerHTML = '';
+            listaLocal.innerHTML = '<span class="text-[7px] animate-pulse text-slate-600">CARGANDO...</span>';
+            listaVisitante.innerHTML = '<span class="text-[7px] animate-pulse text-slate-600">CARGANDO...</span>';
 
             if(p.detalle_jugadores) {
-                const resJ = await fetch('/api/jugadores');
-                const jugadores = await resJ.json();
+                if(!window.cacheJugadoresGlobal) {
+                    const resJ = await fetch('/api/jugadores');
+                    window.cacheJugadoresGlobal = await resJ.json();
+                }
+                
+                const jugadores = window.cacheJugadoresGlobal;
+                listaLocal.innerHTML = ''; listaVisitante.innerHTML = '';
 
                 Object.entries(p.detalle_jugadores).forEach(([tel, stats]) => {
                     if(stats.goles > 0) {
@@ -1024,9 +1188,8 @@ window.abrirModal = function() {
                         const nombre = infoJ ? infoJ.nombre : "Jugador";
                         const esLocal = infoJ && infoJ.equipo === p.equipo_local;
                         
-                        // Formato: Nombre + Balón + Número (si es más de 1)
                         const item = `
-                            <div class="flex items-center gap-2 ${esLocal ? 'justify-end' : 'justify-start'}">
+                            <div class="flex items-center gap-2 ${esLocal ? 'justify-end' : 'justify-start'} mb-1">
                                 ${esLocal ? `<span class="text-[10px] text-white font-bold uppercase">${nombre}</span>` : ''}
                                 <div class="flex items-center bg-slate-900 px-2 py-1 rounded-lg border border-slate-800">
                                     <span class="text-[10px]">⚽</span>
@@ -1041,11 +1204,19 @@ window.abrirModal = function() {
                 });
             }
 
-            if(listaLocal.innerHTML === '') listaLocal.innerHTML = '<span class="text-[8px] text-slate-700 uppercase block text-right">Sin anotaciones</span>';
-            if(listaVisitante.innerHTML === '') listaVisitante.innerHTML = '<span class="text-[8px] text-slate-700 uppercase block text-left">Sin anotaciones</span>';
+            if(listaLocal.innerHTML === '' || listaLocal.innerHTML.includes('CARGANDO')) 
+                listaLocal.innerHTML = '<span class="text-[8px] text-slate-700 uppercase block text-right italic">Sin anotaciones</span>';
+            if(listaVisitante.innerHTML === '' || listaVisitante.innerHTML.includes('CARGANDO')) 
+                listaVisitante.innerHTML = '<span class="text-[8px] text-slate-700 uppercase block text-left italic">Sin anotaciones</span>';
 
-            document.getElementById('modalDetallePartido').classList.replace('hidden', 'flex');
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Error en detalle:", e); }
+    };
+
+    window.cerrarModalReasignar = function() {
+        const modal = document.getElementById('modalReasignarSede');
+        if (modal) {
+            modal.classList.replace('flex', 'hidden');
+        }
     };
 
     window.cerrarDetalle = function() {
@@ -1372,13 +1543,24 @@ window.abrirModal = function() {
     };
 
     // Cargar Canchas en el Tab
-    window.cargarCamposCards = async function() {
+    // FUNCIÓN AUXILIAR: Centraliza la obtención de datos
+    async function obtenerDatosCampos(forzar = false) {
+        if (!cacheCamposData || forzar) {
+            const res = await fetch('/api/campos');
+            cacheCamposData = await res.json();
+        }
+        return cacheCamposData;
+    }
+
+    // 1. Corregir cargarCamposCards (La pestaña de Canchas)
+    window.cargarCamposCards = async function(forzar = false) {
         const contenedor = document.getElementById('listaCamposCards');
         if(!contenedor) return;
+
         try {
-            const res = await fetch('/api/campos');
-            const campos = await res.json();
+            const campos = await obtenerDatosCampos(forzar); // Usa caché o pide nuevos
             contenedor.innerHTML = '';
+            
             for (const id in campos) {
                 const c = campos[id];
                 const isMantenimiento = c.estado === 'mantenimiento';
@@ -1402,8 +1584,37 @@ window.abrirModal = function() {
                         </div>
                     </div>`;
             }
-        } catch (e) { console.error("Error:", e); }
+        } catch (e) { console.error("Error cargando cards de campos:", e); }
     };
+
+    // 2. Corregir llenarSelectsCampos (Los formularios)
+    window.llenarSelectsCampos = async function() {
+        const select = document.getElementById('selectCampos');
+        if(!select) return;
+
+        try {
+            const campos = await obtenerDatosCampos(); // Usa la misma caché
+            select.innerHTML = '<option value="">Selecciona Cancha</option>';
+
+            for (const id in campos) {
+                const campo = campos[id];
+                const isMantenimiento = campo.estado === 'mantenimiento';
+                const opt = document.createElement('option');
+                
+                opt.value = id;
+                if (isMantenimiento) {
+                    opt.textContent = "🚧 " + campo.nombre.toUpperCase() + " (EN MANTENIMIENTO)";
+                    opt.disabled = true;
+                    opt.className = "text-slate-500 bg-slate-900 italic";
+                } else {
+                    opt.textContent = "✅ " + campo.nombre.toUpperCase() + " (" + campo.lugar.toUpperCase() + ")";
+                    opt.className = "text-white";
+                }
+                select.appendChild(opt);
+            }
+        } catch (e) { console.error("Error al llenar select de campos:", e); }
+    };
+
 
         // Funciones para el Modal de Edición
     window.prepararEdicionCampo = function(id, nombre, lugar, estado) {
@@ -1435,8 +1646,6 @@ window.abrirModal = function() {
             lugar: e.target.lugar.value,
             estado: document.getElementById('selectEstadoCampo').value || 'disponible'
         };
-
-        console.log("Intentando guardar campo con ID:", idAEditar); // Para debug
 
         // Llamamos a la función inteligente
         window.ejecutarGuardadoCancha(idAEditar, data);
@@ -1545,11 +1754,221 @@ window.abrirModal = function() {
         }
     };
 
-    window.cerrarModalReasignar = function() {
-    const modal = document.getElementById('modalReasignarSede');
-    if (modal) {
-        modal.classList.replace('flex', 'hidden');
-    }
+    window.generarTorneoAleatorio = async function() {
+        if(!confirm("🎲 ¿Generar nuevo sorteo? Esto creará el rol de juegos para toda la temporada.")) return;
+
+        try {
+            // 1. Obtener equipos
+            const resE = await fetch('/api/equipos');
+            const equiposData = await resE.json();
+            let equipos = Object.values(equiposData).map(e => e.nombre);
+
+            if (equipos.length < 2) return alert("❌ Mínimo 2 equipos para sortear.");
+            
+            // Mezcla aleatoria
+            equipos.sort(() => Math.random() - 0.5);
+
+            // Manejo de impares
+            if (equipos.length % 2 !== 0) equipos.push("DESCANSO");
+
+            let partidosPaquete = [];
+            const n = equipos.length;
+            
+            // 2. Algoritmo Round Robin
+            for (let j = 0; j < n - 1; j++) {
+                for (let i = 0; i < n / 2; i++) {
+                    const loc = equipos[i];
+                    const vis = equipos[n - 1 - i];
+                    if (loc !== "DESCANSO" && vis !== "DESCANSO") {
+                        partidosPaquete.push({ 
+                            equipo_local: loc, 
+                            equipo_visitante: vis, 
+                            jornada: j + 1 
+                        });
+                    }
+                }
+                equipos.splice(1, 0, equipos.pop());
+            }
+
+            // 3. ENVIAR TODO EL PAQUETE (Ruta rápida)
+            const res = await fetch('/api/admin/partidos/generar-torneo', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}' 
+                },
+                body: JSON.stringify({ partidos: partidosPaquete })
+            });
+
+            if(res.ok) {
+                alert("🏆 ¡Torneo generado con éxito!");
+                
+                // 4. Dibujar el diagrama inmediatamente sin recargar
+                window.pintarFixtureVisual(partidosPaquete);
+                
+                // 5. Actualizar la lista de la otra pestaña
+                if(window.cargarPartidosCards) window.cargarPartidosCards();
+            } else {
+                const err = await res.json();
+                alert("❌ Error: " + (err.error || "No se pudo generar"));
+            }
+        } catch (e) { 
+            console.error(e); 
+            alert("❌ Error de comunicación con el servidor");
+        }
+    };
+
+    window.pintarFixtureVisual = function(partidos) {
+        const contenedor = document.getElementById('contenedorFixture');
+        if (!contenedor) return;
+
+        contenedor.innerHTML = '<h3 class="text-white font-black uppercase text-center my-8 tracking-tighter text-xl">Fixture del Torneo</h3>';
+
+        // Agrupar partidos por jornada
+        const jornadas = {};
+        partidos.forEach(p => {
+            const jor = p.jornada || 1;
+            if (!jornadas[jor]) jornadas[jor] = [];
+            jornadas[jor].push(p);
+        });
+
+        // Dibujar cada jornada
+        Object.keys(jornadas).forEach(numJor => {
+            let htmlJornada = `
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl mb-6">
+                    <div class="flex items-center gap-4 mb-6">
+                        <span class="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase">Semana ${numJor}</span>
+                        <div class="h-px bg-slate-800 flex-1"></div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            `;
+
+            jornadas[numJor].forEach(p => {
+                htmlJornada += `
+                    <button onclick="window.abrirAsignacionRapida('${p.equipo_local}', '${p.equipo_visitante}', '${p.id}')" 
+                            class="w-full flex items-center justify-between bg-slate-950/50 p-4 rounded-2xl border border-slate-800/50 hover:border-blue-500 hover:bg-blue-500/5 transition group text-left">
+                        <div class="flex-1 text-right font-bold text-white text-[11px] uppercase truncate group-hover:text-blue-400">${p.equipo_local}</div>
+                        <div class="px-4 text-blue-500 font-black text-[9px] italic">VS</div>
+                        <div class="flex-1 text-left font-bold text-white text-[11px] uppercase truncate group-hover:text-blue-400">${p.equipo_visitante}</div>
+                    </button>
+                `;
+            });
+
+            htmlJornada += `</div></div>`;
+            contenedor.innerHTML += htmlJornada;
+        });
+    };
+
+    window.recuperarFixtureGuardado = async function() {
+        try {
+            const res = await fetch('/api/partidos');
+            const partidosData = await res.json();
+            // Convertimos el objeto de Firebase en Array
+            const partidos = Object.keys(partidosData).map(id => ({ id, ...partidosData[id] }));
+
+            if (partidos.length > 0) {
+                // Si ya existen partidos en la DB, dibujamos el diagrama
+                window.pintarFixtureVisual(partidos);
+            }
+        } catch (e) { 
+            console.error("Error al recuperar el fixture:", e); 
+        }
+    };
+
+    window.limpiarTodo = async function() {
+        if(!confirm("⚠️ ¿BORRAR TODO? Esta acción eliminará todos los partidos del torneo actual. No se puede deshacer.")) return;
+
+        try {
+            const res = await fetch('/api/admin/partidos/limpiar-todo', {
+                method: 'DELETE',
+                headers: { 
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                }
+            });
+
+            if(res.ok) {
+                alert("🧹 Torneo limpiado correctamente.");
+                // Limpiamos el contenedor visual
+                const contenedor = document.getElementById('contenedorFixture');
+                if(contenedor) contenedor.innerHTML = '';
+                
+                // Actualizamos la pestaña de partidos
+                if(window.cargarPartidosCards) window.cargarPartidosCards();
+            } else {
+                alert("❌ Error al intentar limpiar la base de datos.");
+            }
+        } catch (e) { 
+            console.error(e);
+            alert("❌ Error de comunicación");
+        }
+    };
+
+    window.abrirAsignacionRapida = async function(local, visitante, partidoId) {
+        const modal = document.getElementById('modalCrearPartido');
+        if (!modal) return;
+
+        // 1. Mostrar modal
+        modal.classList.replace('hidden', 'flex');
+        
+        // 2. Cargar datos previos
+        await window.llenarSelectsEquipos();
+        await window.llenarSelectsCampos();
+        const p = window.cachePartidosLista.find(item => item.id === partidoId);
+
+        // 3. Referencias de los inputs
+        const inputFecha = modal.querySelector('input[name="fecha"]');
+        const inputHora = modal.querySelector('input[name="hora"]');
+        const selCancha = document.getElementById('selectCampos');
+        const btnSubmit = modal.querySelector('button[type="submit"]');
+
+        // 4. Lógica de Bloqueo "En Vivo" o "Finalizado"
+        // Si el partido está en curso o ya terminó, NO se puede mover la logística
+        const estaBloqueado = p && (p.estatus === 'en_curso' || p.estatus === 'finalizado' || p.resultado_confirmado);
+
+        if (estaBloqueado) {
+            modal.querySelector('h3').innerText = "🚫 PROGRAMACIÓN BLOQUEADA (EN CURSO)";
+            if(btnSubmit) btnSubmit.classList.add('hidden'); // Escondemos el botón de guardar
+            
+            // Bloqueamos los inputs
+            [inputFecha, inputHora, selCancha].forEach(el => {
+                if(el) {
+                    el.disabled = true;
+                    el.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            });
+        } else {
+            // Si es programado o pendiente, restauramos todo
+            modal.querySelector('h3').innerText = "📅 GESTIONAR PROGRAMACIÓN";
+            if(btnSubmit) btnSubmit.classList.remove('hidden');
+            
+            [inputFecha, inputHora, selCancha].forEach(el => {
+                if(el) {
+                    el.disabled = false;
+                    el.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            });
+        }
+
+        // 5. Llenado de datos (Auto-completado)
+        if (p) {
+            if (inputFecha) inputFecha.value = p.fecha || '';
+            if (inputHora) inputHora.value = p.hora || '';
+            if (selCancha) selCancha.value = p.campo_id || '';
+        }
+
+        // Bloqueo permanente de equipos (esto siempre va)
+        document.getElementById('selectLocal').disabled = true;
+        document.getElementById('selectVisitante').disabled = true;
+
+        window.idPartidoSorteo = partidoId;
+
+        // Disparamos la agenda visual
+        setTimeout(() => {
+            if (typeof window.verificarConflictosInteligentes === 'function') {
+                window.verificarConflictosInteligentes();
+            }
+        }, 200);
 };
 
 </script>
