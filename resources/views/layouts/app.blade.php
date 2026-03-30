@@ -67,6 +67,7 @@
     let limitePartidos = 5;
     let cacheEquiposData = null;
     let cacheCamposData = null;
+    let limiteJugadores = 5;
 
     //LISTENERS Y CONFIGURACIONES INICIALES
     document.addEventListener('DOMContentLoaded', () => {
@@ -83,6 +84,26 @@
         window.recuperarFixtureGuardado();
         window.llenarSelectsEquipos();
         window.llenarSelectsCampos();
+
+
+        const inputBusqueda = document.getElementById('busquedaJugador');
+        const selectFiltroEquipo = document.getElementById('filtroEquipo');
+
+        if (inputBusqueda) {
+            inputBusqueda.addEventListener('input', () => { 
+                limiteJugadores = 5; // Reiniciamos el límite al escribir
+            });
+        }
+        if (selectFiltroEquipo) {
+            selectFiltroEquipo.addEventListener('change', () => { 
+                limiteJugadores = 5; // Reiniciamos el límite al cambiar equipo
+            });
+        }
+
+            setTimeout(() => {
+            if(typeof filtrarTabla === 'function') filtrarTabla();
+        }, 100);
+        
 
         // 3. FUNCIÓN PARA ABRIR MODAL CREAR PARTIDO
         window.abrirModalCrearPartido = function() {
@@ -636,40 +657,36 @@
 
         const filas = Array.from(tablaBody.querySelectorAll('tr'));
 
-        filas.forEach(fila => {
-            // 1. Extraer datos
+        // 1. PRIMERA PASADA: Identificar quiénes cumplen con el filtro
+        let filasQueCumplen = filas.filter(fila => {
             const nombreContenedor = fila.querySelector('[data-field="nombre"]');
-            const nombreCompletoTexto = nombreContenedor?.innerText.toUpperCase() || ""; // Usamos Upper para los badges
+            const nombreCompletoTexto = nombreContenedor?.innerText.toUpperCase() || "";
             const nombreSolo = nombreContenedor?.innerText.toLowerCase() || "";
             const telefono = fila.querySelector('[data-field="telefono"]')?.innerText.toLowerCase() || "";
-            
             const equipoCelda = fila.querySelector('[data-field="equipo"]');
             const valorEquipo = equipoCelda ? equipoCelda.getAttribute('data-valor') : "";
+            const nombreEquipoTexto = equipoCelda?.innerText.toLowerCase() || "";
 
-            // 2. Lógica de Búsqueda (Nombre o Teléfono)
-            const coincideBusqueda = nombreSolo.includes(busqueda) || telefono.includes(busqueda);
+            const coincideBusqueda = nombreSolo.includes(busqueda) || 
+                                    telefono.includes(busqueda) || 
+                                    nombreEquipoTexto.includes(busqueda);
             
-            // 3. Lógica de Filtros Especiales y Equipos
             let coincideFiltro = true;
-
             if (equipoFiltro === "Libre") {
                 coincideFiltro = (valorEquipo === "Libre");
             } else if (equipoFiltro === "SUSPENDIDO") {
-                // Verifica si el texto de la fila contiene la palabra SUSPENDIDO
                 coincideFiltro = nombreCompletoTexto.includes("SUSPENDIDO");
             } else if (equipoFiltro === "LESIONADO") {
-                // Verifica si el texto de la fila contiene la palabra LESIONADO
                 coincideFiltro = nombreCompletoTexto.includes("LESIONADO");
             } else if (equipoFiltro !== "") {
                 coincideFiltro = (valorEquipo === equipoFiltro);
             }
 
-            fila.style.display = (coincideBusqueda && coincideFiltro) ? "" : "none";
+            return coincideBusqueda && coincideFiltro;
         });
 
-        // --- Re-ordenamiento de filas visibles ---
-        const filasVisibles = filas.filter(f => f.style.display !== "none");
-        filasVisibles.sort((a, b) => {
+        // 2. ORDENAR las filas que cumplen
+        filasQueCumplen.sort((a, b) => {
             if (orden === 'goles') return (parseInt(b.cells[3].innerText) || 0) - (parseInt(a.cells[3].innerText) || 0);
             if (orden === 'pj') return (parseInt(b.cells[2].innerText) || 0) - (parseInt(a.cells[2].innerText) || 0);
             if (orden === 'dorsal') {
@@ -678,9 +695,63 @@
                 return numA - numB;
             }
             return a.querySelector('[data-field="nombre"]').innerText.localeCompare(b.querySelector('[data-field="nombre"]').innerText);
-        }).forEach(f => tablaBody.appendChild(f));
+        });
+
+        // 3. APLICAR VISIBILIDAD Y LÍMITE
+        filas.forEach(f => f.style.display = "none"); // Ocultamos todas primero
+
+        // Solo mostramos las que cumplen, hasta el límite actual
+        filasQueCumplen.slice(0, limiteJugadores).forEach(f => {
+            f.style.display = "";
+            tablaBody.appendChild(f); // Re-inyectar para mantener el orden visual
+        });
+
+        // 4. GESTIONAR BOTÓN "MOSTRAR MÁS"
+        gestionarBotonVerMasJugadores(filasQueCumplen.length);
     }
+    
+
+    function gestionarBotonVerMasJugadores(totalFiltrados) {
+        let btnContenedor = document.getElementById('btnContenedorJugadores');
         
+        // Si no existe el contenedor del botón en el HTML, lo creamos después de la tabla
+        if (!btnContenedor) {
+            btnContenedor = document.createElement('div');
+            btnContenedor.id = 'btnContenedorJugadores';
+            btnContenedor.className = 'flex flex-col items-center gap-2 py-6';
+            document.getElementById('content-jugadores').appendChild(btnContenedor);
+        }
+
+        if (totalFiltrados > limiteJugadores) {
+            btnContenedor.innerHTML = `
+                <p class="text-[9px] text-slate-500 uppercase font-black">Mostrando ${limiteJugadores} de ${totalFiltrados} jugadores</p>
+                <button onclick="window.cargarMasJugadores()" 
+                    class="bg-slate-800 hover:bg-blue-600 text-white px-8 py-2 rounded-xl text-[10px] font-black uppercase transition-all active:scale-95 border border-slate-700">
+                    ➕ Ver más jugadores
+                </button>
+            `;
+        } else if (limiteJugadores > 5) {
+            btnContenedor.innerHTML = `
+                <button onclick="window.verMenosJugadores()" 
+                    class="text-slate-500 hover:text-white text-[9px] font-bold uppercase tracking-widest transition-all">
+                    ⬆️ Volver al principio
+                </button>
+            `;
+        } else {
+            btnContenedor.innerHTML = ''; // Si no hay nada que paginar, se limpia
+        }
+    }
+
+    window.cargarMasJugadores = function() {
+        limiteJugadores += 5;
+        filtrarTabla();
+    };
+
+    window.verMenosJugadores = function() {
+        limiteJugadores = 5;
+        filtrarTabla();
+        document.getElementById('content-jugadores').scrollIntoView({ behavior: 'smooth' });
+    };
 
    function abrirModalCrearPartido() {
         const modal = document.getElementById('modalCrearPartido');

@@ -30,8 +30,8 @@
                     </select>
 
                     <select id="ordenarPor" onchange="filtrarTabla()" class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white outline-none focus:border-blue-500">
-                        <option value="nombre">Ordenar por Nombre</option>
                         <option value="goles">Más Goleadores</option>
+                        <option value="nombre">Ordenar por Nombre</option>
                         <option value="pj">Más Partidos</option>
                         <option value="dorsal">Por Dorsal (#)</option>
                     </select>
@@ -142,7 +142,7 @@
                 <div id="contenedorListaPartidos"></div>
             </div>
 
-            <div id="content-posiciones" class="tab-pane hjidden">
+            <div id="content-posiciones" class="tab-pane hidden">
                 <div class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
