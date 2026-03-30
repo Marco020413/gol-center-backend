@@ -1637,7 +1637,6 @@
     };
 
     // Cargar Canchas en el Tab
-    // FUNCIÓN AUXILIAR: Centraliza la obtención de datos
     async function obtenerDatosCampos(forzar = false) {
         if (!cacheCamposData || forzar) {
             const res = await fetch('/api/campos');
@@ -1916,9 +1915,20 @@
         const contenedor = document.getElementById('contenedorFixture');
         if (!contenedor) return;
 
-        contenedor.innerHTML = '<h3 class="text-white font-black uppercase text-center my-8 tracking-tighter text-xl">Fixture del Torneo</h3>';
+        let leyenda = `
+            <div class="flex flex-wrap justify-center gap-4 mb-8 text-[10px] uppercase font-black tracking-widest text-slate-500">
+                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-slate-700"></span> Pendiente</div>
+                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-slate-500"></span> Programado</div>
+                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-red-500 animate-pulse"></span> En Vivo</div>
+                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-emerald-500"></span> Finalizado</div>
+            </div>
+        `;
 
-        // Agrupar partidos por jornada
+        contenedor.innerHTML = `
+            <h3 class="text-white font-black uppercase text-center mt-8 mb-4 tracking-tighter text-xl italic">⚽Torneo de Copa</h3>
+            ${leyenda}
+        `;
+
         const jornadas = {};
         partidos.forEach(p => {
             const jor = p.jornada || 1;
@@ -1926,24 +1936,74 @@
             jornadas[jor].push(p);
         });
 
-        // Dibujar cada jornada
         Object.keys(jornadas).forEach(numJor => {
             let htmlJornada = `
-                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl mb-6">
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl mb-8">
                     <div class="flex items-center gap-4 mb-6">
-                        <span class="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase">Semana ${numJor}</span>
+                        <span class="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">Semana ${numJor}</span>
                         <div class="h-px bg-slate-800 flex-1"></div>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             `;
 
             jornadas[numJor].forEach(p => {
+
+                let statusConfig = {
+                    claseBorde: 'border-slate-800/50',
+                    claseBg: 'bg-slate-950/50',
+                    claseTexto: 'text-slate-400',
+                    badge: `<span class="text-[8px] bg-slate-800 text-slate-600 px-2 py-0.5 rounded-md uppercase font-bold">Sin Horario</span>`,
+                    indicador: 'text-slate-700'
+                };
+
+                // --- LÓGICA DE ESTADOS UNIFICADA ---
+                const estaFinalizado = p.estatus === 'finalizado' || p.resultado_confirmado === true || p.bloqueado === true;
+
+                if (estaFinalizado) {
+                    statusConfig.claseBorde = 'border-emerald-500/40';
+                    statusConfig.claseBg = 'bg-emerald-500/10';
+                    statusConfig.claseTexto = 'text-white';
+                    statusConfig.indicador = 'text-emerald-400 font-black';
+                    statusConfig.badge = `<span class="text-[8px] bg-emerald-600 text-white px-2 py-0.5 rounded-md uppercase font-black">Finalizado</span>`;
+                } 
+
+                else if (p.estatus === 'en_curso') {
+                    statusConfig.claseBorde = 'border-red-500/50';
+                    statusConfig.claseBg = 'bg-red-500/5';
+                    statusConfig.claseTexto = 'text-white';
+                    statusConfig.indicador = 'text-red-500 animate-pulse';
+                    statusConfig.badge = `<span class="text-[8px] bg-red-600 text-white px-2 py-0.5 rounded-md uppercase font-black animate-pulse">En Vivo</span>`;
+                } 
+
+                else if (p.fecha && p.hora) {
+                    statusConfig.claseBorde = 'border-slate-600';
+                    statusConfig.claseBg = 'bg-slate-800/40';
+                    statusConfig.claseTexto = 'text-white';
+                    statusConfig.indicador = 'text-blue-500';
+                    statusConfig.badge = `<span class="text-[8px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-md uppercase font-bold">${p.hora} HS</span>`;
+                }
+
                 htmlJornada += `
                     <button onclick="window.abrirAsignacionRapida('${p.equipo_local}', '${p.equipo_visitante}', '${p.id}')" 
-                            class="w-full flex items-center justify-between bg-slate-950/50 p-4 rounded-2xl border border-slate-800/50 hover:border-blue-500 hover:bg-blue-500/5 transition group text-left">
-                        <div class="flex-1 text-right font-bold text-white text-[11px] uppercase truncate group-hover:text-blue-400">${p.equipo_local}</div>
-                        <div class="px-4 text-blue-500 font-black text-[9px] italic">VS</div>
-                        <div class="flex-1 text-left font-bold text-white text-[11px] uppercase truncate group-hover:text-blue-400">${p.equipo_visitante}</div>
+                            class="w-full flex flex-col gap-1 ${statusConfig.claseBg} p-4 rounded-2xl border ${statusConfig.claseBorde} hover:scale-[1.02] transition-all group relative overflow-hidden">
+                        
+                        <div class="flex items-center justify-between w-full">
+                            <div class="flex-1 text-right font-bold ${statusConfig.claseTexto} text-[11px] uppercase truncate group-hover:text-blue-400">
+                                ${p.equipo_local}
+                            </div>
+                            
+                            <div class="px-4 ${statusConfig.indicador} font-black text-[10px] italic">
+                                ${estaFinalizado ? (p.goles_local ?? 0) + ' - ' + (p.goles_visitante ?? 0) : 'VS'}
+                            </div>
+                            
+                            <div class="flex-1 text-left font-bold ${statusConfig.claseTexto} text-[11px] uppercase truncate group-hover:text-blue-400">
+                                ${p.equipo_visitante}
+                            </div>
+                        </div>
+
+                        <div class="flex justify-center items-center mt-1">
+                            ${statusConfig.badge}
+                        </div>
                     </button>
                 `;
             });
