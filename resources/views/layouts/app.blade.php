@@ -67,7 +67,7 @@
     let limitePartidos = 5;
     let cacheEquiposData = null;
     let cacheCamposData = null;
-    let limiteJugadores = 5;
+    let limiteJugadores = 15;
 
     //LISTENERS Y CONFIGURACIONES INICIALES
     document.addEventListener('DOMContentLoaded', () => {
@@ -91,12 +91,12 @@
 
         if (inputBusqueda) {
             inputBusqueda.addEventListener('input', () => { 
-                limiteJugadores = 5; // Reiniciamos el límite al escribir
+                limiteJugadores = 15; // Reiniciamos el límite al escribir
             });
         }
         if (selectFiltroEquipo) {
             selectFiltroEquipo.addEventListener('change', () => { 
-                limiteJugadores = 5; // Reiniciamos el límite al cambiar equipo
+                limiteJugadores = 15; // Reiniciamos el límite al cambiar equipo
             });
         }
 
@@ -159,7 +159,8 @@
                     telefono: editMode ? editTelefono : window.formJugador.telefono.value,
                     equipo: window.formJugador.equipo.value,
                     numero: window.formJugador.numero.value,
-                    estatus: document.getElementById('edit_estatus').value 
+                    estatus: document.getElementById('edit_estatus').value, 
+                    partidos_suspension: parseInt(document.getElementById('partidos_suspension').value) || 0
                 };
 
                 const url = editMode ? `/api/admin/jugadores/actualizar/${editTelefono}` : '/api/admin/jugadores/registrar';
@@ -328,13 +329,22 @@
     };
     // --- FUNCIONES GLOBALES ---
 
-    window.editarJugador = async function(telefono, nombre, equipo, edad, direccion, numero, pj, estatus) {
+    window.toggleCamposSuspension = function() {
+        const estatus = document.getElementById('edit_estatus').value;
+        const contenedor = document.getElementById('contenedorPartidosSuspension');
+        if (estatus === 'suspendido') {
+            contenedor.classList.remove('hidden');
+        } else {
+            contenedor.classList.add('hidden');
+            document.getElementById('partidos_suspension').value = 0;
+        }
+    };
+
+    window.editarJugador = async function(telefono, nombre, equipo, edad, direccion, numero, pj, estatus, partidosSuspension) {
         editMode = true;
         editTelefono = telefono;
         
         document.querySelector('#modalJugador h3').innerText = 'Editar Jugador';
-        document.getElementById('btnGuardar').innerText = 'Actualizar Datos';
-        
         const f = window.formJugador; 
         f.nombre.value = nombre;
         f.telefono.value = telefono;
@@ -343,9 +353,12 @@
         f.direccion.value = direccion;
         f.numero.value = numero; 
 
-        // Cargar estatus
-        if(document.getElementById('edit_estatus')) {
-            document.getElementById('edit_estatus').value = estatus || 'activo';
+        // Cargar estatus y partidos de suspensión
+        const selectEstatus = document.getElementById('edit_estatus');
+        if(selectEstatus) {
+            selectEstatus.value = estatus || 'activo';
+            document.getElementById('partidos_suspension').value = partidosSuspension || 0;
+            window.toggleCamposSuspension(); // Ejecutar lógica visual
         }
 
         // Bloqueo de equipo por historial
@@ -434,7 +447,7 @@
                 case 'equipos_gest':
                     if(typeof cargarGestionEquipos === 'function') cargarGestionEquipos();
                     break;
-                case 'general':
+                case 'roles':
                     if(typeof recuperarFixtureGuardado === 'function') recuperarFixtureGuardado();
                     break;
             }
@@ -730,7 +743,7 @@
                     ➕ Ver más jugadores
                 </button>
             `;
-        } else if (limiteJugadores > 5) {
+        } else if (limiteJugadores > 15) {
             btnContenedor.innerHTML = `
                 <button onclick="window.verMenosJugadores()" 
                     class="text-slate-500 hover:text-white text-[9px] font-bold uppercase tracking-widest transition-all">
@@ -743,12 +756,12 @@
     }
 
     window.cargarMasJugadores = function() {
-        limiteJugadores += 5;
+        limiteJugadores += 15;
         filtrarTabla();
     };
 
     window.verMenosJugadores = function() {
-        limiteJugadores = 5;
+        limiteJugadores = 15;
         filtrarTabla();
         document.getElementById('content-jugadores').scrollIntoView({ behavior: 'smooth' });
     };
@@ -1084,6 +1097,15 @@
                     const previa = statsGuardadas[tel] || { asistio: true, goles: 0 };
                     const esInactivo = (j.estatus === 'suspendido' || j.estatus === 'lesionado');
 
+                    // Lógica para el texto de suspensión
+                    let infoSuspension = '';
+                    if (j.estatus === 'suspendido') {
+                        const resto = parseInt(j.partidos_suspension) || 0;
+                        infoSuspension = resto > 0 
+                            ? `<span class="text-[7px] text-amber-500 block animate-pulse">[RESTA: ${resto} PARTIDOS]</span>` 
+                            : `<span class="text-[7px] text-red-500 block">[SANCIÓN INDEFINIDA]</span>`;
+                    }
+
                     htmlSeccion += `
                         <div class="fila-jugador-cedula flex items-center gap-3 bg-slate-900/60 p-2 rounded-lg border border-slate-800/40 
                             ${(esInactivo || !previa.asistio) ? 'opacity-30 grayscale' : ''}" 
@@ -1097,8 +1119,9 @@
                             <div class="flex-1 min-w-0">
                                 <p class="text-[11px] text-white font-bold truncate uppercase">
                                     <span class="text-slate-500 mr-1">#${j.numero}</span>${j.nombre}
-                                    ${esInactivo ? `<span class="text-[7px] text-red-500 ml-1 font-black">[${j.estatus.toUpperCase()}]</span>` : ''}
+                                    ${esInactivo ? `<span class="text-[7px] text-red-500 ml-1">[${j.estatus.toUpperCase()}]</span>` : ''}
                                 </p>
+                                ${j.estatus === 'suspendido' ? infoSuspension : ''}
                             </div>
 
                             <div class="flex items-center gap-1 bg-slate-950 rounded-lg p-1 border border-slate-800">

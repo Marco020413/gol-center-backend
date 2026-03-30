@@ -9,7 +9,7 @@
             <button onclick="changeTab('equipos_gest')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Gestionar Equipos</button>
             <button onclick="changeTab('partidos')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Partidos</button>
             <button onclick="changeTab('campos'); cargarCamposCards();" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Canchas</button>
-            <button onclick="changeTab('general')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">General</button>
+            <button onclick="changeTab('roles')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Roles</button>
         </div>
 
         <div id="tab-content">
@@ -28,7 +28,7 @@
                         <option value="SUSPENDIDO">Jugadores Sancionados 🚫</option>
                         <option value="LESIONADO">Jugadores Lesionados 🚑</option>
                     </select>
-
+                    
                     <select id="ordenarPor" onchange="filtrarTabla()" class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white outline-none focus:border-blue-500">
                         <option value="goles">Más Goleadores</option>
                         <option value="nombre">Ordenar por Nombre</option>
@@ -52,26 +52,24 @@
                             @forelse($jugadores as $telefono => $j)
                             <tr class="hover:bg-blue-900/5 transition">
                                 <td class="px-6 py-4">
-                                    <div class="flex items-center gap-3">
-                                        <div class="size-8 bg-blue-600/20 text-blue-500 rounded-full flex items-center justify-center font-bold text-xs border border-blue-500/30 flex-shrink-0">
-                                            {{ $j['numero'] ?? '00' }}
+                                    <div class="flex flex-col">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-white font-bold" data-field="nombre">{{ $j['nombre'] }}</span>
+                                            @if(($j['estatus'] ?? 'activo') === 'lesionado')
+                                                <span class="bg-blue-500 text-[7px] px-1.5 py-0.5 rounded text-white font-black">LESIONADO 🚑</span>
+                                            @endif
                                         </div>
                                         
-                                        <div class="text-left overflow-hidden">
-                                            <div class="font-medium text-white flex items-center gap-2" title="{{ $j['nombre'] ?? '' }}">
-                                                <span class="truncate max-w-[100px] md:max-w-[180px] block" data-field="nombre">
-                                                    {{ $j['nombre'] ?? 'Sin Nombre' }}
+                                        @if(($j['estatus'] ?? '') === 'suspendido')
+                                            @php $resto = (int)($j['partidos_suspension'] ?? 0); @endphp
+                                            <div class="flex items-center gap-2 mt-1">
+                                                <span class="bg-red-600 text-[7px] px-2 py-0.5 rounded text-white font-black animate-pulse">SUSPENDIDO 🚫</span>
+                                                <span class="text-[9px] font-black uppercase text-amber-500 tracking-tighter">
+                                                    {{ $resto > 0 ? "Restan: $resto partidos" : "Sanción Manual" }}
                                                 </span>
-                                                
-                                                @if(($j['estatus'] ?? 'activo') === 'suspendido')
-                                                    <span class="bg-red-500 text-[8px] px-1.5 py-0.5 rounded text-white font-black animate-pulse flex-shrink-0">SUSPENDIDO</span>
-                                                @elseif(($j['estatus'] ?? 'activo') === 'lesionado')
-                                                    <span class="bg-amber-500 text-[8px] px-1.5 py-0.5 rounded text-white font-black flex-shrink-0">LESIONADO</span>
-                                                @endif
-                                            </div>    
-
-                                            <div class="text-[10px] text-slate-500" data-field="telefono">{{ $telefono }}</div>
-                                        </div>
+                                            </div>
+                                        @endif
+                                        <div class="text-[10px] text-slate-500" data-field="telefono">{{ $telefono }}</div>
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 text-center" data-field="equipo" data-valor="{{ $j['equipo'] ?? 'Libre' }}">
@@ -90,7 +88,7 @@
                                 </td>
                                 <td class="px-6 py-4 text-center font-bold text-white">{{ $j['goles'] ?? 0 }}</td>
                                 <td class="px-6 py-4 text-center flex justify-center gap-2">
-                                    <button onclick="editarJugador('{{ $telefono }}', '{{ $j['nombre'] ?? '' }}', '{{ $j['equipo'] ?? '' }}', '{{ $j['edad'] ?? 0 }}', '{{ $j['direccion'] ?? '' }}', '{{ $j['numero'] ?? 0 }}', '{{ $j['partidos_jugados'] ?? 0 }}', '{{ $j['estatus'] ?? 'activo' }}')" class="text-blue-500 hover:text-blue-400 p-1 transition">                                        
+                                    <button onclick="editarJugador('{{ $telefono }}', '{{ $j['nombre'] ?? '' }}', '{{ $j['equipo'] ?? '' }}', '{{ $j['edad'] ?? 0 }}', '{{ $j['direccion'] ?? '' }}', '{{ $j['numero'] ?? 0 }}', '{{ $j['partidos_jugados'] ?? 0 }}', '{{ $j['estatus'] ?? 'activo' }}', '{{ $j['partidos_suspension'] ?? 0 }}')" class="text-blue-500 hover:text-blue-400 p-1 transition">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                     </button>
                                     <button onclick="eliminarJugador('{{ $telefono }}')" class="text-red-500 hover:text-red-400 p-1 transition">
@@ -167,7 +165,7 @@
                 </div>
             </div>
 
-            <div id="content-general" class="tab-pane hidden space-y-6">
+            <div id="content-roles" class="tab-pane hidden space-y-6">
                 <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-4 shadow-2xl">
                     <div class="size-16 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
                         <svg class="size-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -255,14 +253,25 @@
                     <option value="">Selecciona un equipo</option>
                 </select>
             </div>
-            <div>
-                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Estado del Jugador</label>
-                <select name="estatus" id="edit_estatus" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
-                    <option value="activo">ACTIVO ✅</option>
-                    <option value="suspendido">SUSPENDIDO 🚫</option>
-                    <option value="lesionado">LESIONADO 🚑</option>
-                </select>
+           <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Estado del Jugador</label>
+                    <select name="estatus" id="edit_estatus" onchange="window.toggleCamposSuspension()" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500 transition">
+                        <option value="activo">ACTIVO ✅</option>
+                        <option value="suspendido">SUSPENDIDO 🚫</option>
+                        <option value="lesionado">LESIONADO 🚑</option>
+                    </select>
+                </div>
+
+                <div id="contenedorPartidosSuspension" class="hidden">
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Partidos de Castigo</label>
+                    <input type="number" id="partidos_suspension" name="partidos_suspension" min="0" max="99" value="0" 
+                        class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500 transition appearance-none"
+                        style="-moz-appearance: textfield;">
+                    <p class="text-[7px] text-amber-500 mt-1 italic font-medium">0 = Sin límite (manual)</p>
+                </div>
             </div>
+
             <p id="avisoEquipoBloqueado" class="hidden text-[9px] text-amber-500 italic font-bold mt-1">
                 ⚠️ El equipo está bloqueado porque el jugador ya tiene historial de partidos.
             </p>

@@ -83,29 +83,29 @@ class PartidoController extends Controller
                 return response()->json(['error' => 'El acta de este partido ya ha sido cerrada.'], 403);
             }
 
-            // 1. Guardar datos actuales para persistencia visual
+            // 1. Guardar datos actuales para persistencia visual (lo que el admin ve en el modal)
             $updateData = [
                 'goles_local' => (int)$request->goles_local,
                 'goles_visitante' => (int)$request->goles_visitante,
                 'detalle_jugadores' => $request->detalle_jugadores 
             ];
 
-            // 2. Si se marca como FINALIZADO, procesamos estadísticas permanentes
-            if ($request->confirmar_final) {
+            // 2. Si se marca como FINALIZADO, procesamos la "magia" automática
+            $confirmarFinal = filter_var($request->confirmar_final, FILTER_VALIDATE_BOOLEAN);
+
+            if ($confirmarFinal) {
                 $updateData['resultado_confirmado'] = true;
                 $updateData['estatus'] = 'confirmado';
 
+                // --- A. PROCESAR ESTADÍSTICAS DE JUGADORES QUE ASISTIERON ---
                 $detalleJugadores = $request->detalle_jugadores ?? [];
-
                 foreach ($detalleJugadores as $telefono => $stats) {
-                    // Si el admin marcó asistencia, procesamos aunque esté suspendido/lesionado
                     if (isset($stats['asistio']) && $stats['asistio']) {
                         $jugadorRef = $this->database->getReference('jugadores/' . $telefono);
                         $datosJugador = $jugadorRef->getValue();
 
                         if ($datosJugador) {
-                            // Sumamos goles y PJ (Partido Jugado)
-                            $nuevosGoles = (int)($datosJugador['goles'] ?? 0) + (int)$stats['goles'];
+                            $nuevosGoles = (int)($datosJugador['goles'] ?? 0) + (int)($stats['goles'] ?? 0);
                             $nuevosPJ = (int)($datosJugador['partidos_jugados'] ?? 0) + 1;
 
                             $jugadorRef->update([
@@ -115,13 +115,43 @@ class PartidoController extends Controller
                         }
                     }
                 }
+
+                // --- B. PROCESAR DESCUENTO DE SANCIONES (Lógica Automática) ---
+                $equipoLocal = trim($partido['equipo_local']);
+                $equipoVis   = trim($partido['equipo_visitante']);
+                $equiposEnJuego = [$equipoLocal, $equipoVis];
+
+                $jugadoresRef = $this->database->getReference('jugadores');
+                $todosLosJugadores = $jugadoresRef->getValue() ?? [];
+
+                foreach ($todosLosJugadores as $tel => $j) {
+                    $equipoJugador = trim($j['equipo'] ?? '');
+                    
+                    // Si el jugador es de uno de los equipos que jugó Y está suspendido
+                    if (in_array($equipoJugador, $equiposEnJuego) && ($j['estatus'] ?? '') === 'suspendido') {
+                        $restantes = (int)($j['partidos_suspension'] ?? 0);
+
+                        if ($restantes > 0) {
+                            $nuevosRestantes = $restantes - 1;
+                            $updSuspension = ['partidos_suspension' => $nuevosRestantes];
+
+                            // Si llegó a 0, se activa automáticamente
+                            if ($nuevosRestantes <= 0) {
+                                $updSuspension['estatus'] = 'activo';
+                                $updSuspension['partidos_suspension'] = 0;
+                            }
+                            
+                            $this->database->getReference('jugadores/' . $tel)->update($updSuspension);
+                        }
+                    }
+                }
             }
 
-            // 3. Aplicamos todos los cambios al partido
+            // 3. Aplicamos todos los cambios al partido en Firebase
             $referencia->update($updateData);
 
             return response()->json([
-                'message' => $request->confirmar_final ? 'Acta cerrada y estadísticas procesadas' : 'Marcador actualizado'
+                'message' => $confirmarFinal ? 'Acta cerrada, estadísticas y sanciones procesadas' : 'Marcador actualizado'
             ]);
 
         } catch (\Exception $e) {
