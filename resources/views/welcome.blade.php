@@ -11,6 +11,7 @@
             <button onclick="changeTab('campos'); cargarCamposCards();" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Canchas</button>
             <button onclick="changeTab('roles')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Roles</button>
         </div>
+    <div id="podio-final" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"></div>
 
         <div id="tab-content">
             <div id="content-jugadores" class="tab-pane">
@@ -211,6 +212,11 @@
             <div class="space-y-3">
                 <button onclick="abrirModal()" class="w-full bg-white text-blue-600 font-bold py-3 rounded-lg text-sm hover:shadow-xl transition">Registrar Jugador</button>
                 <button onclick="abrirModalEquipo()" class="w-full bg-blue-700 text-white font-bold py-3 rounded-lg text-sm border border-blue-400/30 hover:bg-blue-800 transition">Crear Equipo</button>
+                <button id="btnGenerarLiguilla" 
+                        onclick="window.verificarFinFaseRegular()" 
+                        class="hidden bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-black py-4 px-8 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-lg active:scale-95">
+                        🏆 Generar Fase Final (Liguilla)
+                </button>
             </div>
         </div>
     </div>
@@ -347,7 +353,7 @@
                     <option value="">Cargando canchas...</option>
                 </select>
             </div>
-
+    
             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition uppercase text-xs">Crear Encuentro ⚽</button>
         </form>
         <div id="agendaCanchaContenedor" class="mt-4 hidden bg-slate-950/50 border border-slate-800 rounded-xl p-4 overflow-hidden">

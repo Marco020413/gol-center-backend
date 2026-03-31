@@ -20,6 +20,7 @@ Route::put('/admin/partidos/actualizar/{id}', [App\Http\Controllers\PartidoContr
 Route::delete('/admin/partidos/eliminar/{id}', [App\Http\Controllers\PartidoController::class, 'eliminar']);
 Route::delete('/admin/partidos/limpiar-todo', [App\Http\Controllers\PartidoController::class, 'limpiarTodo']);
 Route::put('/admin/partidos/actualizar-datos/{id}', [App\Http\Controllers\PartidoController::class, 'actualizarDatosSorteo']);
+Route::post('/admin/partidos/generar-liguilla', [App\Http\Controllers\PartidoController::class, 'generarTorneo']);
 
 // Rutas para Campos
 Route::get('/campos', [App\Http\Controllers\CampoController::class, 'index']);

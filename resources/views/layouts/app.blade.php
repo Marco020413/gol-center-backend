@@ -275,15 +275,33 @@
                         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                         body: JSON.stringify(data)
                     });
+                    
                     const result = await res.json();
+
                     if (res.ok) {
-                        alert(esFinal ? "🔒 Acta cerrada" : "✅ Marcador actualizado");
+                        // Cerramos el modal
                         if(window.modalActualizarMarcador) window.modalActualizarMarcador.classList.replace('flex', 'hidden');
-                        cargarPartidosCards(); 
+
+                        // --- DISPARO DE AUTOMATIZACIÓN ---
+                        // Si el partido se marcó como FINALIZADO, ejecutamos la lógica de torneo
+                        if (esFinal) {
+                            // Refrescamos fixture y disparamos verificadores (Liguilla/Final)
+                            if (window.recuperarFixtureGuardado) {
+                                await window.recuperarFixtureGuardado();
+                            }
+                        } else {
+                            // Si solo fue una actualización parcial, solo refrescamos visualmente
+                            if(typeof cargarPartidosCards === 'function') cargarPartidosCards();
+                            alert("✅ Marcador actualizado");
+                        }
+
                     } else {
                         alert("❌ " + (result.error || "Error al actualizar"));
                     }
-                } catch (e) { alert("Error de conexión"); }
+                } catch (e) { 
+                    console.error(e);
+                    alert("Error de conexión"); 
+                }
             };
         }
 
@@ -1925,7 +1943,7 @@
         `;
 
         contenedor.innerHTML = `
-            <h3 class="text-white font-black uppercase text-center mt-8 mb-4 tracking-tighter text-xl italic">⚽Torneo de Copa</h3>
+            <h3 class="text-white font-black uppercase text-center mt-8 mb-4 tracking-tighter text-xl italic">⚽ Torneo de Copa</h3>
             ${leyenda}
         `;
 
@@ -1936,18 +1954,26 @@
             jornadas[jor].push(p);
         });
 
+        // IMPORTANTE: El Object.keys().forEach crea la variable numJor en cada vuelta
         Object.keys(jornadas).forEach(numJor => {
+            
+            // --- LÓGICA DEL TÍTULO DINÁMICO ---
+            // Si numJor es un número (como "1"), ponemos "Semana 1". 
+            // Si es texto (como "SEMIFINAL"), lo dejamos tal cual.
+            const textoTitulo = isNaN(numJor) ? numJor : `Semana ${numJor}`;
+
             let htmlJornada = `
                 <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl mb-8">
                     <div class="flex items-center gap-4 mb-6">
-                        <span class="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">Semana ${numJor}</span>
+                        <span class="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest"> 
+                            ${textoTitulo} 
+                        </span>
                         <div class="h-px bg-slate-800 flex-1"></div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             `;
 
             jornadas[numJor].forEach(p => {
-
                 let statusConfig = {
                     claseBorde: 'border-slate-800/50',
                     claseBg: 'bg-slate-950/50',
@@ -1956,7 +1982,6 @@
                     indicador: 'text-slate-700'
                 };
 
-                // --- LÓGICA DE ESTADOS UNIFICADA ---
                 const estaFinalizado = p.estatus === 'finalizado' || p.resultado_confirmado === true || p.bloqueado === true;
 
                 if (estaFinalizado) {
@@ -1966,7 +1991,6 @@
                     statusConfig.indicador = 'text-emerald-400 font-black';
                     statusConfig.badge = `<span class="text-[8px] bg-emerald-600 text-white px-2 py-0.5 rounded-md uppercase font-black">Finalizado</span>`;
                 } 
-
                 else if (p.estatus === 'en_curso') {
                     statusConfig.claseBorde = 'border-red-500/50';
                     statusConfig.claseBg = 'bg-red-500/5';
@@ -1974,7 +1998,6 @@
                     statusConfig.indicador = 'text-red-500 animate-pulse';
                     statusConfig.badge = `<span class="text-[8px] bg-red-600 text-white px-2 py-0.5 rounded-md uppercase font-black animate-pulse">En Vivo</span>`;
                 } 
-
                 else if (p.fecha && p.hora) {
                     statusConfig.claseBorde = 'border-slate-600';
                     statusConfig.claseBg = 'bg-slate-800/40';
@@ -2011,22 +2034,6 @@
             htmlJornada += `</div></div>`;
             contenedor.innerHTML += htmlJornada;
         });
-    };
-
-    window.recuperarFixtureGuardado = async function() {
-        try {
-            const res = await fetch('/api/partidos');
-            const partidosData = await res.json();
-            // Convertimos el objeto de Firebase en Array
-            const partidos = Object.keys(partidosData).map(id => ({ id, ...partidosData[id] }));
-
-            if (partidos.length > 0) {
-                // Si ya existen partidos en la DB, dibujamos el diagrama
-                window.pintarFixtureVisual(partidos);
-            }
-        } catch (e) { 
-            console.error("Error al recuperar el fixture:", e); 
-        }
     };
 
     window.limpiarTodo = async function() {
@@ -2123,7 +2130,244 @@
                 window.verificarConflictosInteligentes();
             }
         }, 200);
-};
+    };
+
+
+     // --- 1. RECUPERAR FIXTURE ---
+    window.recuperarFixtureGuardado = async function() {
+        try {
+            const res = await fetch('/api/partidos');
+            const partidosData = await res.json();
+            const partidos = Object.keys(partidosData).map(id => ({ id, ...partidosData[id] }));
+
+            if (partidos.length > 0) {
+                window.pintarFixtureVisual(partidos);
+                
+                // --- NUEVA LÓGICA AUTOMÁTICA ---
+                
+                // 1. Verificar si terminó la Fase Regular (para crear Octavos, Cuartos o Semis)
+                const tieneLiguilla = partidos.some(p => ['OCTAVOS', 'CUARTOS', 'SEMIFINAL', 'FINAL'].includes(p.jornada));
+                
+                if (!tieneLiguilla) {
+                    // Si no hay liguilla aún, checamos si ya terminó la fase regular
+                    const pendientesRegulares = partidos.filter(p => p.estatus !== 'finalizado');
+                    if (pendientesRegulares.length === 0) {
+                        await window.verificarFinFaseRegular();
+                    }
+                } else {
+                    // 2. Si ya hay liguilla, verificar si la fase actual terminó para saltar a la siguiente
+                    await window.verificarProgresoLiguilla();
+                }
+            }
+        } catch (e) { 
+            console.error("Error al recuperar el fixture:", e); 
+        }
+    };
+
+    window.verificarFinFaseRegular = async function() {
+        try {
+            console.log("Verificando fin de fase...");
+            const res = await fetch('/api/partidos');
+            const partidos = await res.json();
+            const listaPartidos = Object.values(partidos);
+
+            const pendientes = listaPartidos.filter(p => 
+                p.estatus !== 'finalizado' && 
+                p.resultado_confirmado !== true &&
+                !['SEMIFINAL', 'FINAL'].includes(p.jornada)
+            );
+
+            if (pendientes.length === 0) {
+                if (confirm("🏆 ¡Fase Regular terminada! ¿Deseas generar las Semifinales?")) {
+                    await window.prepararYGenerarLiguilla(listaPartidos);
+                }
+            } else {
+                alert(`Aún faltan ${pendientes.length} partidos por finalizar.`);
+            }
+        } catch (error) {
+            console.error("Error en verificador:", error);
+        }
+    };
+
+    // --- 3. PROCESADOR DE LIGUILLA ---
+    window.prepararYGenerarLiguilla = async function(partidosActuales) {
+        console.log("Calculando liguilla automática...");
+
+        // A. Calculamos la tabla local
+        const calcularTablaLocal = (partidos) => {
+            const stats = {};
+            partidos.forEach(p => {
+                if ((p.estatus === 'finalizado' || p.resultado_confirmado) && !['OCTAVOS','CUARTOS','SEMIFINAL','FINAL'].includes(p.jornada)) {
+                    const loc = p.equipo_local, vis = p.equipo_visitante;
+                    const gl = parseInt(p.goles_local || 0), gv = parseInt(p.goles_visitante || 0);
+                    if (!stats[loc]) stats[loc] = { nombre: loc, pts: 0, dg: 0, gf: 0 };
+                    if (!stats[vis]) stats[vis] = { nombre: vis, pts: 0, dg: 0, gf: 0 };
+                    stats[loc].gf += gl; stats[vis].gf += gv;
+                    stats[loc].dg += (gl - gv); stats[vis].dg += (gv - gl);
+                    if (gl > gv) stats[loc].pts += 3; else if (gv > gl) stats[vis].pts += 3; else { stats[loc].pts += 1; stats[vis].pts += 1; }
+                }
+            });
+            return Object.values(stats).sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+        };
+
+        const tablaCompleta = calcularTablaLocal(partidosActuales);
+        const totalEquipos = tablaCompleta.length;
+
+        // B. AUTOMATIZACIÓN: Decidir cuántos clasifican según el total
+        let cuantosClasifican = 2; // Por defecto Final directa
+        if (totalEquipos >= 16) cuantosClasifican = 16;
+        else if (totalEquipos >= 8) cuantosClasifican = 8;
+        else if (totalEquipos >= 4) cuantosClasifican = 4;
+
+        const clasificados = tablaCompleta.slice(0, cuantosClasifican);
+        const llaves = [];
+
+        // C. LÓGICA UNIVERSAL DE EMPAREJAMIENTO (Aquí va lo que preguntaste)
+        for (let i = 0; i < cuantosClasifican / 2; i++) {
+            let nombreFase = 'SEMIFINAL';
+            if (cuantosClasifican === 16) nombreFase = 'OCTAVOS';
+            if (cuantosClasifican === 8) nombreFase = 'CUARTOS';
+            if (cuantosClasifican === 2) nombreFase = 'FINAL';
+
+            llaves.push({
+                equipo_local: clasificados[i].nombre,
+                equipo_visitante: clasificados[cuantosClasifican - 1 - i].nombre,
+                jornada: nombreFase,
+                estatus: 'programado'
+            });
+        }
+
+        // D. Envío a la API
+        try {
+            const res = await fetch('/api/admin/partidos/generar-liguilla', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({ partidos: llaves })
+            });
+
+            if(res.ok) {
+                alert(`🏆 ¡${llaves[0].jornada} generada con éxito para ${cuantosClasifican} equipos!`);
+                window.recuperarFixtureGuardado();
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+
+    window.verificarProgresoLiguilla = async function() {
+        const res = await fetch('/api/partidos');
+        const partidos = await res.json();
+        const lista = Object.values(partidos);
+
+        const partidoFinal = lista.find(p => p.jornada === 'FINAL');
+        
+        if (partidoFinal) {
+            const estatusActual = (partidoFinal.estatus || "").toLowerCase();
+            if (estatusActual === 'finalizado' || partidoFinal.resultado_confirmado) {
+                
+                // --- EVITAR BUCLE: Si el podio ya está visible, no hacer nada ---
+                if (!document.getElementById('podio-final').classList.contains('hidden')) return;
+
+                // 1. Calcular Campeón y Subcampeón
+                const gl = parseInt(partidoFinal.goles_local || 0);
+                const gv = parseInt(partidoFinal.goles_visitante || 0);
+                const campeon = gl > gv ? partidoFinal.equipo_local : partidoFinal.equipo_visitante;
+                const subcampeon = gl > gv ? partidoFinal.equipo_visitante : partidoFinal.equipo_local;
+
+                // 2. Calcular 3er Lugar (Perdedores de Semifinales)
+                const partidosSemis = lista.filter(p => p.jornada === 'SEMIFINAL');
+                let tercero = "POR DEFINIR";
+                if (partidosSemis.length === 2) {
+                    const perdedores = partidosSemis.map(p => {
+                        const sl = parseInt(p.goles_local || 0);
+                        const sv = parseInt(p.goles_visitante || 0);
+                        return sl > sv ? p.equipo_visitante : p.equipo_local;
+                    });
+                    // Podrías comparar diferencia de goles de semis, aquí tomamos al primero por simplicidad
+                    tercero = perdedores[0]; 
+                }
+
+                window.mostrarCuadroHonor(campeon, subcampeon, tercero);
+                return;
+            }
+        }
+        // ... (resto de tu lógica de Octavos/Cuartos/Semis se queda igual)
+    };
+
+    window.mostrarCuadroHonor = function(campeon, subcampeon, tercero) {
+        const contenedor = document.getElementById('podio-final');
+        if (!contenedor) return;
+
+        contenedor.innerHTML = `
+            <div class="bg-slate-950 p-10 rounded-[40px] border border-slate-800 shadow-2xl text-center max-w-lg w-full mx-4 relative overflow-hidden">
+                <div class="absolute -top-24 -left-24 size-48 bg-blue-600/20 blur-[100px]"></div>
+                
+                <h2 class="text-white font-black text-3xl mb-10 uppercase tracking-[0.2em]">Cuadro de Honor</h2>
+                
+                <div class="flex justify-center items-end gap-2 pb-6">
+                    <div class="flex flex-col items-center w-28">
+                        <div class="w-full h-24 bg-gradient-to-b from-slate-700 to-slate-900 rounded-t-2xl flex items-center justify-center border-t-4 border-slate-400 shadow-lg">
+                            <span class="text-slate-400 font-black text-2xl">2º</span>
+                        </div>
+                        <p class="text-slate-400 text-[10px] mt-3 font-bold uppercase truncate w-full">${subcampeon}</p>
+                    </div>
+
+                    <div class="flex flex-col items-center w-36 scale-110 -translate-y-4">
+                        <div class="text-5xl mb-4 animate-bounce">🏆</div>
+                        <div class="w-full h-40 bg-gradient-to-b from-amber-400 to-amber-700 rounded-t-2xl flex items-center justify-center border-t-4 border-amber-200 shadow-[0_0_30px_rgba(245,158,11,0.3)]">
+                            <span class="text-white font-black text-4xl">1º</span>
+                        </div>
+                        <p class="text-amber-500 text-xs mt-3 font-black uppercase tracking-widest truncate w-full">${campeon}</p>
+                    </div>
+
+                    <div class="flex flex-col items-center w-28">
+                        <div class="w-full h-16 bg-gradient-to-b from-orange-800 to-slate-900 rounded-t-2xl flex items-center justify-center border-t-4 border-orange-600 shadow-lg">
+                            <span class="text-orange-600 font-black text-xl">3º</span>
+                        </div>
+                        <p class="text-orange-700 text-[9px] mt-3 font-bold uppercase truncate w-full">${tercero}</p>
+                    </div>
+                </div>
+
+                <button onclick="this.closest('#podio-final').classList.add('hidden')" 
+                    class="mt-10 px-8 py-3 bg-slate-900 hover:bg-white hover:text-black text-slate-500 text-[10px] font-bold uppercase tracking-widest rounded-full transition-all duration-500">
+                    Cerrar Vitrina
+                </button>
+            </div>
+        `;
+        contenedor.classList.remove('hidden');
+    };
+
+    window.mostrarCuadroHonor = function(campeon, subcampeon) {
+        const contenedor = document.getElementById('podio-final'); // Asegúrate de tener este ID en tu HTML
+        if (!contenedor) return;
+
+        contenedor.innerHTML = `
+            <div class="bg-gradient-to-b from-slate-900 to-black p-8 rounded-3xl border-2 border-amber-500/50 shadow-[0_0_50px_rgba(245,158,11,0.2)] text-center animate-bounce-slow">
+                <h2 class="text-amber-500 font-black text-4xl mb-6 tracking-tighter uppercase">Cuadro de Honor</h2>
+                <div class="flex justify-center items-end gap-4">
+                    <div class="flex flex-col items-center">
+                        <div class="w-24 h-32 bg-slate-800 rounded-t-lg flex items-center justify-center border-t-4 border-slate-400">
+                            <span class="text-slate-400 font-bold text-xl">2º</span>
+                        </div>
+                        <p class="text-white text-[10px] mt-2 font-bold uppercase">${subcampeon}</p>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="text-5xl mb-2">🏆</div>
+                        <div class="w-32 h-48 bg-gradient-to-t from-amber-900 to-amber-500 rounded-t-lg flex items-center justify-center border-t-4 border-amber-200 shadow-lg">
+                            <span class="text-white font-black text-3xl">1º</span>
+                        </div>
+                        <p class="text-amber-500 text-sm mt-2 font-black uppercase tracking-widest">${campeon}</p>
+                    </div>
+                </div>
+                <button onclick="location.reload()" class="mt-8 text-slate-500 text-[10px] uppercase tracking-widest hover:text-white transition">Finalizar Torneo</button>
+            </div>
+        `;
+        contenedor.classList.remove('hidden');
+    };
 
 </script>
 </body>
