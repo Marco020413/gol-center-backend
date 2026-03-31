@@ -4,12 +4,12 @@
 <main class="max-w-7xl mx-auto px-4 sm:px-6 py-4 lg:py-10 grid grid-cols-1 lg:grid-cols-3 gap-6">    
     <div class="lg:col-span-2">
         <div class="flex border-b border-slate-800 mb-6 gap-4 overflow-x-auto pb-1 scrollbar-hide whitespace-nowrap">
-            <button onclick="changeTab('jugadores')" class="tab-btn pb-4 text-blue-500 border-b-2 border-blue-500 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Jugadores</button>
-            <button onclick="changeTab('posiciones')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Posiciones</button>
-            <button onclick="changeTab('equipos_gest')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Gestionar Equipos</button>
-            <button onclick="changeTab('partidos')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Partidos</button>
-            <button onclick="changeTab('campos'); cargarCamposCards();" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Canchas</button>
-            <button onclick="changeTab('roles')" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Roles</button>
+            <button onclick="changeTab('jugadores')" id="btn-tab-jugadores" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Jugadores</button>
+            <button onclick="changeTab('posiciones')" id="btn-tab-posiciones" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Posiciones</button>
+            <button onclick="changeTab('equipos_gest')" id="btn-tab-equipos_gest" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Gestionar Equipos</button>
+            <button onclick="changeTab('partidos')" id="btn-tab-partidos" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Partidos</button>
+            <button onclick="changeTab('campos')" id="btn-tab-campos" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Canchas</button>
+            <button onclick="changeTab('roles')" id="btn-tab-roles" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Roles</button>
         </div>
     <div id="podio-final" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"></div>
 
@@ -212,11 +212,12 @@
             <div class="space-y-3">
                 <button onclick="abrirModal()" class="w-full bg-white text-blue-600 font-bold py-3 rounded-lg text-sm hover:shadow-xl transition">Registrar Jugador</button>
                 <button onclick="abrirModalEquipo()" class="w-full bg-blue-700 text-white font-bold py-3 rounded-lg text-sm border border-blue-400/30 hover:bg-blue-800 transition">Crear Equipo</button>
-                <button id="btnGenerarLiguilla" 
-                        onclick="window.verificarFinFaseRegular()" 
-                        class="hidden bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-black py-4 px-8 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-lg active:scale-95">
-                        🏆 Generar Fase Final (Liguilla)
-                </button>
+                <div class="flex justify-center mb-6">
+                    <button onclick="window.forzarGeneracionLiguilla()" 
+                            class="bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-black px-6 py-2 rounded-full uppercase tracking-widest shadow-lg shadow-amber-900/20 transition-all">
+                        ⚡ Forzar Generación de Liguilla (Manual)
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -336,6 +337,13 @@
                     <select name="visitante" id="selectVisitante" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500"></select>
                 </div>
             </div>
+            <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Sede / Cancha</label>
+                <select name="campo_id" id="selectCampos" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                    <option value="">Cargando canchas...</option>
+                </select>
+            </div>
+    
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Fecha</label>
@@ -347,13 +355,7 @@
                 </div>
             </div>
 
-            <div>
-                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Sede / Cancha</label>
-                <select name="campo_id" id="selectCampos" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
-                    <option value="">Cargando canchas...</option>
-                </select>
-            </div>
-    
+
             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition uppercase text-xs">Crear Encuentro ⚽</button>
         </form>
         <div id="agendaCanchaContenedor" class="mt-4 hidden bg-slate-950/50 border border-slate-800 rounded-xl p-4 overflow-hidden">

@@ -205,12 +205,10 @@
             };
         }
 
-        // 7. LÓGICA DE FORMULARIO: CREAR PARTIDO (VERSION INTELIGENTE)
+       // 7. LÓGICA DE FORMULARIO: CREAR PARTIDO (CON RECARGA)
         if (window.formPartidos) {
             window.formPartidos.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                
-                // REGLA DE ORO: Si tenemos idPartidoSorteo, usamos la ruta de actualizar
                 const idSorteo = window.idPartidoSorteo;
                 const url = idSorteo ? `/api/admin/partidos/actualizar-datos/${idSorteo}` : '/api/admin/partidos/crear';
                 const metodo = idSorteo ? 'PUT' : 'POST';
@@ -236,13 +234,13 @@
                     if (res.ok) {
                         alert("✅ ¡Partido programado con éxito!");
                         window.idPartidoSorteo = null; 
-                        location.reload(); 
+                        location.reload(); // Recarga solicitada
                     }
                 } catch (e) { alert("Error de conexión"); }
             });
         }
 
-        // 8. LÓGICA DE FORMULARIO: ACTUALIZAR MARCADOR Y CÉDULA
+        // 8. LÓGICA DE FORMULARIO: ACTUALIZAR MARCADOR Y CÉDULA (CON RECARGA)
         if (window.formActualizar) {
             window.formActualizar.onsubmit = async (e) => {
                 e.preventDefault();
@@ -251,10 +249,7 @@
                     const tel = fila.dataset.telefono;
                     const asistio = fila.querySelector('.check-asistencia').checked;
                     const goles = fila.querySelector('.input-gol-jugador').value;
-                    listaEstadisticas[tel] = {
-                        asistio: asistio,
-                        goles: parseInt(goles) || 0
-                    };
+                    listaEstadisticas[tel] = { asistio, goles: parseInt(goles) || 0 };
                 });
 
                 const id = document.getElementById('edit_partido_id').value;
@@ -276,32 +271,15 @@
                         body: JSON.stringify(data)
                     });
                     
-                    const result = await res.json();
-
                     if (res.ok) {
-                        // Cerramos el modal
                         if(window.modalActualizarMarcador) window.modalActualizarMarcador.classList.replace('flex', 'hidden');
-
-                        // --- DISPARO DE AUTOMATIZACIÓN ---
-                        // Si el partido se marcó como FINALIZADO, ejecutamos la lógica de torneo
-                        if (esFinal) {
-                            // Refrescamos fixture y disparamos verificadores (Liguilla/Final)
-                            if (window.recuperarFixtureGuardado) {
-                                await window.recuperarFixtureGuardado();
-                            }
-                        } else {
-                            // Si solo fue una actualización parcial, solo refrescamos visualmente
-                            if(typeof cargarPartidosCards === 'function') cargarPartidosCards();
-                            alert("✅ Marcador actualizado");
-                        }
-
+                        alert(esFinal ? "🔒 Acta cerrada" : "✅ Marcador actualizado");
+                        location.reload(); // Recarga solicitada
                     } else {
+                        const result = await res.json();
                         alert("❌ " + (result.error || "Error al actualizar"));
                     }
-                } catch (e) { 
-                    console.error(e);
-                    alert("Error de conexión"); 
-                }
+                } catch (e) { console.error(e); alert("Error de conexión"); }
             };
         }
 
@@ -311,6 +289,15 @@
         }
         cargarPartidosCards(); 
         cargarGestionEquipos();
+
+        const lastTab = localStorage.getItem('pestanaActiva');
+            if (lastTab) {
+                // Ejecutamos el cambio a la pestaña donde estábamos
+                window.changeTab(lastTab);
+            } else {
+                // Si no hay nada guardado (primera vez), por defecto Jugadores
+                window.changeTab('jugadores');
+            }
         
     });
 
@@ -426,47 +413,52 @@
     }
     
     window.changeTab = function(tabName) {
-        // 1. Ocultar todos los paneles
+        // 1. Guardar en memoria el nombre de la pestaña
+        localStorage.setItem('pestanaActiva', tabName);
+
+        // 2. Ocultar todos los paneles
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
         
-        // 2. Resetear estilos de botones
+        // 3. Resetear estilos de TODOS los botones
         document.querySelectorAll('.tab-btn').forEach(b => {
             b.classList.remove('text-blue-500', 'border-b-2', 'border-blue-500');
             b.classList.add('text-slate-500');
         });
 
-        // 3. Mostrar el panel objetivo
+        // 4. Mostrar el panel objetivo
         const target = document.getElementById('content-' + tabName);
         if(target) target.classList.remove('hidden');
 
-        // 4. Activar estilo del botón
-        const btnActivo = event ? event.currentTarget : null;
-        if(btnActivo) btnActivo.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
-
-        // --- REGLA DE RENDIMIENTO: Resetear paginación al cambiar ---
-        if (tabName === 'partidos') {
-            window.limitePartidos = 5; 
-            // Llamamos a la carga de datos
-            if(typeof cargarPartidosCards === 'function') cargarPartidosCards();
+        // 5. Activar estilo del botón (Validación robusta)
+        const btnId = 'btn-tab-' + tabName;
+        const btnActivo = document.getElementById(btnId);
+        
+        if(btnActivo) {
+            btnActivo.classList.remove('text-slate-500');
+            btnActivo.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
         }
 
-        // 5. CARGA INTELIGENTE (Lazy Loading)
+        // --- CARGA DE DATOS SEGÚN PESTAÑA ---
         const ahora = Date.now();
         const necesitaCarga = !ultimaCarga[tabName] || (ahora - ultimaCarga[tabName] > 10000);
 
         if (necesitaCarga) {
             switch(tabName) {
-                case 'partidos':
-                    cargarPartidosCards(); 
+                case 'partidos': 
+                    window.limitePartidos = 5;
+                    if(typeof cargarPartidosCards === 'function') cargarPartidosCards(); 
                     break;
-                case 'posiciones':
-                    window.cargarTablaPosiciones(); 
+                case 'posiciones': 
+                    if(window.cargarTablaPosiciones) window.cargarTablaPosiciones(); 
                     break;
-                case 'equipos_gest':
-                    if(typeof cargarGestionEquipos === 'function') cargarGestionEquipos();
+                case 'equipos_gest': 
+                    if(typeof cargarGestionEquipos === 'function') cargarGestionEquipos(); 
                     break;
-                case 'roles':
-                    if(typeof recuperarFixtureGuardado === 'function') recuperarFixtureGuardado();
+                case 'roles': 
+                    if(typeof recuperarFixtureGuardado === 'function') recuperarFixtureGuardado(); 
+                    break;
+                case 'campos':
+                    if(typeof cargarCamposCards === 'function') cargarCamposCards();
                     break;
             }
             ultimaCarga[tabName] = ahora;
@@ -1058,15 +1050,26 @@
     };
     
     async function abrirActualizarMarcador(id) {
+        const contenedor = document.getElementById('contenedorCedulaJugadores');
         try {
-            const resPartidos = await fetch('/api/partidos');
-            const partidos = await resPartidos.json();
-            const p = partidos[id];
-            
-            const resJugadores = await fetch('/api/jugadores');
-            const todosLosJugadores = await resJugadores.json();
+            if(contenedor) contenedor.innerHTML = '<p class="text-blue-500 animate-pulse text-center py-4 uppercase text-[10px]">Cargando datos del partido...</p>';
+            window.modalActualizarMarcador.classList.replace('hidden', 'flex');
 
-            if(!p) return alert("Partido no encontrado");
+            const [resP, resJ] = await Promise.all([
+                fetch('/api/partidos'),
+                fetch('/api/jugadores')
+            ]);
+
+            if (!resP.ok || !resJ.ok) throw new Error("Error 500");
+
+            const partidos = await resP.json();
+            const todosLosJugadores = await resJ.json();
+            const p = partidos[id];
+
+            if(!p) {
+                window.modalActualizarMarcador.classList.replace('flex', 'hidden');
+                return alert("Partido no encontrado");
+            }
 
             document.getElementById('edit_partido_id').value = id;
             document.getElementById('edit_labelLocal').innerText = p.equipo_local.toUpperCase();
@@ -1075,7 +1078,6 @@
             document.getElementById('goles_visitante').value = p.goles_visitante || 0;
 
             const statsGuardadas = p.detalle_jugadores || {};
-            const contenedor = document.getElementById('contenedorCedulaJugadores');
             contenedor.innerHTML = ''; 
 
             const equipos = [
@@ -1084,15 +1086,11 @@
             ];
 
             equipos.forEach(eq => {
-                // Contamos bajas para el aviso visual
-                const bajas = Object.values(todosLosJugadores).filter(j => 
-                    j.equipo === eq.nombre && (j.estatus === 'suspendido' || j.estatus === 'lesionado')
-                ).length;
-
-                // Obtenemos a TODOS los jugadores del equipo (incluyendo suspendidos para no perder sus goles)
                 const jugadoresEquipo = Object.entries(todosLosJugadores)
                     .filter(([tel, j]) => j.equipo === eq.nombre)
-                    .sort((a,b) => a[1].numero - b[1].numero);
+                    .sort((a,b) => (a[1].numero || 0) - (b[1].numero || 0));
+
+                const bajas = jugadoresEquipo.filter(([tel, j]) => j.estatus === 'suspendido' || j.estatus === 'lesionado').length;
 
                 let htmlSeccion = `
                     <div class="border border-slate-800 rounded-xl overflow-hidden mb-3">
@@ -1104,7 +1102,7 @@
                                     <span class="text-[11px] font-black text-white uppercase tracking-widest">${eq.nombre}</span>
                                     <span class="text-[9px] text-slate-500 bg-slate-950 px-2 py-0.5 rounded-full">${jugadoresEquipo.length} REGISTRADOS</span>
                                 </div>
-                                ${bajas > 0 ? `<span class="text-[8px] text-red-400 font-bold ml-5 uppercase italic">⚠️ ${bajas} baja(s) por sanción o lesión</span>` : ''}
+                                ${bajas > 0 ? `<span class="text-[8px] text-red-400 font-bold ml-5 uppercase italic">⚠️ ${bajas} bajas</span>` : ''}
                             </div>
                             <svg class="size-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </button>
@@ -1115,56 +1113,31 @@
                     const previa = statsGuardadas[tel] || { asistio: true, goles: 0 };
                     const esInactivo = (j.estatus === 'suspendido' || j.estatus === 'lesionado');
 
-                    // Lógica para el texto de suspensión
-                    let infoSuspension = '';
-                    if (j.estatus === 'suspendido') {
-                        const resto = parseInt(j.partidos_suspension) || 0;
-                        infoSuspension = resto > 0 
-                            ? `<span class="text-[7px] text-amber-500 block animate-pulse">[RESTA: ${resto} PARTIDOS]</span>` 
-                            : `<span class="text-[7px] text-red-500 block">[SANCIÓN INDEFINIDA]</span>`;
-                    }
-
                     htmlSeccion += `
                         <div class="fila-jugador-cedula flex items-center gap-3 bg-slate-900/60 p-2 rounded-lg border border-slate-800/40 
-                            ${(esInactivo || !previa.asistio) ? 'opacity-30 grayscale' : ''}" 
-                            id="fila_jugador_${tel}" data-telefono="${tel}">
-                            
-                            <input type="checkbox" ${previa.asistio && !esInactivo ? 'checked' : ''} 
-                                ${esInactivo ? 'disabled' : ''}
-                                class="check-asistencia size-4 rounded accent-green-500" 
-                                onchange="window.toggleAsistencia('${tel}', this)">
-                            
+                            ${(esInactivo || !previa.asistio) ? 'opacity-30 grayscale' : ''}" id="fila_jugador_${tel}" data-telefono="${tel}">
+                            <input type="checkbox" ${previa.asistio && !esInactivo ? 'checked' : ''} ${esInactivo ? 'disabled' : ''} 
+                                class="check-asistencia size-4 rounded accent-green-500" onchange="window.toggleAsistencia('${tel}', this)">
                             <div class="flex-1 min-w-0">
-                                <p class="text-[11px] text-white font-bold truncate uppercase">
-                                    <span class="text-slate-500 mr-1">#${j.numero}</span>${j.nombre}
-                                    ${esInactivo ? `<span class="text-[7px] text-red-500 ml-1">[${j.estatus.toUpperCase()}]</span>` : ''}
-                                </p>
-                                ${j.estatus === 'suspendido' ? infoSuspension : ''}
+                                <p class="text-[11px] text-white font-bold truncate uppercase">#${j.numero} ${j.nombre}</p>
                             </div>
-
                             <div class="flex items-center gap-1 bg-slate-950 rounded-lg p-1 border border-slate-800">
-                                <button type="button" onclick="window.modificarGolJugador('${tel}', -1, '${eq.tipo}')" 
-                                        ${esInactivo ? 'disabled' : ''}
-                                        class="btn-control-gol size-6 flex items-center justify-center text-slate-400 hover:text-white rounded">-</button>
-                                
-                                <input type="number" value="${previa.goles}" readonly 
-                                    id="goles_jugador_${tel}" 
+                                <button type="button" onclick="window.modificarGolJugador('${tel}', -1, '${eq.tipo}')" ${esInactivo ? 'disabled' : ''} class="size-6 flex items-center justify-center text-slate-400 hover:text-white rounded">-</button>
+                                <input type="number" value="${previa.goles}" readonly id="goles_jugador_${tel}" 
                                     class="input-gol-jugador input-gol-${eq.tipo} w-7 bg-transparent text-center text-[11px] font-black text-blue-400 outline-none">
-                                
-                                <button type="button" onclick="window.modificarGolJugador('${tel}', 1, '${eq.tipo}')" 
-                                        ${esInactivo ? 'disabled' : ''}
-                                        class="btn-control-gol size-6 flex items-center justify-center text-white bg-blue-600/20 hover:bg-blue-600 rounded">+</button>
+                                <button type="button" onclick="window.modificarGolJugador('${tel}', 1, '${eq.tipo}')" ${esInactivo ? 'disabled' : ''} class="size-6 flex items-center justify-center text-white bg-blue-600/20 hover:bg-blue-600 rounded">+</button>
                             </div>
-                        </div>
-                    `;
+                        </div>`;
                 });
-
                 htmlSeccion += `</div></div>`;
                 contenedor.innerHTML += htmlSeccion;
             });
 
-            window.modalActualizarMarcador.classList.replace('hidden', 'flex');
-        } catch (e) { console.error("Error:", e); }
+        } catch (e) { 
+            console.error(e);
+            alert("⚠️ Error de conexión con el servidor.");
+            window.modalActualizarMarcador.classList.replace('flex', 'hidden');
+        }
     }
 
     function cerrarModalMarcador() { window.modalActualizarMarcador.classList.replace('flex', 'hidden'); }
@@ -1341,70 +1314,90 @@
         const horaNueva = document.querySelector('#formCrearPartido input[name="hora"]').value;
         const btnSubmit = document.querySelector('#formCrearPartido button[type="submit"]');
         
+        // El ID del partido que estamos editando (para no chocar con él mismo)
+        const idActual = window.idPartidoSorteo;
+
         const contenedor = document.getElementById('agendaCanchaContenedor');
         const listaAgenda = document.getElementById('listaAgendaCancha');
         const alerta = document.getElementById('alertaConflicto');
 
+        // Si no hay datos suficientes, escondemos la agenda pero NO tocamos los inputs
         if (!campoId || !fecha) {
             if(contenedor) contenedor.classList.add('hidden');
             return;
         }
 
         try {
+            // Indicador visual de carga sutil solo en la zona de la agenda
+            listaAgenda.innerHTML = '<p class="text-[10px] text-blue-500 animate-pulse text-center py-2">Consultando disponibilidad...</p>';
+            contenedor.classList.remove('hidden');
+
             const res = await fetch('/api/partidos');
             const partidos = await res.json();
             
-            const partidosHoy = Object.values(partidos).filter(p => p.campo_id === campoId && p.fecha === fecha);
+            // Filtramos: Partidos en la misma sede/fecha QUE NO SEAN el que estamos editando actualmente
+            const partidosHoy = Object.values(partidos).filter(p => 
+                p.campo_id === campoId && 
+                p.fecha === fecha && 
+                p.id !== idActual
+            );
 
-            contenedor.classList.remove('hidden');
+            // Limpiamos solo el área de la lista, sin tocar el resto del modal
             listaAgenda.innerHTML = '';
 
             if (partidosHoy.length === 0) {
-                listaAgenda.innerHTML = '<p class="text-[10px] text-slate-500 italic text-center py-2">Sede disponible para esta fecha</p>';
+                listaAgenda.innerHTML = '<p class="text-[10px] text-green-500 font-bold text-center py-2">✅ Sede disponible para esta fecha</p>';
             } else {
                 partidosHoy.sort((a,b) => a.hora.localeCompare(b.hora)).forEach(p => {
-                    // --- LÓGICA PARA CALCULAR HORA FIN (Inicio + 100 min) ---
                     const [horas, minutos] = p.hora.split(':').map(Number);
                     let totalMinutosFin = (horas * 60) + minutos + 100;
-                    
                     const horasFin = Math.floor(totalMinutosFin / 60);
                     const minutosFin = totalMinutosFin % 60;
-                    
-                    // Formateamos para que siempre tenga 2 dígitos (ej: 09:05)
                     const horaFinFormateada = `${horasFin.toString().padStart(2, '0')}:${minutosFin.toString().padStart(2, '0')}`;
 
                     listaAgenda.innerHTML += `
-                        <div class="flex justify-between items-center bg-slate-900 border border-slate-800 p-2 rounded-lg mb-1">
+                        <div class="flex justify-between items-center bg-slate-950/50 border border-slate-800 p-2 rounded-lg mb-1">
                             <div class="flex flex-col">
                                 <span class="text-blue-400 font-bold text-xs">${p.hora} - ${horaFinFormateada}</span>
-                                <span class="text-[8px] text-slate-500 uppercase tracking-tighter">Ocupado (100 min)</span>
+                                <span class="text-[8px] text-slate-500 uppercase">Ocupado (100 min)</span>
                             </div>
                             <span class="text-[9px] text-slate-400 uppercase truncate ml-4">${p.equipo_local} vs ${p.equipo_visitante}</span>
                         </div>`;
                 });
             }
 
-            // VALIDACIÓN DE CHOQUE
+            // --- LÓGICA DE VALIDACIÓN DE CHOQUE (SÓLO AFECTA AL BOTÓN) ---
             if (horaNueva) {
                 let choque = false;
-                const totalMinNuevo = (parseInt(horaNueva.split(':')[0]) * 60) + parseInt(horaNueva.split(':')[1]);
+                const [hN, mN] = horaNueva.split(':').map(Number);
+                const totalMinNuevo = (hN * 60) + mN;
 
                 partidosHoy.forEach(p => {
-                    const totalMinPartido = (parseInt(p.hora.split(':')[0]) * 60) + parseInt(p.hora.split(':')[1]);
-                    if (Math.abs(totalMinPartido - totalMinNuevo) < 100) { choque = true; }
+                    const [hP, mP] = p.hora.split(':').map(Number);
+                    const totalMinPartido = (hP * 60) + mP;
+                    
+                    // Si la diferencia es menor a 100 minutos, hay conflicto
+                    if (Math.abs(totalMinPartido - totalMinNuevo) < 100) { 
+                        choque = true; 
+                    }
                 });
 
                 if (choque) {
                     btnSubmit.disabled = true;
                     btnSubmit.classList.add('opacity-50', 'cursor-not-allowed');
-                    alerta.classList.remove('hidden');
+                    btnSubmit.innerText = "❌ HORARIO OCUPADO";
+                    if(alerta) alerta.classList.remove('hidden');
                 } else {
                     btnSubmit.disabled = false;
                     btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
-                    alerta.classList.add('hidden');
+                    btnSubmit.innerText = idActual ? "GUARDAR CAMBIOS ⚽" : "CREAR ENCUENTRO ⚽";
+                    if(alerta) alerta.classList.add('hidden');
                 }
             }
-        } catch (e) { console.error("Error agenda:", e); }
+        } catch (e) { 
+            console.error("Error agenda:", e);
+            listaAgenda.innerHTML = '<p class="text-[9px] text-red-500 text-center uppercase">Error al conectar con el servidor</p>';
+        }
     };
 
 
@@ -1958,8 +1951,6 @@
         Object.keys(jornadas).forEach(numJor => {
             
             // --- LÓGICA DEL TÍTULO DINÁMICO ---
-            // Si numJor es un número (como "1"), ponemos "Semana 1". 
-            // Si es texto (como "SEMIFINAL"), lo dejamos tal cual.
             const textoTitulo = isNaN(numJor) ? numJor : `Semana ${numJor}`;
 
             let htmlJornada = `
@@ -2069,69 +2060,89 @@
         const modal = document.getElementById('modalCrearPartido');
         if (!modal) return;
 
-        // 1. Mostrar modal
-        modal.classList.replace('hidden', 'flex');
+        // 1. REFERENCIAS E INICIALIZACIÓN
+        const selLocal = document.getElementById('selectLocal');
+        const selVisitante = document.getElementById('selectVisitante');
+        const contenedorAgenda = document.getElementById('agendaCanchaContenedor');
+        const listaAgenda = document.getElementById('listaAgendaCancha');
         
-        // 2. Cargar datos previos
-        await window.llenarSelectsEquipos();
-        await window.llenarSelectsCampos();
-        const p = window.cachePartidosLista.find(item => item.id === partidoId);
+        // Reset visual de la agenda para que no se mezcle con el partido anterior
+        if (contenedorAgenda) contenedorAgenda.classList.add('hidden');
+        if (listaAgenda) listaAgenda.innerHTML = '';
 
-        // 3. Referencias de los inputs
-        const inputFecha = modal.querySelector('input[name="fecha"]');
-        const inputHora = modal.querySelector('input[name="hora"]');
-        const selCancha = document.getElementById('selectCampos');
-        const btnSubmit = modal.querySelector('button[type="submit"]');
+        // Mostrar modal inmediatamente
+        modal.classList.replace('hidden', 'flex');
 
-        // 4. Lógica de Bloqueo "En Vivo" o "Finalizado"
-        // Si el partido está en curso o ya terminó, NO se puede mover la logística
-        const estaBloqueado = p && (p.estatus === 'en_curso' || p.estatus === 'finalizado' || p.resultado_confirmado);
+        // Bloqueo preventivo anti-lag
+        if(selLocal) selLocal.disabled = true;
+        if(selVisitante) selVisitante.disabled = true;
 
-        if (estaBloqueado) {
-            modal.querySelector('h3').innerText = "🚫 PROGRAMACIÓN BLOQUEADA (EN CURSO)";
-            if(btnSubmit) btnSubmit.classList.add('hidden'); // Escondemos el botón de guardar
-            
-            // Bloqueamos los inputs
-            [inputFecha, inputHora, selCancha].forEach(el => {
-                if(el) {
-                    el.disabled = true;
-                    el.classList.add('opacity-50', 'cursor-not-allowed');
-                }
-            });
-        } else {
-            // Si es programado o pendiente, restauramos todo
-            modal.querySelector('h3').innerText = "📅 GESTIONAR PROGRAMACIÓN";
-            if(btnSubmit) btnSubmit.classList.remove('hidden');
-            
-            [inputFecha, inputHora, selCancha].forEach(el => {
-                if(el) {
-                    el.disabled = false;
-                    el.classList.remove('opacity-50', 'cursor-not-allowed');
-                }
-            });
-        }
-
-        // 5. Llenado de datos (Auto-completado)
-        if (p) {
-            if (inputFecha) inputFecha.value = p.fecha || '';
-            if (inputHora) inputHora.value = p.hora || '';
-            if (selCancha) selCancha.value = p.campo_id || '';
-        }
-
-        // Bloqueo permanente de equipos (esto siempre va)
-        document.getElementById('selectLocal').disabled = true;
-        document.getElementById('selectVisitante').disabled = true;
-
-        window.idPartidoSorteo = partidoId;
-
-        // Disparamos la agenda visual
-        setTimeout(() => {
-            if (typeof window.verificarConflictosInteligentes === 'function') {
-                window.verificarConflictosInteligentes();
+        try {
+            // 2. CARGA DE DATOS (CACHE)
+            if (!window.cachePartidosLista || window.cachePartidosLista.length === 0) {
+                const res = await fetch('/api/partidos');
+                const partidosData = await res.json();
+                window.cachePartidosLista = Object.keys(partidosData).map(id => ({ id, ...partidosData[id] }));
             }
-        }, 200);
-    };
 
+            const p = window.cachePartidosLista.find(item => item.id === partidoId);
+            if (!p) return alert("No se encontraron los datos del partido.");
+
+            // 3. CARGA DE CATÁLOGOS (SELECTS)
+            await Promise.all([window.llenarSelectsEquipos(), window.llenarSelectsCampos()]);
+
+            // 4. ASIGNACIÓN DE VALORES FIJOS
+            if(selLocal) { selLocal.value = p.equipo_local; selLocal.disabled = true; }
+            if(selVisitante) { selVisitante.value = p.equipo_visitante; selVisitante.disabled = true; }
+
+            const inputFecha = modal.querySelector('input[name="fecha"]');
+            const inputHora = modal.querySelector('input[name="hora"]');
+            const selCancha = document.getElementById('selectCampos');
+            const btnSubmit = modal.querySelector('button[type="submit"]');
+
+            // 5. LÓGICA DE BLOQUEO POR ESTATUS
+            const estaBloqueado = p.estatus === 'en_curso' || p.estatus === 'finalizado' || p.resultado_confirmado;
+
+            if (estaBloqueado) {
+                modal.querySelector('h3').innerText = "🚫 PROGRAMACIÓN BLOQUEADA";
+                if(btnSubmit) btnSubmit.classList.add('hidden');
+                [inputFecha, inputHora, selCancha].forEach(el => { if(el) el.disabled = true; });
+            } else {
+                modal.querySelector('h3').innerText = "📅 GESTIONAR PROGRAMACIÓN";
+                if(btnSubmit) {
+                    btnSubmit.classList.remove('hidden');
+                    btnSubmit.innerText = "GUARDAR CAMBIOS ⚽";
+                }
+                [inputFecha, inputHora, selCancha].forEach(el => { if(el) el.disabled = false; });
+            }
+
+            // 6. FORMATEO DE CAMPOS (Evita el error de "PENDIENTE")
+            if (inputFecha) {
+                inputFecha.value = (p.fecha && !p.fecha.includes('PENDIENTE')) ? p.fecha : '';
+            }
+            if (inputHora) {
+                inputHora.value = (p.hora && p.hora !== '00:00') ? p.hora : '';
+            }
+            if (selCancha) {
+                selCancha.value = p.campo_id || '';
+            }
+
+            window.idPartidoSorteo = partidoId;
+
+            // 7. DISPARAR AGENDA (Solo si hay datos suficientes)
+            if (selCancha.value && inputFecha.value) {
+                // Un pequeño delay asegura que el DOM se asentó antes de la consulta pesada
+                setTimeout(() => { 
+                    if (typeof window.verificarConflictosInteligentes === 'function') {
+                        window.verificarConflictosInteligentes(); 
+                    }
+                }, 100);
+            }
+
+        } catch (e) {
+            console.error("Error en asignación rápida:", e);
+        }
+    };
 
      // --- 1. RECUPERAR FIXTURE ---
     window.recuperarFixtureGuardado = async function() {
@@ -2171,33 +2182,37 @@
             const partidos = await res.json();
             const listaPartidos = Object.values(partidos);
 
-            const pendientes = listaPartidos.filter(p => 
-                p.estatus !== 'finalizado' && 
-                p.resultado_confirmado !== true &&
-                !['SEMIFINAL', 'FINAL'].includes(p.jornada)
-            );
+            // 1. Filtrar solo fase regular (jornadas numéricas)
+            const partidosRegulares = listaPartidos.filter(p => !isNaN(p.jornada));
+            
+            if (partidosRegulares.length === 0) return;
 
-            if (pendientes.length === 0) {
-                if (confirm("🏆 ¡Fase Regular terminada! ¿Deseas generar las Semifinales?")) {
-                    await window.prepararYGenerarLiguilla(listaPartidos);
-                }
+            // 2. CRUCIAL: Solo avanzar si TODOS tienen resultado_confirmado === true
+            const actasPendientes = partidosRegulares.filter(p => p.resultado_confirmado !== true);
+
+            if (actasPendientes.length === 0) {
+                // Un pequeño delay para que la tabla en el server se asiente
+                setTimeout(async () => {
+                    if (confirm("🏆 ¡Fase Regular terminada y actas cerradas! ¿Deseas generar la Liguilla basada en la tabla de posiciones?")) {
+                        await window.prepararYGenerarLiguilla(listaPartidos);
+                    }
+                }, 800);
             } else {
-                alert(`Aún faltan ${pendientes.length} partidos por finalizar.`);
+                console.log(`Actas pendientes en fase regular: ${actasPendientes.length}. Esperando cierres...`);
             }
         } catch (error) {
             console.error("Error en verificador:", error);
         }
     };
-
+    
     // --- 3. PROCESADOR DE LIGUILLA ---
     window.prepararYGenerarLiguilla = async function(partidosActuales) {
-        console.log("Calculando liguilla automática...");
+        console.log("Calculando inicio de liguilla...");
 
-        // A. Calculamos la tabla local
         const calcularTablaLocal = (partidos) => {
             const stats = {};
             partidos.forEach(p => {
-                if ((p.estatus === 'finalizado' || p.resultado_confirmado) && !['OCTAVOS','CUARTOS','SEMIFINAL','FINAL'].includes(p.jornada)) {
+                if (p.resultado_confirmado === true && !isNaN(p.jornada)) {
                     const loc = p.equipo_local, vis = p.equipo_visitante;
                     const gl = parseInt(p.goles_local || 0), gv = parseInt(p.goles_visitante || 0);
                     if (!stats[loc]) stats[loc] = { nombre: loc, pts: 0, dg: 0, gf: 0 };
@@ -2210,92 +2225,111 @@
             return Object.values(stats).sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         };
 
-        const tablaCompleta = calcularTablaLocal(partidosActuales);
-        const totalEquipos = tablaCompleta.length;
+        const tabla = calcularTablaLocal(partidosActuales);
+        if (tabla.length < 2) return alert("No hay suficientes equipos con actas cerradas.");
 
-        // B. AUTOMATIZACIÓN: Decidir cuántos clasifican según el total
-        let cuantosClasifican = 2; // Por defecto Final directa
-        if (totalEquipos >= 16) cuantosClasifican = 16;
-        else if (totalEquipos >= 8) cuantosClasifican = 8;
-        else if (totalEquipos >= 4) cuantosClasifican = 4;
+        // Determinamos cuántos clasifican
+        let clasificadosCount = 2;
+        if (tabla.length >= 16) clasificadosCount = 16;
+        else if (tabla.length >= 8) clasificadosCount = 8;
+        else if (tabla.length >= 4) clasificadosCount = 4;
 
-        const clasificados = tablaCompleta.slice(0, cuantosClasifican);
+        const clasificados = tabla.slice(0, clasificadosCount);
+        let nombreFase = 'FINAL';
+        if (clasificadosCount === 16) nombreFase = 'OCTAVOS';
+        if (clasificadosCount === 8) nombreFase = 'CUARTOS';
+        if (clasificadosCount === 4) nombreFase = 'SEMIFINAL';
+
         const llaves = [];
-
-        // C. LÓGICA UNIVERSAL DE EMPAREJAMIENTO (Aquí va lo que preguntaste)
-        for (let i = 0; i < cuantosClasifican / 2; i++) {
-            let nombreFase = 'SEMIFINAL';
-            if (cuantosClasifican === 16) nombreFase = 'OCTAVOS';
-            if (cuantosClasifican === 8) nombreFase = 'CUARTOS';
-            if (cuantosClasifican === 2) nombreFase = 'FINAL';
-
+        for (let i = 0; i < clasificadosCount / 2; i++) {
             llaves.push({
                 equipo_local: clasificados[i].nombre,
-                equipo_visitante: clasificados[cuantosClasifican - 1 - i].nombre,
+                equipo_visitante: clasificados[clasificadosCount - 1 - i].nombre,
                 jornada: nombreFase,
                 estatus: 'programado'
             });
         }
 
-        // D. Envío a la API
-        try {
-            const res = await fetch('/api/admin/partidos/generar-liguilla', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({ partidos: llaves })
-            });
-
-            if(res.ok) {
-                alert(`🏆 ¡${llaves[0].jornada} generada con éxito para ${cuantosClasifican} equipos!`);
-                window.recuperarFixtureGuardado();
-            }
-        } catch (err) {
-            console.error(err);
-        }
+        await window.enviarLiguilla(llaves);
     };
 
 
     window.verificarProgresoLiguilla = async function() {
         const res = await fetch('/api/partidos');
-        const partidos = await res.json();
-        const lista = Object.values(partidos);
+        const partidosData = await res.json();
+        const lista = Object.values(partidosData);
 
-        const partidoFinal = lista.find(p => p.jornada === 'FINAL');
+        // 1. Identificar la fase de liguilla más avanzada que tiene partidos
+        const fasesOrder = ['OCTAVOS', 'CUARTOS', 'SEMIFINAL', 'FINAL'];
+        let faseActual = "";
+        for (let f of fasesOrder) {
+            if (lista.some(p => String(p.jornada).toUpperCase() === f)) faseActual = f;
+        }
+
+        // Si no hay liguilla o ya es la Final cerrada, no hacemos nada aquí
+        if (!faseActual) return window.verificarFinFaseRegular();
         
-        if (partidoFinal) {
-            const estatusActual = (partidoFinal.estatus || "").toLowerCase();
-            if (estatusActual === 'finalizado' || partidoFinal.resultado_confirmado) {
-                
-                // --- EVITAR BUCLE: Si el podio ya está visible, no hacer nada ---
-                if (!document.getElementById('podio-final').classList.contains('hidden')) return;
+        // Si la Final ya existe, checamos si terminó para el podio
+        if (faseActual === 'FINAL') {
+            const pFinal = lista.find(p => String(p.jornada).toUpperCase() === 'FINAL');
+            if (pFinal.resultado_confirmado) {
+                // Lógica de podio que ya tienes...
+                const gl = parseInt(pFinal.goles_local || 0);
+                const gv = parseInt(pFinal.goles_visitante || 0);
+                const campeon = gl > gv ? pFinal.equipo_local : pFinal.equipo_visitante;
+                window.mostrarCuadroHonor(campeon, gl > gv ? pFinal.equipo_visitante : pFinal.equipo_local);
+            }
+            return;
+        }
 
-                // 1. Calcular Campeón y Subcampeón
-                const gl = parseInt(partidoFinal.goles_local || 0);
-                const gv = parseInt(partidoFinal.goles_visitante || 0);
-                const campeon = gl > gv ? partidoFinal.equipo_local : partidoFinal.equipo_visitante;
-                const subcampeon = gl > gv ? partidoFinal.equipo_visitante : partidoFinal.equipo_local;
+        // 2. Verificar si la fase actual terminó
+        const partidosDeFase = lista.filter(p => String(p.jornada).toUpperCase() === faseActual);
+        const todosTerminados = partidosDeFase.every(p => p.resultado_confirmado === true);
 
-                // 2. Calcular 3er Lugar (Perdedores de Semifinales)
-                const partidosSemis = lista.filter(p => p.jornada === 'SEMIFINAL');
-                let tercero = "POR DEFINIR";
-                if (partidosSemis.length === 2) {
-                    const perdedores = partidosSemis.map(p => {
-                        const sl = parseInt(p.goles_local || 0);
-                        const sv = parseInt(p.goles_visitante || 0);
-                        return sl > sv ? p.equipo_visitante : p.equipo_local;
+        if (todosTerminados) {
+            const siguienteFase = fasesOrder[fasesOrder.indexOf(faseActual) + 1];
+            
+            // Evitar duplicados
+            if (lista.some(p => String(p.jornada).toUpperCase() === siguienteFase)) return;
+
+            if (confirm(`🔥 Fase de ${faseActual} terminada. ¿Generar llaves de ${siguienteFase}?`)) {
+                const ganadores = partidosDeFase.map(p => {
+                    return (parseInt(p.goles_local || 0) >= parseInt(p.goles_visitante || 0)) ? p.equipo_local : p.equipo_visitante;
+                });
+
+                const nuevasLlaves = [];
+                for (let i = 0; i < ganadores.length / 2; i++) {
+                    nuevasLlaves.push({
+                        equipo_local: ganadores[i * 2],
+                        equipo_visitante: ganadores[i * 2 + 1],
+                        jornada: siguienteFase,
+                        estatus: 'programado'
                     });
-                    // Podrías comparar diferencia de goles de semis, aquí tomamos al primero por simplicidad
-                    tercero = perdedores[0]; 
                 }
-
-                window.mostrarCuadroHonor(campeon, subcampeon, tercero);
-                return;
+                await window.enviarLiguilla(nuevasLlaves);
             }
         }
-        // ... (resto de tu lógica de Octavos/Cuartos/Semis se queda igual)
+    };
+
+    // Función auxiliar para enviar los partidos generados
+    window.enviarLiguilla = async function(llaves) {
+        try {
+            const res = await fetch('/api/admin/partidos/generar-liguilla', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({ partidos: llaves })
+            });
+
+            if(res.ok) {
+                alert("🏆 Siguiente fase generada con éxito");
+                location.reload();
+            }
+        } catch (err) {
+            console.error("Error al enviar liguilla:", err);
+        }
     };
 
     window.mostrarCuadroHonor = function(campeon, subcampeon, tercero) {

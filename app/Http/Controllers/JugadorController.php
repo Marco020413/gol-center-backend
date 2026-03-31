@@ -162,6 +162,48 @@ class JugadorController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+
+    public function generarLiguilla(Request $request) {
+        try {
+            $nuevosPartidos = $request->partidos; // Array de llaves (local, visitante, jornada)
+            if (!$nuevosPartidos || count($nuevosPartidos) == 0) {
+                return response()->json(['error' => 'No se enviaron partidos válidos'], 400);
+            }
+
+            // Traemos los equipos una sola vez para mapear los escudos
+            $equiposRef = $this->database->getReference('equipos')->getValue() ?? [];
+            $escudosMap = [];
+            foreach ($equiposRef as $idEq => $eq) {
+                if (isset($eq['nombre'])) {
+                    $escudosMap[$eq['nombre']] = $eq['escudo'] ?? '';
+                }
+            }
+
+            foreach ($nuevosPartidos as $p) {
+                $id_partido = uniqid('partido_');
+                
+                // Creamos el registro en Firebase
+                $this->database->getReference('partidos/' . $id_partido)->set([
+                    'equipo_local'         => $p['equipo_local'],
+                    'equipo_visitante'     => $p['equipo_visitante'],
+                    'escudo_local'         => $escudosMap[$p['equipo_local']] ?? '',
+                    'escudo_visitante'     => $escudosMap[$p['equipo_visitante']] ?? '',
+                    'jornada'              => $p['jornada'], 
+                    'campo_id'             => 'sin_asignar',
+                    'fecha'                => 'PENDIENTE',
+                    'hora'                 => '00:00',
+                    'goles_local'          => 0,
+                    'goles_visitante'      => 0,
+                    'estatus'              => 'programado',
+                    'resultado_confirmado' => false
+                ]);
+            }
+
+            return response()->json(['message' => 'Fase de liguilla generada exitosamente']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Error en servidor: ' . $e->getMessage()], 500);
+        }
+    }
 }
 
 
