@@ -141,4 +141,20 @@ class EquipoController extends Controller
             return response()->json(['error' => 'Error de Firebase'], 500);
         }
     }
+    
+    public function eliminarEscudoArchivo(Request $request)
+    {
+        try {
+            $nombreArchivo = basename($request->archivo); // Seguridad: solo el nombre del archivo
+            $rutaFisica = public_path('img/escudos/' . $nombreArchivo);
+
+            if (file_exists($rutaFisica)) {
+                unlink($rutaFisica);
+                return response()->json(['message' => 'Archivo eliminado']);
+            }
+            return response()->json(['error' => 'Archivo no encontrado'], 404);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }

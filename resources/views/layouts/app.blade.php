@@ -22,10 +22,35 @@
         #formActualizarMarcador {
             overflow-y: auto;
         }
+
+        #overlay-carga {
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.8);
+        display: none; /* Oculto por defecto */
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        }
+
+        .spinner {
+        width: 50px;
+        height: 50px;
+        border: 5px solid #334155;
+        border-top: 5px solid #f59e0b; /* Color Ambar */
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
     </style>
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
-    
+    <div id="overlay-carga">
+        <div class="spinner"></div>
+        <p class="text-white font-black uppercase tracking-widest mt-4 text-[10px]">Archivando Torneo en el Historial...</p>
+    </div>
     <header class="w-full bg-slate-900/80 border-b border-slate-800 backdrop-blur-md sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-4">
@@ -68,6 +93,7 @@
     let cacheEquiposData = null;
     let cacheCamposData = null;
     let limiteJugadores = 15;
+    let cacheHistorialCompleto = null;
 
     //LISTENERS Y CONFIGURACIONES INICIALES
     document.addEventListener('DOMContentLoaded', () => {
@@ -319,9 +345,25 @@
 
     window.abrirModalEquipo = function() { 
         const modal = document.getElementById('modalEquipo');
+        const form = document.getElementById('formRegistroEquipo');
+        const titulo = document.getElementById('tituloModalEquipo');
+        const preview = document.getElementById('previewContenedor');
+        const inputId = document.getElementById('equipo_id_edit');
+
         if(modal) {
+            // RESET TOTAL: Forzamos modo creación
+            editMode = false; 
+            if(form) form.reset();
+            if(inputId) inputId.value = '';
+            if(titulo) titulo.innerText = 'Nuevo Equipo';
+            if(preview) preview.classList.add('hidden');
+
+            // Mostrar modal
             modal.classList.remove('hidden');
             modal.classList.add('flex');
+            
+            // Cargar galería por si acaso
+            if(typeof cargarGaleriaEscudos === 'function') cargarGaleriaEscudos();
         }
     };
 
@@ -382,6 +424,34 @@
         await cargarEquipos(); 
         f.equipo.value = equipo; 
         window.modalJugador.classList.replace('hidden', 'flex');
+    };
+
+     window.eliminarJugador = async function(telefono) {
+        // 1. Confirmación de seguridad
+        if (!confirm('⚠️ ¿Estás seguro de eliminar a este jugador? Se borrarán sus estadísticas permanentemente.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/admin/jugadores/eliminar/${telefono}`, {
+                method: 'DELETE',
+                headers: { 
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                alert('🗑️ Jugador eliminado correctamente');
+                location.reload(); // Recargamos para actualizar la tabla
+            } else {
+                const result = await response.json();
+                alert('❌ Error: ' + (result.error || 'No se pudo eliminar al jugador'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('❌ Error de conexión con el servidor');
+        }
     };
 
     function cerrarModal() { 
@@ -460,7 +530,10 @@
                 case 'campos':
                     if(typeof cargarCamposCards === 'function') cargarCamposCards();
                     break;
-            }
+                case 'historial':
+                    if(typeof cargarHistorialSaloDeLaFama === 'function') cargarHistorialSaloDeLaFama();
+                    break;
+                }
             ultimaCarga[tabName] = ahora;
         }
     };
@@ -477,31 +550,33 @@
         try {
             const response = await fetch('/api/equipos/escudos');
             const escudos = await response.json();
-            
             contenedor.innerHTML = ''; 
 
             if (escudos.length === 0) {
-                contenedor.innerHTML = '<p class="col-span-4 text-[10px] text-slate-500 italic py-4">No hay escudos. ¡Sube el primero!</p>';
+                contenedor.innerHTML = '<p class="col-span-4 text-[10px] text-slate-500 italic py-4">No hay escudos.</p>';
             }
 
             escudos.forEach((url) => {
                 const nombreArchivo = url.split('/').pop();
-                // Limpiamos los números del nombre para que se vea bien
                 const nombreLimpio = nombreArchivo.includes('_') ? nombreArchivo.split('_').slice(1).join('_') : nombreArchivo;
 
-                const label = document.createElement('label');
-                label.className = 'cursor-pointer group';
-                label.innerHTML = `
-                    <input type="radio" name="escudo_url" value="${url}" class="hidden peer" onchange="mostrarPreview('${url}', '${nombreLimpio}')">
-                    <img src="${url}" class="size-12 mx-auto object-contain peer-checked:border-2 border-blue-500 rounded-lg bg-white/10 hover:scale-110 transition">
-                    <p class="text-[7px] mt-1 uppercase truncate text-slate-500">${nombreLimpio}</p>
+                const div = document.createElement('div');
+                div.className = 'relative group';
+                div.innerHTML = `
+                    <button onclick="eliminarArchivoEscudo('${nombreArchivo}')" 
+                            class="absolute -top-1 -right-1 bg-red-600 text-white rounded-full size-4 text-[8px] flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        ✕
+                    </button>
+                    
+                    <label class="cursor-pointer">
+                        <input type="radio" name="escudo_url" value="${url}" class="hidden peer" onchange="mostrarPreview('${url}', '${nombreLimpio}')">
+                        <img src="${url}" class="size-12 mx-auto object-contain peer-checked:border-2 border-blue-500 rounded-lg bg-white/10 hover:scale-105 transition">
+                        <p class="text-[6px] mt-1 uppercase truncate text-slate-500 text-center">${nombreLimpio}</p>
+                    </label>
                 `;
-                contenedor.appendChild(label);
+                contenedor.appendChild(div);
             });
-        } catch (e) { 
-            console.error("Error al cargar escudos:", e); 
-            contenedor.innerHTML = '<p class="col-span-4 text-red-500 text-[8px]">Error al conectar con el servidor</p>';
-        }
+        } catch (e) { console.error("Error al cargar escudos:", e); }
     }
 
     // Nueva función de previsualización
@@ -516,31 +591,50 @@
         txt.innerText = nombre;
     }
     
-    // CORRECCIÓN: Función para abrir el modal en modo EDICIÓN
+
     async function editarEquipo(id, nombre, escudo) {
-        editMode = true;
-        document.getElementById('tituloModalEquipo').innerText = 'Editar Equipo';
-        document.getElementById('equipo_id_edit').value = id; // El ID oculto que ya tienes en el HTML
-        document.getElementById('nombreEquipoInput').value = nombre;
+        editMode = true; 
         
-        // Mostramos el escudo actual
-        mostrarPreview(escudo, nombre);
+        const modal = document.getElementById('modalEquipo');
+        const titulo = document.getElementById('tituloModalEquipo');
+        const inputId = document.getElementById('equipo_id_edit');
+        const inputNombre = document.getElementById('nombreEquipoInput');
+
+        if(titulo) titulo.innerText = 'Editar Equipo';
+        if(inputId) inputId.value = id;
+        if(inputNombre) inputNombre.value = nombre;
         
-        abrirModalEquipo();
+        if(typeof mostrarPreview === 'function') {
+            mostrarPreview(escudo, nombre);
+        }
+        
+        if(modal) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        
+        if(typeof cargarGaleriaEscudos === 'function') cargarGaleriaEscudos();
     }
 
     async function registrarNuevoEquipo() {
         const form = document.getElementById('formRegistroEquipo');
         const btn = document.getElementById('btnGuardarEquipo');
+        const equipoId = document.getElementById('equipo_id_edit').value;
         
         btn.innerText = 'Procesando...';
         btn.disabled = true;
 
         const data = new FormData(form);
 
+        const url = equipoId 
+            ? `/api/admin/equipos/actualizar/${equipoId}` 
+            : '/api/admin/equipos/registrar';
+        
+        if (equipoId) data.append('_method', 'PUT');
+
         try {
-            const response = await fetch('/api/admin/equipos/registrar', {
-                method: 'POST',
+            const response = await fetch(url, {
+                method: 'POST', 
                 body: data,
                 headers: {
                     'X-CSRF-TOKEN': '{{ csrf_token() }}'
@@ -548,16 +642,19 @@
             });
 
             if (response.ok) {
-                alert('✅ Equipo guardado con éxito');
+                alert(equipoId ? '✅ Equipo actualizado' : '✅ Equipo guardado');
                 location.reload();
             } else {
-                alert('❌ Error al guardar');
+                const errorData = await response.json();
+                alert('❌ Error: ' + (errorData.message || 'No se pudo guardar'));
                 btn.innerText = 'Guardar Equipo';
                 btn.disabled = false;
             }
         } catch (e) {
+            console.error(e);
             alert('❌ Error de conexión');
             btn.disabled = false;
+            btn.innerText = 'Guardar Equipo';
         }
     }
 
@@ -581,6 +678,7 @@
             const response = await fetch('/api/equipos');
             const equipos = await response.json();
             contenedor.innerHTML = '';
+            
             for (const id in equipos) {
                 const eq = equipos[id];
                 contenedor.innerHTML += `
@@ -600,8 +698,30 @@
                     </div>
                 `;
             }
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Error al cargar lista de equipos:", e); }
     }
+
+    window.eliminarArchivoEscudo = async function(nombreArchivo) {
+        if(!confirm(`¿Borrar permanentemente el archivo "${nombreArchivo}" del servidor?`)) return;
+
+        try {
+            const response = await fetch('/api/admin/escudos/eliminar', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({ archivo: nombreArchivo })
+            });
+
+            if(response.ok) {
+                alert('🗑️ Archivo eliminado');
+                cargarGaleriaEscudos(); // Recargar solo la galería
+            } else {
+                alert('❌ Error al eliminar el archivo');
+            }
+        } catch (e) { console.error(e); }
+    };
 
     // 2. EDITAR EQUIPO (Corregido el error de innerText)
     async function editarEquipo(id, nombre, escudo) {
@@ -636,39 +756,7 @@
             alert('❌ Nombre incorrecto.');
         }
     }
-
-
     
-
-    
-
-    window.eliminarJugador = async function(telefono) {
-        // 1. Confirmación de seguridad
-        if (!confirm('⚠️ ¿Estás seguro de eliminar a este jugador? Se borrarán sus estadísticas permanentemente.')) {
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/admin/jugadores/eliminar/${telefono}`, {
-                method: 'DELETE',
-                headers: { 
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json'
-                }
-            });
-
-            if (response.ok) {
-                alert('🗑️ Jugador eliminado correctamente');
-                location.reload(); // Recargamos para actualizar la tabla
-            } else {
-                const result = await response.json();
-                alert('❌ Error: ' + (result.error || 'No se pudo eliminar al jugador'));
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('❌ Error de conexión con el servidor');
-        }
-    };
     
     function filtrarTabla() {
         const busqueda = document.getElementById('busquedaJugador').value.toLowerCase().trim();
@@ -1446,99 +1534,98 @@
         window.recalcularMarcadorGlobal();
     };
 
-
-
-    //Tabla de Posiciones
-
+    // Tabla de Posiciones - Fase Regular
     window.cargarTablaPosiciones = async function() {
         const cuerpo = document.getElementById('tablaCuerpoPosiciones');
-            if(!cuerpo) return;
+        if(!cuerpo) return;
 
-            try {
-                const [resE, resP] = await Promise.all([
-                    fetch('/api/equipos'),
-                    fetch('/api/partidos')
-                ]);
+        try {
+            const [resE, resP] = await Promise.all([
+                fetch('/api/equipos'),
+                fetch('/api/partidos')
+            ]);
+            
+            const equipos = await resE.json();
+            const partidos = await resP.json();
+
+            // 1. Inicializar objeto de estadísticas
+            let stats = {};
+            for (const id in equipos) {
+                stats[equipos[id].nombre] = {
+                    nombre: equipos[id].nombre,
+                    escudo: equipos[id].escudo,
+                    pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0
+                };
+            }
+
+            // 2. Procesar partidos (FILTRADO POR FASE REGULAR)
+            Object.values(partidos).forEach(partido => {
+                // CONDICIÓN: Acta cerrada Y jornada numérica (Fase Regular)
+                const esFaseRegular = !isNaN(partido.jornada);
                 
-                const equipos = await resE.json();
-                const partidos = await resP.json();
+                if (partido.resultado_confirmado && esFaseRegular) {
+                    const loc = partido.equipo_local;
+                    const vis = partido.equipo_visitante;
+                    const gl = parseInt(partido.goles_local || 0);
+                    const gv = parseInt(partido.goles_visitante || 0);
 
-                // 1. Inicializar objeto de estadísticas para cada equipo
-                let stats = {};
-                for (const id in equipos) {
-                    stats[equipos[id].nombre] = {
-                        nombre: equipos[id].nombre,
-                        escudo: equipos[id].escudo,
-                        pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0
-                    };
-                }
+                    if (stats[loc] && stats[vis]) {
+                        stats[loc].pj++; stats[vis].pj++;
+                        stats[loc].gf += gl; stats[loc].gc += gv;
+                        stats[vis].gf += gv; stats[vis].gc += gl;
 
-                // 2. Procesar partidos (Solo los que tienen acta cerrada)
-                Object.values(partidos).forEach(partido => {
-                    if (partido.resultado_confirmado) {
-                        const loc = partido.equipo_local;
-                        const vis = partido.equipo_visitante;
-                        const gl = parseInt(partido.goles_local);
-                        const gv = parseInt(partido.goles_visitante);
-
-                        if (stats[loc] && stats[vis]) {
-                            stats[loc].pj++; stats[vis].pj++;
-                            stats[loc].gf += gl; stats[loc].gc += gv;
-                            stats[vis].gf += gv; stats[vis].gc += gl;
-
-                            if (gl > gv) {
-                                stats[loc].g++; stats[loc].pts += 3;
-                                stats[vis].p++;
-                            } else if (gl < gv) {
-                                stats[vis].g++; stats[vis].pts += 3;
-                                stats[loc].p++;
-                            } else {
-                                stats[loc].e++; stats[vis].e++;
-                                stats[loc].pts += 1; stats[vis].pts += 1;
-                            }
+                        if (gl > gv) {
+                            stats[loc].g++; stats[loc].pts += 3;
+                            stats[vis].p++;
+                        } else if (gl < gv) {
+                            stats[vis].g++; stats[vis].pts += 3;
+                            stats[loc].p++;
+                        } else {
+                            stats[loc].e++; stats[vis].e++;
+                            stats[loc].pts += 1; stats[vis].pts += 1;
                         }
                     }
-                });
+                }
+            });
 
-                // 3. Convertir a Array y Ordenar (Pts > Diferencia Goles > GF)
-                const tablaOrdenada = Object.values(stats).sort((a, b) => {
-                    if (b.pts !== a.pts) return b.pts - a.pts;
-                    const difA = a.gf - a.gc;
-                    const difB = b.gf - b.gc;
-                    if (difB !== difA) return difB - difA;
-                    return b.gf - a.gf;
-                });
+            // 3. Ordenar (Pts > Diferencia > GF)
+            const tablaOrdenada = Object.values(stats).sort((a, b) => {
+                if (b.pts !== a.pts) return b.pts - a.pts;
+                const difA = a.gf - a.gc;
+                const difB = b.gf - b.gc;
+                if (difB !== difA) return difB - difA;
+                return b.gf - a.gf;
+            });
 
-                // 4. Dibujar la tabla
-                cuerpo.innerHTML = '';
-                tablaOrdenada.forEach((team, index) => {
-                    const difG = team.gf - team.gc;
-                    cuerpo.innerHTML += `
-                        <tr class="hover:bg-blue-500/5 transition-colors">
-                            <td class="px-4 py-4 text-center text-slate-500 font-bold text-xs">${index + 1}</td>
-                            <td class="px-4 py-4">
-                                <div class="flex items-center gap-3">
-                                    <img src="${team.escudo}" class="size-6 object-contain">
-                                    <span class="text-white font-bold text-xs uppercase tracking-tight">${team.nombre}</span>
-                                </div>
-                            </td>
-                            <td class="px-2 py-4 text-center text-slate-300 text-xs">${team.pj}</td>
-                            <td class="px-2 py-4 text-center text-slate-400 text-xs hidden md:table-cell">${team.g}</td>
-                            <td class="px-2 py-4 text-center text-slate-400 text-xs hidden md:table-cell">${team.e}</td>
-                            <td class="px-2 py-4 text-center text-slate-400 text-xs hidden md:table-cell">${team.p}</td>
-                            <td class="px-3 py-4 text-center font-black text-white text-sm">${team.pts}</td>
-                            <td class="px-2 py-4 text-center text-slate-400 text-xs">${team.gf}</td>
-                            <td class="px-2 py-4 text-center text-slate-400 text-xs">${team.gc}</td>
-                            <td class="px-2 py-4 text-center font-bold ${difG > 0 ? 'text-green-500' : difG < 0 ? 'text-red-500' : 'text-slate-500'} text-xs">
-                                ${difG > 0 ? '+' + difG : difG}
-                            </td>
-                        </tr>
-                    `;
-                });
+            // 4. Dibujar la tabla
+            cuerpo.innerHTML = '';
+            tablaOrdenada.forEach((team, index) => {
+                const difG = team.gf - team.gc;
+                cuerpo.innerHTML += `
+                    <tr class="hover:bg-blue-500/5 transition-colors border-b border-slate-800/50">
+                        <td class="px-4 py-4 text-center text-slate-500 font-bold text-xs">${index + 1}</td>
+                        <td class="px-4 py-4">
+                            <div class="flex items-center gap-3">
+                                <img src="${team.escudo}" class="size-6 object-contain">
+                                <span class="text-white font-bold text-xs uppercase tracking-tight">${team.nombre}</span>
+                            </div>
+                        </td>
+                        <td class="px-2 py-4 text-center text-slate-300 text-xs">${team.pj}</td>
+                        <td class="px-2 py-4 text-center text-slate-400 text-xs hidden md:table-cell">${team.g}</td>
+                        <td class="px-2 py-4 text-center text-slate-400 text-xs hidden md:table-cell">${team.e}</td>
+                        <td class="px-2 py-4 text-center text-slate-400 text-xs hidden md:table-cell">${team.p}</td>
+                        <td class="px-3 py-4 text-center font-black text-white text-sm">${team.pts}</td>
+                        <td class="px-2 py-4 text-center text-slate-400 text-xs">${team.gf}</td>
+                        <td class="px-2 py-4 text-center text-slate-400 text-xs">${team.gc}</td>
+                        <td class="px-2 py-4 text-center font-bold ${difG > 0 ? 'text-green-500' : difG < 0 ? 'text-red-500' : 'text-slate-500'} text-xs">
+                            ${difG > 0 ? '+' + difG : difG}
+                        </td>
+                    </tr>
+                `;
+            });
 
-            } catch (e) { console.error("Error tabla posiciones:", e); }
-        };
-
+        } catch (e) { console.error("Error tabla posiciones:", e); }
+    };
    
    window.ejecutarGuardadoCancha = async function(id, data, nuevaSedeId = null) {
         if(nuevaSedeId) data.nueva_sede_id = nuevaSedeId;
@@ -1947,16 +2034,14 @@
             jornadas[jor].push(p);
         });
 
-        // IMPORTANTE: El Object.keys().forEach crea la variable numJor en cada vuelta
         Object.keys(jornadas).forEach(numJor => {
-            
-            // --- LÓGICA DEL TÍTULO DINÁMICO ---
+            const esFaseFinal = ['OCTAVOS', 'CUARTOS', 'SEMIFINAL', 'FINAL'].includes(String(numJor).toUpperCase());
             const textoTitulo = isNaN(numJor) ? numJor : `Semana ${numJor}`;
 
             let htmlJornada = `
                 <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl mb-8">
                     <div class="flex items-center gap-4 mb-6">
-                        <span class="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest"> 
+                        <span class="${esFaseFinal ? 'bg-amber-600' : 'bg-blue-600'} text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest"> 
                             ${textoTitulo} 
                         </span>
                         <div class="h-px bg-slate-800 flex-1"></div>
@@ -1973,14 +2058,33 @@
                     indicador: 'text-slate-700'
                 };
 
-                const estaFinalizado = p.estatus === 'finalizado' || p.resultado_confirmado === true || p.bloqueado === true;
+                const estaFinalizado = p.estatus === 'finalizado' || p.resultado_confirmado === true;
+                
+                // --- LÓGICA DE RESALTADO DE GANADOR ---
+                let claseGanadorLocal = "";
+                let claseGanadorVisitante = "";
+                const gl = parseInt(p.goles_local || 0);
+                const gv = parseInt(p.goles_visitante || 0);
+                const mostrarBadgeCampeon = p.jornada === 'FINAL' && p.resultado_confirmado === true && gl !== gv;
 
                 if (estaFinalizado) {
-                    statusConfig.claseBorde = 'border-emerald-500/40';
-                    statusConfig.claseBg = 'bg-emerald-500/10';
+                    statusConfig.claseBorde = p.jornada === 'FINAL' ? 'border-amber-500/50' : 'border-emerald-500/40';
+                    statusConfig.claseBg = p.jornada === 'FINAL' ? 'bg-amber-500/5' : 'bg-emerald-500/10';
                     statusConfig.claseTexto = 'text-white';
                     statusConfig.indicador = 'text-emerald-400 font-black';
                     statusConfig.badge = `<span class="text-[8px] bg-emerald-600 text-white px-2 py-0.5 rounded-md uppercase font-black">Finalizado</span>`;
+
+                    if (gl > gv) {
+                        claseGanadorLocal = "text-amber-400 font-black scale-110 origin-right";
+                        claseGanadorVisitante = "text-slate-600 font-normal opacity-50";
+                    } else if (gv > gl) {
+                        claseGanadorVisitante = "text-amber-400 font-black scale-110 origin-left";
+                        claseGanadorLocal = "text-slate-600 font-normal opacity-50";
+                    } else {
+                        // Si hay empate, ambos se ven normales (blancos) para no confundir
+                        claseGanadorLocal = "text-white font-bold";
+                        claseGanadorVisitante = "text-white font-bold";
+                    }
                 } 
                 else if (p.estatus === 'en_curso') {
                     statusConfig.claseBorde = 'border-red-500/50';
@@ -2001,16 +2105,17 @@
                     <button onclick="window.abrirAsignacionRapida('${p.equipo_local}', '${p.equipo_visitante}', '${p.id}')" 
                             class="w-full flex flex-col gap-1 ${statusConfig.claseBg} p-4 rounded-2xl border ${statusConfig.claseBorde} hover:scale-[1.02] transition-all group relative overflow-hidden">
                         
+                        ${mostrarBadgeCampeon ? '<div class="absolute -top-1 -right-1 text-[10px] bg-amber-500 text-black px-2 font-black rotate-12 shadow-lg">CAMPEÓN</div>' : ''}
                         <div class="flex items-center justify-between w-full">
-                            <div class="flex-1 text-right font-bold ${statusConfig.claseTexto} text-[11px] uppercase truncate group-hover:text-blue-400">
+                            <div class="flex-1 text-right text-[11px] uppercase truncate transition-all ${claseGanadorLocal || statusConfig.claseTexto}">
                                 ${p.equipo_local}
                             </div>
                             
                             <div class="px-4 ${statusConfig.indicador} font-black text-[10px] italic">
-                                ${estaFinalizado ? (p.goles_local ?? 0) + ' - ' + (p.goles_visitante ?? 0) : 'VS'}
+                                ${estaFinalizado ? gl + ' - ' + gv : 'VS'}
                             </div>
                             
-                            <div class="flex-1 text-left font-bold ${statusConfig.claseTexto} text-[11px] uppercase truncate group-hover:text-blue-400">
+                            <div class="flex-1 text-left text-[11px] uppercase truncate transition-all ${claseGanadorVisitante || statusConfig.claseTexto}">
                                 ${p.equipo_visitante}
                             </div>
                         </div>
@@ -2028,7 +2133,11 @@
     };
 
     window.limpiarTodo = async function() {
+        // 1. Primer aviso de seguridad
         if(!confirm("⚠️ ¿BORRAR TODO? Esta acción eliminará todos los partidos del torneo actual. No se puede deshacer.")) return;
+
+        // 2. Segundo aviso (Seguro de Salón de la Fama)
+        if(!confirm("❓ ¿Ya archivaste este torneo en el Salón de la Fama? Si no lo hiciste, perderás las estadísticas de esta copa para siempre.")) return;
 
         try {
             const res = await fetch('/api/admin/partidos/limpiar-todo', {
@@ -2040,13 +2149,12 @@
             });
 
             if(res.ok) {
-                alert("🧹 Torneo limpiado correctamente.");
-                // Limpiamos el contenedor visual
-                const contenedor = document.getElementById('contenedorFixture');
-                if(contenedor) contenedor.innerHTML = '';
+                // --- LO MÁS IMPORTANTE ---
+                localStorage.removeItem('torneo_finalizado'); // <--- Esto permite que la siguiente copa se guarde sola
+                localStorage.removeItem('pestanaActiva'); 
                 
-                // Actualizamos la pestaña de partidos
-                if(window.cargarPartidosCards) window.cargarPartidosCards();
+                alert("🧹 Torneo limpiado y sistema reseteado para la próxima copa.");
+                location.reload(); // Recargamos para que el generador aparezca limpio
             } else {
                 alert("❌ Error al intentar limpiar la base de datos.");
             }
@@ -2254,63 +2362,6 @@
     };
 
 
-    window.verificarProgresoLiguilla = async function() {
-        const res = await fetch('/api/partidos');
-        const partidosData = await res.json();
-        const lista = Object.values(partidosData);
-
-        // 1. Identificar la fase de liguilla más avanzada que tiene partidos
-        const fasesOrder = ['OCTAVOS', 'CUARTOS', 'SEMIFINAL', 'FINAL'];
-        let faseActual = "";
-        for (let f of fasesOrder) {
-            if (lista.some(p => String(p.jornada).toUpperCase() === f)) faseActual = f;
-        }
-
-        // Si no hay liguilla o ya es la Final cerrada, no hacemos nada aquí
-        if (!faseActual) return window.verificarFinFaseRegular();
-        
-        // Si la Final ya existe, checamos si terminó para el podio
-        if (faseActual === 'FINAL') {
-            const pFinal = lista.find(p => String(p.jornada).toUpperCase() === 'FINAL');
-            if (pFinal.resultado_confirmado) {
-                // Lógica de podio que ya tienes...
-                const gl = parseInt(pFinal.goles_local || 0);
-                const gv = parseInt(pFinal.goles_visitante || 0);
-                const campeon = gl > gv ? pFinal.equipo_local : pFinal.equipo_visitante;
-                window.mostrarCuadroHonor(campeon, gl > gv ? pFinal.equipo_visitante : pFinal.equipo_local);
-            }
-            return;
-        }
-
-        // 2. Verificar si la fase actual terminó
-        const partidosDeFase = lista.filter(p => String(p.jornada).toUpperCase() === faseActual);
-        const todosTerminados = partidosDeFase.every(p => p.resultado_confirmado === true);
-
-        if (todosTerminados) {
-            const siguienteFase = fasesOrder[fasesOrder.indexOf(faseActual) + 1];
-            
-            // Evitar duplicados
-            if (lista.some(p => String(p.jornada).toUpperCase() === siguienteFase)) return;
-
-            if (confirm(`🔥 Fase de ${faseActual} terminada. ¿Generar llaves de ${siguienteFase}?`)) {
-                const ganadores = partidosDeFase.map(p => {
-                    return (parseInt(p.goles_local || 0) >= parseInt(p.goles_visitante || 0)) ? p.equipo_local : p.equipo_visitante;
-                });
-
-                const nuevasLlaves = [];
-                for (let i = 0; i < ganadores.length / 2; i++) {
-                    nuevasLlaves.push({
-                        equipo_local: ganadores[i * 2],
-                        equipo_visitante: ganadores[i * 2 + 1],
-                        jornada: siguienteFase,
-                        estatus: 'programado'
-                    });
-                }
-                await window.enviarLiguilla(nuevasLlaves);
-            }
-        }
-    };
-
     // Función auxiliar para enviar los partidos generados
     window.enviarLiguilla = async function(llaves) {
         try {
@@ -2332,77 +2383,345 @@
         }
     };
 
-    window.mostrarCuadroHonor = function(campeon, subcampeon, tercero) {
-        const contenedor = document.getElementById('podio-final');
-        if (!contenedor) return;
+    
+    window.archivarTorneo = async function(campeon, todosLosPartidos) {
+        const loader = document.getElementById('overlay-carga');
+        if(loader) loader.style.display = 'flex'; 
 
-        contenedor.innerHTML = `
-            <div class="bg-slate-950 p-10 rounded-[40px] border border-slate-800 shadow-2xl text-center max-w-lg w-full mx-4 relative overflow-hidden">
-                <div class="absolute -top-24 -left-24 size-48 bg-blue-600/20 blur-[100px]"></div>
-                
-                <h2 class="text-white font-black text-3xl mb-10 uppercase tracking-[0.2em]">Cuadro de Honor</h2>
-                
-                <div class="flex justify-center items-end gap-2 pb-6">
-                    <div class="flex flex-col items-center w-28">
-                        <div class="w-full h-24 bg-gradient-to-b from-slate-700 to-slate-900 rounded-t-2xl flex items-center justify-center border-t-4 border-slate-400 shadow-lg">
-                            <span class="text-slate-400 font-black text-2xl">2º</span>
-                        </div>
-                        <p class="text-slate-400 text-[10px] mt-3 font-bold uppercase truncate w-full">${subcampeon}</p>
-                    </div>
+        const dataHistorial = {
+            nombre_torneo: "Torneo de Copa " + new Date().getFullYear(),
+            fecha_finalizacion: new Date().toISOString(),
+            campeon: campeon,
+            resumen_partidos: todosLosPartidos,
+            stats_finales: "Generado automáticamente",
+            tabla_final: Array.from(document.querySelectorAll('#tablaCuerpoPosiciones tr')).map(tr => ({
+                nombre: tr.querySelector('td:nth-child(2) span').innerText,
+                pj: tr.querySelector('td:nth-child(3)').innerText,
+                pts: tr.querySelector('td:nth-child(7)').innerText,
+                gf: tr.querySelector('td:nth-child(8)').innerText
+            }))
+        };
 
-                    <div class="flex flex-col items-center w-36 scale-110 -translate-y-4">
-                        <div class="text-5xl mb-4 animate-bounce">🏆</div>
-                        <div class="w-full h-40 bg-gradient-to-b from-amber-400 to-amber-700 rounded-t-2xl flex items-center justify-center border-t-4 border-amber-200 shadow-[0_0_30px_rgba(245,158,11,0.3)]">
-                            <span class="text-white font-black text-4xl">1º</span>
-                        </div>
-                        <p class="text-amber-500 text-xs mt-3 font-black uppercase tracking-widest truncate w-full">${campeon}</p>
-                    </div>
+        try {
+            const res = await fetch('/api/admin/guardar-podio', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}' 
+                },
+                body: JSON.stringify(dataHistorial)
+            });
 
-                    <div class="flex flex-col items-center w-28">
-                        <div class="w-full h-16 bg-gradient-to-b from-orange-800 to-slate-900 rounded-t-2xl flex items-center justify-center border-t-4 border-orange-600 shadow-lg">
-                            <span class="text-orange-600 font-black text-xl">3º</span>
-                        </div>
-                        <p class="text-orange-700 text-[9px] mt-3 font-bold uppercase truncate w-full">${tercero}</p>
-                    </div>
-                </div>
-
-                <button onclick="this.closest('#podio-final').classList.add('hidden')" 
-                    class="mt-10 px-8 py-3 bg-slate-900 hover:bg-white hover:text-black text-slate-500 text-[10px] font-bold uppercase tracking-widest rounded-full transition-all duration-500">
-                    Cerrar Vitrina
-                </button>
-            </div>
-        `;
-        contenedor.classList.remove('hidden');
+            if (res.ok) {
+                if(loader) loader.style.display = 'none'; // OCULTAR CARGA
+                alert("📁 El torneo ha sido archivado en el historial. ¡Felicidades al campeón: " + campeon + "!");
+            }
+        } catch (err) {
+            if(loader) loader.style.display = 'none'; // OCULTAR EN CASO DE ERROR
+            console.error("Error al archivar:", err);
+        }
     };
 
-    window.mostrarCuadroHonor = function(campeon, subcampeon) {
-        const contenedor = document.getElementById('podio-final'); // Asegúrate de tener este ID en tu HTML
-        if (!contenedor) return;
+    window.verificarProgresoLiguilla = async function() {
+        const res = await fetch('/api/partidos');
+        const partidosData = await res.json();
+        const lista = Object.values(partidosData);
 
-        contenedor.innerHTML = `
-            <div class="bg-gradient-to-b from-slate-900 to-black p-8 rounded-3xl border-2 border-amber-500/50 shadow-[0_0_50px_rgba(245,158,11,0.2)] text-center animate-bounce-slow">
-                <h2 class="text-amber-500 font-black text-4xl mb-6 tracking-tighter uppercase">Cuadro de Honor</h2>
-                <div class="flex justify-center items-end gap-4">
-                    <div class="flex flex-col items-center">
-                        <div class="w-24 h-32 bg-slate-800 rounded-t-lg flex items-center justify-center border-t-4 border-slate-400">
-                            <span class="text-slate-400 font-bold text-xl">2º</span>
-                        </div>
-                        <p class="text-white text-[10px] mt-2 font-bold uppercase">${subcampeon}</p>
-                    </div>
-                    <div class="flex flex-col items-center">
-                        <div class="text-5xl mb-2">🏆</div>
-                        <div class="w-32 h-48 bg-gradient-to-t from-amber-900 to-amber-500 rounded-t-lg flex items-center justify-center border-t-4 border-amber-200 shadow-lg">
-                            <span class="text-white font-black text-3xl">1º</span>
-                        </div>
-                        <p class="text-amber-500 text-sm mt-2 font-black uppercase tracking-widest">${campeon}</p>
-                    </div>
-                </div>
-                <button onclick="location.reload()" class="mt-8 text-slate-500 text-[10px] uppercase tracking-widest hover:text-white transition">Finalizar Torneo</button>
-            </div>
-        `;
-        contenedor.classList.remove('hidden');
+        const fasesOrder = ['OCTAVOS', 'CUARTOS', 'SEMIFINAL', 'FINAL'];
+        let faseActual = "";
+        for (let f of fasesOrder) {
+            if (lista.some(p => String(p.jornada).toUpperCase() === f)) faseActual = f;
+        }
+
+        if (!faseActual) return window.verificarFinFaseRegular();
+        
+        // --- LÓGICA DE CIERRE DE TORNEO (FINAL) ---
+        if (faseActual === 'FINAL') {
+            const pFinal = lista.find(p => String(p.jornada).toUpperCase() === 'FINAL');
+            if (pFinal && pFinal.resultado_confirmado) {
+                // 1. Determinar ganador
+                const gl = parseInt(pFinal.goles_local || 0);
+                const gv = parseInt(pFinal.goles_visitante || 0);
+                const campeon = gl > gv ? pFinal.equipo_local : pFinal.equipo_visitante;
+
+                // 2. Guardar historial (Solo si no se ha guardado ya este torneo)
+                // Usamos un flag en localStorage para no repetir la petición en cada recarga
+                const idTorneoActual = "torneo_" + new Date().getFullYear(); 
+                if (localStorage.getItem('torneo_finalizado') !== idTorneoActual) {
+                    await window.archivarTorneo(campeon, lista);
+                    localStorage.setItem('torneo_finalizado', idTorneoActual);
+                }
+                
+                console.log("🏆 Torneo finalizado. Campeón: " + campeon);
+            }
+            return;
+        }
+
+        // 2. Verificar si la fase actual terminó (Para generar la siguiente)
+        const partidosDeFase = lista.filter(p => String(p.jornada).toUpperCase() === faseActual);
+        const todosTerminados = partidosDeFase.every(p => p.resultado_confirmado === true);
+
+        if (todosTerminados) {
+            const siguienteFase = fasesOrder[fasesOrder.indexOf(faseActual) + 1];
+            if (lista.some(p => String(p.jornada).toUpperCase() === siguienteFase)) return;
+
+            if (confirm(`🔥 Fase de ${faseActual} terminada. ¿Generar llaves de ${siguienteFase}?`)) {
+                const ganadores = partidosDeFase.map(p => {
+                    return (parseInt(p.goles_local || 0) >= parseInt(p.goles_visitante || 0)) ? p.equipo_local : p.equipo_visitante;
+                });
+
+                const nuevasLlaves = [];
+                for (let i = 0; i < ganadores.length / 2; i++) {
+                    nuevasLlaves.push({
+                        equipo_local: ganadores[i * 2],
+                        equipo_visitante: ganadores[i * 2 + 1],
+                        jornada: siguienteFase,
+                        estatus: 'programado'
+                    });
+                }
+                await window.enviarLiguilla(nuevasLlaves);
+            }
+        }
     };
 
+
+    window.verHistorial = async function() {
+        try {
+            const res = await fetch('/api/historial');
+            const historial = await res.json();
+            
+            const contenedor = document.getElementById('seccionHistorial');
+            contenedor.innerHTML = '<h2 class="text-2xl font-bold text-white mb-6">Archivo de Torneos</h2>';
+
+            Object.values(historial).reverse().forEach(torneo => {
+                contenedor.innerHTML += `
+                    <div class="bg-slate-900 p-6 rounded-3xl border border-slate-800 mb-4 shadow-lg">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h3 class="text-amber-500 font-black uppercase">${torneo.nombre_torneo}</h3>
+                                <p class="text-slate-400 text-xs">Finalizado el: ${new Date(torneo.fecha_finalizacion).toLocaleDateString()}</p>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-[10px] text-slate-500 uppercase font-bold block">Campeón</span>
+                                <span class="text-white font-black text-xl italic">🏆 ${torneo.campeon}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        } catch (e) {
+            console.error("Error al cargar historial:", e);
+        }
+    };
+
+
+    window.cargarHistorialSaloDeLaFama = async function() {
+        const contenedor = document.getElementById('contenedor-historial-tab');
+        if (!contenedor) return;
+
+        try {
+            const res = await fetch('/api/historial');
+            const data = await res.json();
+            contenedor.innerHTML = '';
+
+            if (!data || Object.keys(data).length === 0) {
+                contenedor.innerHTML = '<p class="text-slate-700 uppercase font-black text-[10px]">No hay torneos archivados aún.</p>';
+                return;
+            }
+
+            // Cambiamos Object.values por Object.entries para obtener la CLAVE (ID) y el VALOR (Torneo)
+            Object.entries(data).reverse().forEach(([idTorneo, torneo]) => {
+                contenedor.innerHTML += `
+                    <div class="bg-slate-900 border border-slate-800 p-6 rounded-[30px] relative overflow-hidden group hover:border-amber-500/50 transition-all shadow-xl">
+                        <div class="absolute -top-10 -right-10 size-32 bg-amber-500/5 blur-[40px] group-hover:bg-amber-500/10 transition-all"></div>
+                        
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="text-[9px] bg-amber-600 text-white px-3 py-1 rounded-full font-black uppercase tracking-widest">
+                                ${new Date(torneo.fecha_finalizacion).getFullYear()}
+                            </span>
+                            <span class="text-slate-600 text-[9px] font-bold uppercase italic">
+                                Final: ${new Date(torneo.fecha_finalizacion).toLocaleDateString()}
+                            </span>
+                        </div>
+
+                        <h3 class="text-slate-500 font-bold uppercase text-[9px] mb-1 tracking-widest">Campeón</h3>
+                        <div class="text-white text-2xl font-black uppercase italic tracking-tighter mb-4">
+                            🏆 ${torneo.campeon}
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-800 flex justify-between items-center">
+                            <span class="text-slate-500 text-[8px] font-black uppercase tracking-widest">
+                                ${Object.keys(torneo.resumen_partidos || {}).length} Partidos
+                            </span>
+                            <button onclick="verDetallesTorneo('${idTorneo}')" class="text-amber-500 text-[8px] font-black uppercase tracking-widest hover:text-white transition">Ver Detalles →</button>
+                        </div>
+                    </div>
+                `;
+            });
+        } catch (e) {
+            console.error("Error cargando historial:", e);
+            contenedor.innerHTML = '<p class="text-red-500 uppercase font-black text-[10px]">Error al cargar los archivos.</p>';
+        }
+    };
+
+
+    window.verDetallesTorneo = async function(id) {
+        const modal = document.getElementById('modalDetallesHistorial');
+        if (!modal) return;
+        
+        try {
+            if (!cacheHistorialCompleto) {
+                const res = await fetch('/api/historial');
+                cacheHistorialCompleto = await res.json();
+            }
+            
+            const torneo = cacheHistorialCompleto[id];
+            if (!torneo) return alert("No se encontraron detalles.");
+
+            // 1. HEADER
+            document.getElementById('historial-titulo').innerText = torneo.nombre_torneo || `Torneo ${new Date(torneo.fecha_finalizacion).getFullYear()}`;
+            document.getElementById('historial-subtitulo').innerText = `CAMPEÓN: ${torneo.campeon}`;
+
+            // 2. LÓGICA DE TABLA DE POSICIONES
+            const tablaBody = document.getElementById('historial-tabla-body');
+            tablaBody.innerHTML = '';
+            
+            let tablaData = torneo.tabla_final || torneo.posiciones || [];
+
+            // SI LA TABLA ESTÁ VACÍA, LA CALCULAMOS CON LOS PARTIDOS DEL HISTORIAL
+            if (tablaData.length === 0 && torneo.resumen_partidos) {
+                let statsAuto = {};
+                Object.values(torneo.resumen_partidos).forEach(p => {
+                    const loc = p.local || p.equipo_local;
+                    const vis = p.visitante || p.equipo_visitante;
+                    const gl = parseInt(p.goles_local || 0);
+                    const gv = parseInt(p.goles_visitante || 0);
+
+                    if (!statsAuto[loc]) statsAuto[loc] = { nombre: loc, pj: 0, pts: 0, gf: 0 };
+                    if (!statsAuto[vis]) statsAuto[vis] = { nombre: vis, pj: 0, pts: 0, gf: 0 };
+
+                    statsAuto[loc].pj++; statsAuto[vis].pj++;
+                    statsAuto[loc].gf += gl; statsAuto[vis].gf += gv;
+
+                    if (gl > gv) statsAuto[loc].pts += 3;
+                    else if (gv > gl) statsAuto[vis].pts += 3;
+                    else { statsAuto[loc].pts += 1; statsAuto[vis].pts += 1; }
+                });
+                tablaData = Object.values(statsAuto).sort((a, b) => b.pts - a.pts);
+            }
+
+            // DIBUJAR TABLA
+            tablaData.forEach(eq => {
+                tablaBody.innerHTML += `
+                    <tr class="border-b border-slate-800/50 hover:bg-white/5 transition">
+                        <td class="px-4 py-3 font-bold text-white text-[11px] uppercase">${eq.nombre || eq.equipo}</td>
+                        <td class="px-4 py-3 text-center text-slate-400 font-bold">${eq.pj || 0}</td>
+                        <td class="px-4 py-3 text-center text-amber-500 font-black text-xs">${eq.pts || eq.puntos || 0}</td>
+                        <td class="px-4 py-3 text-center text-slate-400 font-bold">${eq.gf || eq.goles_favor || 0}</td>
+                    </tr>
+                `;
+            });
+
+            // 3. RESUMEN DE PARTIDOS (Este ya te funcionaba, lo mantenemos igual)
+            const partidosContenedor = document.getElementById('historial-partidos');
+            partidosContenedor.innerHTML = '';
+            const partidos = torneo.resumen_partidos || torneo.partidos || {};
+            
+            Object.values(partidos).forEach(p => {
+                const local = p.local || p.equipo_local;
+                const visitante = p.visitante || p.equipo_visitante;
+                const gl = p.goles_local ?? 0;
+                const gv = p.goles_visitante ?? 0;
+
+                partidosContenedor.innerHTML += `
+                    <div class="flex items-center justify-between bg-slate-800/30 p-3 rounded-xl border border-slate-800 mb-2">
+                        <span class="text-slate-500 text-[8px] font-black uppercase w-16">${p.jornada || 'Match'}</span>
+                        <div class="flex-1 flex justify-center items-center gap-4">
+                            <span class="text-white font-bold text-[10px] uppercase w-24 text-right">${local}</span>
+                            <span class="bg-slate-900 px-3 py-1 rounded-lg text-amber-500 font-black italic text-xs min-w-[50px] text-center">${gl} - ${gv}</span>
+                            <span class="text-white font-bold text-[10px] uppercase w-24 text-left">${visitante}</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // 4. ESTADÍSTICAS FINALES (TOP GOLEADORES CON NOMBRES)
+            const statsFinales = document.getElementById('historial-stats');
+            statsFinales.innerHTML = '';
+
+            let goleadoresTorneo = {};
+            
+            // Obtenemos los jugadores actuales para cruzar el nombre (si los tienes en cache)
+            // Si no los tienes, intentaremos sacarlos del DOM de la tabla de jugadores
+            const listaJugadoresActuales = Array.from(document.querySelectorAll('#content-jugadores tbody tr'));
+
+            Object.values(partidos).forEach(partido => {
+                const detalle = partido.detalle_jugadores || {};
+                Object.entries(detalle).forEach(([tel, info]) => {
+                    if (info.goles > 0) {
+                        // BUSCAMOS EL NOMBRE:
+                        // 1. Intentar sacarlo del 'info' si se grabó al archivar
+                        // 2. Si no, buscarlo en la tabla de jugadores actual por el teléfono
+                        let nombreReal = info.nombre; 
+                        
+                        if (!nombreReal) {
+                            const filaJugador = listaJugadoresActuales.find(tr => 
+                                tr.querySelector('[data-field="telefono"]')?.innerText.trim() === tel
+                            );
+                            nombreReal = filaJugador ? filaJugador.querySelector('[data-field="nombre"]')?.innerText.split('\n')[0] : `Jugador (${tel})`;
+                        }
+
+                        if (!goleadoresTorneo[tel]) {
+                            goleadoresTorneo[tel] = { nombre: nombreReal, goles: 0 };
+                        }
+                        goleadoresTorneo[tel].goles += info.goles;
+                    }
+                });
+            });
+
+            const rankingGoleadores = Object.values(goleadoresTorneo)
+                .sort((a, b) => b.goles - a.goles)
+                .slice(0, 6); // Top 6
+
+            if (rankingGoleadores.length > 0) {
+                let htmlGoleadores = `
+                    <div class="col-span-full">
+                        <h4 class="text-amber-500 text-[8px] font-black uppercase tracking-[0.2em] mb-3 italic">Máximos Goleadores de la Temporada</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                `;
+
+                rankingGoleadores.forEach((jugador, i) => {
+                    const esPrimero = i === 0;
+                    htmlGoleadores += `
+                        <div class="flex justify-between items-center ${esPrimero ? 'bg-amber-500/10 border-amber-500/30 shadow-lg shadow-amber-900/20' : 'bg-slate-800/40 border-slate-700/50'} p-3 rounded-xl border transition-all">
+                            <div class="flex items-center gap-3">
+                                <span class="text-lg">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '⚽'}</span>
+                                <div class="flex flex-col">
+                                    <span class="text-white font-black text-[11px] uppercase italic tracking-tighter">${jugador.nombre}</span>
+                                    <span class="text-[8px] text-slate-500 font-bold uppercase">${i + 1}° Posición</span>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <span class="${esPrimero ? 'text-amber-500' : 'text-white'} font-black text-sm italic">${jugador.goles}</span>
+                                <span class="text-[7px] text-slate-500 font-black uppercase block">Goles</span>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                htmlGoleadores += `</div></div>`;
+                statsFinales.innerHTML = htmlGoleadores;
+            } else {
+                statsFinales.innerHTML = `<p class="text-slate-600 text-[10px] italic">No hay datos de goleadores para este torneo.</p>`;
+            }
+
+            modal.classList.remove('hidden');
+
+        } catch (e) { console.error("Error modal historial:", e); }
+    };
+    window.cerrarModalHistorial = function() {
+        document.getElementById('modalDetallesHistorial').classList.add('hidden');
+    };
 </script>
 </body>
 </html>

@@ -12,6 +12,7 @@ Route::delete('/admin/jugadores/eliminar/{telefono}', [App\Http\Controllers\Juga
 Route::put('/admin/jugadores/actualizar/{telefono}', [App\Http\Controllers\JugadorController::class, 'actualizar']);
 Route::get('/equipos/escudos', [App\Http\Controllers\EquipoController::class, 'listarEscudos']);
 Route::delete('/admin/equipos/eliminar/{id}', [App\Http\Controllers\EquipoController::class, 'eliminar']);
+Route::delete('/admin/escudos/eliminar', [App\Http\Controllers\EquipoController::class, 'eliminarEscudoArchivo']);
 
 // Rutas para Partidos
 Route::get('/partidos', [App\Http\Controllers\PartidoController::class, 'listar']);
@@ -21,6 +22,12 @@ Route::delete('/admin/partidos/eliminar/{id}', [App\Http\Controllers\PartidoCont
 Route::delete('/admin/partidos/limpiar-todo', [App\Http\Controllers\PartidoController::class, 'limpiarTodo']);
 Route::put('/admin/partidos/actualizar-datos/{id}', [App\Http\Controllers\PartidoController::class, 'actualizarDatosSorteo']);
 Route::post('/admin/partidos/generar-liguilla', [App\Http\Controllers\PartidoController::class, 'generarTorneo']);
+Route::post('/admin/guardar-podio', [App\Http\Controllers\PartidoController::class, 'guardarPodio']);
+
+Route::get('/historial', function() {
+    $database = app('firebase.database');
+    return $database->getReference('historial_torneos')->getValue();
+});
 
 // Rutas para Campos
 Route::get('/campos', [App\Http\Controllers\CampoController::class, 'index']);

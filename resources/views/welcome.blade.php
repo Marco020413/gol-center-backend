@@ -10,6 +10,7 @@
             <button onclick="changeTab('partidos')" id="btn-tab-partidos" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Partidos</button>
             <button onclick="changeTab('campos')" id="btn-tab-campos" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Canchas</button>
             <button onclick="changeTab('roles')" id="btn-tab-roles" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Roles</button>
+            <button onclick="changeTab('historial')" id="btn-tab-historial" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Salón de la Fama</button>
         </div>
     <div id="podio-final" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"></div>
 
@@ -183,7 +184,8 @@
                             🎲 Sortear y Generar Jornadas
                         </button>
 
-                        <button onclick="window.limpiarTodo()" class="bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white font-black py-4 px-8 rounded-2xl text-xs uppercase tracking-widest transition-all active:scale-95">
+                        <button onclick="window.limpiarTodo()" 
+                                class="bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white font-black py-4 px-8 rounded-2xl text-xs uppercase tracking-widest transition-all active:scale-95">
                             🗑️ Limpiar Torneo
                         </button>
                     </div>
@@ -203,6 +205,17 @@
                 <div id="listaCamposCards" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     </div>
             </div>
+
+            <div id="content-historial" class="tab-pane hidden animate-fade-in">
+                <div class="mb-6">
+                    <h2 class="text-2xl font-black text-white uppercase tracking-tighter italic">Salón de la Fama</h2>
+                    <p class="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Historial de Campeones y Torneos Archivados</p>
+                </div>
+                
+                <div id="contenedor-historial-tab" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <p class="text-slate-600 animate-pulse uppercase text-[10px] font-black">Consultando archivos de la liga...</p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -212,12 +225,6 @@
             <div class="space-y-3">
                 <button onclick="abrirModal()" class="w-full bg-white text-blue-600 font-bold py-3 rounded-lg text-sm hover:shadow-xl transition">Registrar Jugador</button>
                 <button onclick="abrirModalEquipo()" class="w-full bg-blue-700 text-white font-bold py-3 rounded-lg text-sm border border-blue-400/30 hover:bg-blue-800 transition">Crear Equipo</button>
-                <div class="flex justify-center mb-6">
-                    <button onclick="window.forzarGeneracionLiguilla()" 
-                            class="bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-black px-6 py-2 rounded-full uppercase tracking-widest shadow-lg shadow-amber-900/20 transition-all">
-                        ⚡ Forzar Generación de Liguilla (Manual)
-                    </button>
-                </div>
             </div>
         </div>
     </div>
@@ -553,6 +560,57 @@
         <div class="p-4 bg-slate-950/50 flex gap-3">
             <button onclick="window.cerrarModalReasignar()" class="flex-1 px-4 py-3 text-slate-400 font-bold text-[10px] uppercase hover:text-white transition">Cancelar</button>
             <button id="btnConfirmarBorradoEspecial" class="flex-1 font-bold text-[10px] py-3 rounded-xl uppercase transition shadow-lg"></button>
+        </div>
+    </div>
+</div>
+
+<div id="modalDetallesHistorial" class="hidden fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-4xl max-h-[90vh] rounded-[40px] shadow-2xl overflow-hidden flex flex-col">
+        
+        <div class="p-8 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+            <div>
+                <h2 id="historial-titulo" class="text-3xl font-black text-white uppercase italic tracking-tighter">Detalles del Torneo</h2>
+                <p id="historial-subtitulo" class="text-amber-500 text-[10px] font-black uppercase tracking-[0.2em] mt-1"></p>
+            </div>
+            <button onclick="cerrarModalHistorial()" class="size-10 flex items-center justify-center rounded-full bg-slate-800 text-white hover:bg-red-600 transition">✕</button>
+        </div>
+
+        <div class="p-8 overflow-y-auto custom-scrollbar space-y-10">
+            
+            <div>
+                <h3 class="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span class="size-2 bg-amber-500 rounded-full"></span> Estadísticas Finales
+                </h3>
+                <div id="historial-stats" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    </div>
+            </div>
+
+            <div>
+                <h3 class="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span class="size-2 bg-blue-500 rounded-full"></span> Tabla de Posiciones al Cierre
+                </h3>
+                <div class="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+                    <table class="w-full text-left text-[11px]">
+                        <thead class="bg-slate-800/50 text-slate-400 uppercase font-black">
+                            <tr>
+                                <th class="px-4 py-3">Equipo</th>
+                                <th class="px-4 py-3 text-center">PJ</th>
+                                <th class="px-4 py-3 text-center">PTS</th>
+                                <th class="px-4 py-3 text-center">GF</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historial-tabla-body" class="text-slate-300"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div>
+                <h3 class="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span class="size-2 bg-green-500 rounded-full"></span> Resumen de Partidos
+                </h3>
+                <div id="historial-partidos" class="grid grid-cols-1 gap-2">
+                    </div>
+            </div>
         </div>
     </div>
 </div>

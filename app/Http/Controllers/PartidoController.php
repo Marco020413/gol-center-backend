@@ -300,4 +300,38 @@ class PartidoController extends Controller
             return response()->json(['error' => 'Error en servidor: ' . $e->getMessage()], 500);
         }
     }
+
+    public function guardarPodio(Request $request) {
+        try {
+            $idHistorial = 'torneo_' . date('Y_m_d_His');
+            $datos = $request->all();
+
+            // 1. OBTENEMOS LA LISTA DE JUGADORES ACTUALES PARA CRUZAR NOMBRES
+            // Ajusta la ruta 'jugadores' según como esté en tu Firebase
+            $jugadoresRepo = $this->database->getReference('jugadores')->getValue();
+
+            // 2. RECORREMOS LOS PARTIDOS PARA INYECTAR NOMBRES EN EL DETALLE
+            if (isset($datos['resumen_partidos'])) {
+                foreach ($datos['resumen_partidos'] as $key => $partido) {
+                    if (isset($partido['detalle_jugadores'])) {
+                        foreach ($partido['detalle_jugadores'] as $tel => $info) {
+                            // Si el jugador existe en nuestra base actual, grabamos su nombre "en piedra"
+                            if (isset($jugadoresRepo[$tel])) {
+                                $datos['resumen_partidos'][$key]['detalle_jugadores'][$tel]['nombre'] = $jugadoresRepo[$tel]['nombre'];
+                            } else {
+                                $datos['resumen_partidos'][$key]['detalle_jugadores'][$tel]['nombre'] = "Jugador Retirado";
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. GUARDAMOS EL OBJETO YA "ENRIQUECIDO" CON NOMBRES
+            $this->database->getReference('historial_torneos/' . $idHistorial)->set($datos);
+
+            return response()->json(['message' => 'Torneo archivado con nombres estáticos correctamente']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }
