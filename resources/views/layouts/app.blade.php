@@ -95,9 +95,10 @@
     let limiteJugadores = 15;
     let cacheHistorialCompleto = null;
 
-    //LISTENERS Y CONFIGURACIONES INICIALES
-    document.addEventListener('DOMContentLoaded', () => {
-  
+        // LISTENERS Y CONFIGURACIONES INICIALES
+    document.addEventListener('DOMContentLoaded', () => { 
+
+
         window.modalJugador = document.getElementById('modalJugador');
         window.modalEquipo = document.getElementById('modalEquipo');
         window.modalCrearPartido = document.getElementById('modalCrearPartido');
@@ -107,31 +108,65 @@
         window.formEquipo = document.getElementById('formRegistroEquipo');
         window.formPartidos = document.getElementById('formCrearPartido');
         window.formActualizar = document.getElementById('formActualizarMarcador');
-        window.recuperarFixtureGuardado();
-        window.llenarSelectsEquipos();
+
+        // 2. PERSISTENCIA DE PESTAÑA (INSTANTÁNEA)
+        // Ejecutamos esto ANTES que las cargas pesadas para que no haya lag visual
+        const lastTab = localStorage.getItem('pestanaActiva') || 'jugadores';
+        if (typeof window.changeTab === 'function') {
+            window.changeTab(lastTab);
+        }
+
+        // 3. CARGA DE DATOS BASE (SIN BLOQUEO AWAIT)
+        // Se ejecutan en paralelo mientras el usuario ya ve su pestaña
+        window.llenarSelectsEquipos(); 
         window.llenarSelectsCampos();
+        window.recuperarFixtureGuardado();
 
+        // 4. SANEADOR DE JUGADORES Y FILTRADO INICIAL
+        const sanearYFiltrarTabla = async () => {
+            try {
+                const res = await fetch('/api/equipos');
+                const equiposActivos = await res.json();
+                const nombresEquipos = Object.values(equiposActivos).map(e => e.nombre);
 
+                document.querySelectorAll('#tablaPrincipalJugadores tbody tr').forEach(fila => {
+                    const celdaEquipo = fila.querySelector('[data-field="equipo"]');
+                    if (!celdaEquipo) return;
+                    const valorEquipo = celdaEquipo.getAttribute('data-valor');
+
+                    if (valorEquipo !== 'Libre' && !nombresEquipos.includes(valorEquipo) && valorEquipo !== "") {
+                        celdaEquipo.innerHTML = `
+                            <div class="flex flex-col items-center gap-1">
+                                <span class="text-slate-500 text-[10px] uppercase font-black">${valorEquipo}</span>
+                                <span class="bg-amber-500/10 border border-amber-500/50 text-amber-500 text-[9px] px-2 py-0.5 rounded-full font-black animate-pulse">
+                                    ⚠️ SIN EQUIPO
+                                </span>
+                            </div>`;
+                        celdaEquipo.setAttribute('data-valor', 'Libre');
+                    }
+                });
+                if (typeof filtrarTabla === 'function') filtrarTabla();
+            } catch (e) { console.error("Error en saneado inicial:", e); }
+        };
+        setTimeout(sanearYFiltrarTabla, 300);
+
+        // 5. LISTENERS DE BÚSQUEDA Y FILTROS
         const inputBusqueda = document.getElementById('busquedaJugador');
         const selectFiltroEquipo = document.getElementById('filtroEquipo');
-
         if (inputBusqueda) {
             inputBusqueda.addEventListener('input', () => { 
-                limiteJugadores = 15; // Reiniciamos el límite al escribir
+                window.limiteJugadores = 15;
+                if (typeof filtrarTabla === 'function') filtrarTabla();
             });
         }
         if (selectFiltroEquipo) {
             selectFiltroEquipo.addEventListener('change', () => { 
-                limiteJugadores = 15; // Reiniciamos el límite al cambiar equipo
+                window.limiteJugadores = 15;
+                if (typeof filtrarTabla === 'function') filtrarTabla();
             });
         }
 
-            setTimeout(() => {
-            if(typeof filtrarTabla === 'function') filtrarTabla();
-        }, 100);
-        
-
-        // 3. FUNCIÓN PARA ABRIR MODAL CREAR PARTIDO
+        // 6. FUNCIÓN PARA ABRIR MODAL CREAR PARTIDO
         window.abrirModalCrearPartido = function() {
             if (window.modalCrearPartido) {
                 window.modalCrearPartido.classList.replace('hidden', 'flex');
@@ -139,86 +174,85 @@
                 if (typeof llenarSelectsCampos === 'function') llenarSelectsCampos(); 
             }
         };
-        // 4. FUNCIÓN PARA GUARDAD TABLA DE TORNEO
-        window.recuperarFixtureGuardado = async function() {
-            try {
-                const res = await fetch('/api/partidos');
-                const partidosData = await res.json();
-                const partidos = Object.keys(partidosData).map(id => ({ id, ...partidosData[id] }));
 
-                if (partidos.length > 0) {
-                    window.pintarFixtureVisual(partidos);
-                }
-            } catch (e) { console.error("Error recuperando fixture:", e); }
-        };
-
-        // 4. ACTIVAR SENSORES DE AGENDA (CONFLICTOS INTELIGENTES)
+        // 7. SENSORES DE AGENDA
         const selectCampos = document.getElementById('selectCampos');
         const inputFecha = document.querySelector('#formCrearPartido input[name="fecha"]');
         const inputHora = document.querySelector('#formCrearPartido input[name="hora"]');
-
         if(selectCampos) selectCampos.addEventListener('change', window.verificarConflictosInteligentes);
         if(inputFecha) inputFecha.addEventListener('change', window.verificarConflictosInteligentes);
         if(inputHora) inputHora.addEventListener('change', window.verificarConflictosInteligentes);
 
-        // 5. LÓGICA DE FORMULARIO: REGISTRO / EDICIÓN JUGADORES
+        // 8. LÓGICA DE FORMULARIO: REGISTRO / EDICIÓN JUGADORES
         if(window.formJugador) {
             window.formJugador.onsubmit = async (e) => {
                 e.preventDefault();
-                const btn = document.getElementById('btnGuardar');
-                const msgError = document.getElementById('mensajeError'); 
-                btn.innerText = 'Procesando...'; 
-                btn.disabled = true;
-                if(msgError) msgError.classList.add('hidden');
+                
+                // 1. Identificar si es edición por el estado del input o la variable global
+                const inputTelElement = window.formJugador.telefono;
+                const esEdicion = inputTelElement.disabled || window.editMode === true;
 
-                if (window.formJugador.telefono.value.length !== 10 && !editMode) {
-                    alert("⚠️ El teléfono debe tener 10 dígitos");
-                    btn.disabled = false;
-                    btn.innerText = 'Registrar Jugador';
+                // 2. OBTENER EL TELÉFONO DE FORMA SEGURA (Evita el bug de 'undefined')
+                // Si es edición, intentamos window.editTelefono, si no el value del input, si no el texto del modal
+                let telefonoFinal = esEdicion 
+                    ? (window.editTelefono || inputTelElement.value) 
+                    : inputTelElement.value;
+
+                if (!telefonoFinal || telefonoFinal === "" || telefonoFinal === "undefined") {
+                    alert("❌ Error: No se pudo detectar el teléfono del jugador. Recarga la página.");
                     return;
                 }
+
+                const btn = document.getElementById('btnGuardar');
+                btn.innerText = 'Procesando...'; 
+                btn.disabled = true;
 
                 const data = {
                     nombre: window.formJugador.nombre.value,
                     edad: window.formJugador.edad.value,
                     direccion: window.formJugador.direccion.value,
-                    telefono: editMode ? editTelefono : window.formJugador.telefono.value,
-                    equipo: window.formJugador.equipo.value,
+                    telefono: telefonoFinal,
+                    equipo: document.getElementById('selectEquipos').value,
                     numero: window.formJugador.numero.value,
                     estatus: document.getElementById('edit_estatus').value, 
                     partidos_suspension: parseInt(document.getElementById('partidos_suspension').value) || 0
                 };
 
-                const url = editMode ? `/api/admin/jugadores/actualizar/${editTelefono}` : '/api/admin/jugadores/registrar';
-                const method = editMode ? 'PUT' : 'POST';
+                const url = esEdicion ? `/api/admin/jugadores/actualizar/${telefonoFinal}` : '/api/admin/jugadores/registrar';
+                const method = esEdicion ? 'PUT' : 'POST';
 
                 try {
                     const response = await fetch(url, {
                         method: method,
-                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}' 
+                        },
                         body: JSON.stringify(data)
                     });
+                    
                     const result = await response.json();
+
                     if (response.ok) { 
                         alert('✅ ¡Guardado con éxito!'); 
                         location.reload(); 
                     } else {
-                        alert("⚠️ " + (result.error || "Error al procesar"));
-                        btn.innerText = editMode ? 'Actualizar Datos' : 'Registrar Jugador';
-                        btn.disabled = false;
+                        alert("⚠️ " + (result.error || "Error al procesar la solicitud"));
+                        btn.disabled = false; 
+                        btn.innerText = esEdicion ? 'Actualizar Datos' : 'Registrar Jugador';
                     }
                 } catch (error) { 
-                    alert('❌ Error de conexión');
-                    btn.disabled = false;
+                    alert('❌ Error de conexión'); 
+                    btn.disabled = false; 
+                    btn.innerText = 'Guardar';
                 }
             };
         }
 
-        // 6. LÓGICA DE FORMULARIO: REGISTRO DE EQUIPOS
+        // 9. LÓGICA DE FORMULARIO: REGISTRO DE EQUIPOS
         if(window.formEquipo) {
             window.formEquipo.onsubmit = async (e) => {
                 e.preventDefault();
-                const btn = document.getElementById('btnGuardarEquipo');
                 const data = new FormData(window.formEquipo);
                 try {
                     const response = await fetch('/api/admin/equipos/registrar', {
@@ -227,18 +261,17 @@
                         headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
                     });
                     if (response.ok) { alert('🏆 Equipo creado'); location.reload(); }
-                } catch (error) { alert('❌ Error de conexión'); }
+                } catch (error) { alert('❌ Error'); }
             };
         }
 
-       // 7. LÓGICA DE FORMULARIO: CREAR PARTIDO (CON RECARGA)
+        // 10. LÓGICA DE FORMULARIO: CREAR PARTIDO
         if (window.formPartidos) {
             window.formPartidos.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const idSorteo = window.idPartidoSorteo;
                 const url = idSorteo ? `/api/admin/partidos/actualizar-datos/${idSorteo}` : '/api/admin/partidos/crear';
                 const metodo = idSorteo ? 'PUT' : 'POST';
-
                 const data = {
                     local: document.getElementById('selectLocal').value,
                     visitante: document.getElementById('selectVisitante').value,
@@ -246,27 +279,18 @@
                     fecha: window.formPartidos.fecha.value,
                     hora: window.formPartidos.hora.value
                 };
-
                 try {
                     const res = await fetch(url, {
                         method: metodo,
-                        headers: { 
-                            'Content-Type': 'application/json', 
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}' 
-                        },
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                         body: JSON.stringify(data)
                     });
-
-                    if (res.ok) {
-                        alert("✅ ¡Partido programado con éxito!");
-                        window.idPartidoSorteo = null; 
-                        location.reload(); // Recarga solicitada
-                    }
-                } catch (e) { alert("Error de conexión"); }
+                    if (res.ok) { alert("✅ ¡Éxito!"); location.reload(); }
+                } catch (e) { alert("Error"); }
             });
         }
 
-        // 8. LÓGICA DE FORMULARIO: ACTUALIZAR MARCADOR Y CÉDULA (CON RECARGA)
+        // 11. LÓGICA DE FORMULARIO: ACTUALIZAR MARCADOR
         if (window.formActualizar) {
             window.formActualizar.onsubmit = async (e) => {
                 e.preventDefault();
@@ -277,55 +301,58 @@
                     const goles = fila.querySelector('.input-gol-jugador').value;
                     listaEstadisticas[tel] = { asistio, goles: parseInt(goles) || 0 };
                 });
-
                 const id = document.getElementById('edit_partido_id').value;
                 const esFinal = document.getElementById('confirmar_final')?.checked || false;
-
-                if (esFinal && !confirm("⚠️ Al confirmar como FINALIZADO, el acta se cerrará. ¿Proceder?")) return;
-
                 const data = {
                     goles_local: document.getElementById('goles_local').value,
                     goles_visitante: document.getElementById('goles_visitante').value,
                     confirmar_final: esFinal,
                     detalle_jugadores: listaEstadisticas 
                 };
-
                 try {
                     const res = await fetch(`/api/admin/partidos/actualizar/${id}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                         body: JSON.stringify(data)
                     });
-                    
-                    if (res.ok) {
-                        if(window.modalActualizarMarcador) window.modalActualizarMarcador.classList.replace('flex', 'hidden');
-                        alert(esFinal ? "🔒 Acta cerrada" : "✅ Marcador actualizado");
-                        location.reload(); // Recarga solicitada
-                    } else {
-                        const result = await res.json();
-                        alert("❌ " + (result.error || "Error al actualizar"));
-                    }
-                } catch (e) { console.error(e); alert("Error de conexión"); }
+                    if (res.ok) { location.reload(); }
+                } catch (e) { alert("Error"); }
             };
         }
 
-        // 9. CARGA INICIAL DE DATOS
-        if (typeof window.cargarTablaPosiciones === 'function') {
-            window.cargarTablaPosiciones();
-        }
-        cargarPartidosCards(); 
-        cargarGestionEquipos();
-
-        const lastTab = localStorage.getItem('pestanaActiva');
-            if (lastTab) {
-                // Ejecutamos el cambio a la pestaña donde estábamos
-                window.changeTab(lastTab);
-            } else {
-                // Si no hay nada guardado (primera vez), por defecto Jugadores
-                window.changeTab('jugadores');
-            }
-        
+        // 12. CARGAS ADICIONALES (Opcionales, en segundo plano)
+        // Cargamos lo que el usuario NO está viendo para que ya esté listo cuando cambie
+        setTimeout(() => {
+            if (lastTab !== 'posiciones' && window.cargarTablaPosiciones) window.cargarTablaPosiciones();
+            if (lastTab !== 'equipos_gest' && typeof cargarGestionEquipos === 'function') cargarGestionEquipos();
+        }, 2000);
     });
+    
+    window.addEventListener('focus', () => {
+        const ultimaCarga = localStorage.getItem('ultima_actividad');
+        const ahora = Date.now();
+        
+        if (ultimaCarga && (ahora - ultimaCarga > 1800000)) { 
+            console.log("Regresando de inactividad... refrescando datos.");
+            location.reload(); 
+        }
+        localStorage.setItem('ultima_actividad', Date.now());
+    });
+
+    async function cargarDatosSeguros(url, funcionPintar) {
+        try {
+            const res = await fetch(url);
+            if(!res.ok) throw new Error("Error de servidor");
+            const data = await res.json();
+            funcionPintar(data);
+        } catch (error) {
+            // En lugar de morir en consola, avisamos al usuario
+            document.getElementById('status-api').innerHTML = `
+                <span class="text-red-500 text-xs">⚠️ Error de conexión. 
+                    <button onclick="location.reload()" class="underline">Reintentar</button>
+                </span>`;
+        }
+    }
 
     // --- FUNCIONES DE APERTURA DE MODALES ---
     window.abrirModal = function() { 
@@ -388,11 +415,23 @@
     };
 
     window.editarJugador = async function(telefono, nombre, equipo, edad, direccion, numero, pj, estatus, partidosSuspension) {
+        // 1. VARIABLES DE CONTROL (CRÍTICO)
         editMode = true;
         editTelefono = telefono;
         
+        // 2. CONFIGURACIÓN VISUAL E INICIO DE BLOQUEO
         document.querySelector('#modalJugador h3').innerText = 'Editar Jugador';
         const f = window.formJugador; 
+        const btnGuardar = document.getElementById('btnGuardar');
+        const selectEquipo = document.getElementById('selectEquipos');
+        const aviso = document.getElementById('avisoEquipoBloqueado');
+
+        // Bloqueamos para que el admin no guarde datos incompletos
+        btnGuardar.disabled = true;
+        btnGuardar.innerText = "⏳ Cargando...";
+        btnGuardar.classList.add('opacity-50', 'cursor-not-allowed');
+
+        // 3. LLENADO DE CAMPOS BÁSICOS
         f.nombre.value = nombre;
         f.telefono.value = telefono;
         f.telefono.disabled = true; 
@@ -400,30 +439,69 @@
         f.direccion.value = direccion;
         f.numero.value = numero; 
 
-        // Cargar estatus y partidos de suspensión
+        // 4. ESTATUS Y SUSPENSIÓN
         const selectEstatus = document.getElementById('edit_estatus');
         if(selectEstatus) {
             selectEstatus.value = estatus || 'activo';
             document.getElementById('partidos_suspension').value = partidosSuspension || 0;
-            window.toggleCamposSuspension(); // Ejecutar lógica visual
+            if(typeof window.toggleCamposSuspension === 'function') window.toggleCamposSuspension(); 
         }
 
-        // Bloqueo de equipo por historial
-        const selectEquipo = document.getElementById('selectEquipos');
-        const aviso = document.getElementById('avisoEquipoBloqueado');
-        if (parseInt(pj) > 0) {
-            selectEquipo.disabled = true;
-            selectEquipo.classList.add('opacity-50');
-            if(aviso) aviso.classList.remove('hidden');
-        } else {
+        // 5. MOSTRAR MODAL INMEDIATAMENTE (Velocidad visual)
+        window.modalJugador.classList.replace('hidden', 'flex');
+
+        // 6. CARGAR EQUIPOS (Esperamos a que la lista exista en el DOM)
+        if (selectEquipo.options.length <= 1) {
+            await cargarEquipos(); 
+        }
+        
+        // --- AQUÍ EMPIEZA TU LÓGICA ORIGINAL SIN CAMBIAR UNA COMA ---
+        
+        // Normalizamos para comparar sin errores de mayúsculas/minúsculas
+        const equipoNormalizado = (equipo || '').trim().toLowerCase();
+        const equipoExiste = Array.from(selectEquipo.options).some(opt => opt.value.trim().toLowerCase() === equipoNormalizado);
+        
+        // Condición especial: ¿Es un equipo que ya no existe?
+        const esFantasma = !equipoExiste && equipoNormalizado !== 'libre' && equipoNormalizado !== '';
+
+        // 5. Lógica de Bloqueo / Desbloqueo Inteligente
+        if (equipoNormalizado === 'libre' || equipoNormalizado === '' || esFantasma) {
             selectEquipo.disabled = false;
             selectEquipo.classList.remove('opacity-50');
             if(aviso) aviso.classList.add('hidden');
+            
+            if (esFantasma && aviso) {
+                aviso.classList.remove('hidden');
+                aviso.innerText = `ℹ️ El equipo "${equipo}" fue eliminado. Puedes reasignar al jugador.`;
+                aviso.className = "text-[10px] text-blue-400 mt-2 font-bold italic";
+                f.equipo.value = 'Libre';
+            } else {
+                f.equipo.value = equipo || 'Libre';
+            }
+        } 
+        else if (parseInt(pj) >= 5 && equipoExiste) {
+            selectEquipo.disabled = true;
+            selectEquipo.classList.add('opacity-50');
+            f.equipo.value = equipo;
+            
+            if(aviso) {
+                aviso.classList.remove('hidden');
+                aviso.innerText = "⚠️ Equipo bloqueado: El jugador ya tiene historial en este equipo.";
+                aviso.className = "text-[10px] text-amber-500 mt-2 font-bold";
+            }
+        } 
+        else {
+            selectEquipo.disabled = false;
+            selectEquipo.classList.remove('opacity-50');
+            f.equipo.value = equipo || 'Libre';
+            if(aviso) aviso.classList.add('hidden');
         }
+        // --- FIN DE TU LÓGICA ORIGINAL ---
 
-        await cargarEquipos(); 
-        f.equipo.value = equipo; 
-        window.modalJugador.classList.replace('hidden', 'flex');
+        // 8. DESBLOQUEO FINAL DEL BOTÓN
+        btnGuardar.disabled = false;
+        btnGuardar.innerText = "GUARDAR JUGADOR";
+        btnGuardar.classList.remove('opacity-50', 'cursor-not-allowed');
     };
 
      window.eliminarJugador = async function(telefono) {

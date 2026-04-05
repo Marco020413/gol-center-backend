@@ -33,13 +33,56 @@ class JugadorController extends Controller
         }
 
         try {
-            // --- VALIDACIÓN DE DORSAL ÚNICO SOLO EN EL MISMO EQUIPO ---
+        // --- PROTECCIÓN EXTRA: Verificar si el teléfono ya existe ---
+        $path = 'jugadores/' . $request->telefono;
+        $jugadorExistente = $this->database->getReference($path)->getSnapshot()->exists();
+
+        if ($jugadorExistente) {
+            return response()->json([
+                'error' => "El número de teléfono ya está registrado. Si quieres cambiar sus datos sin borrar sus goles, usa el modo 'Editar'."
+            ], 422);
+        }
+
+        // --- VALIDACIÓN DE DORSAL (Tu lógica de siempre) ---
+        $jugadores = $this->database->getReference('jugadores')->getValue() ?? [];
+        foreach ($jugadores as $j) {
+            if (isset($j['equipo']) && isset($j['numero'])) {
+                if ($j['equipo'] === $request->equipo && (int)$j['numero'] === (int)$request->numero) {
+                    return response()->json(['error' => "Dorsal ocupado."], 422);
+                }
+            }
+        }
+
+        // Si pasó las pruebas, registramos como nuevo con ceros
+        $this->database->getReference($path)->set([
+            'nombre'              => $request->nombre,
+            'numero'              => (int)$request->numero,
+            'edad'                => $request->edad,
+            'direccion'           => $request->direccion,
+            'equipo'              => $request->equipo,
+            'partidos_jugados'    => 0,
+            'goles'               => 0,
+            'estatus'             => 'activo', 
+            'partidos_suspension' => 0       
+        ]);
+
+        return response()->json(['message' => '¡Registrado con éxito!']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function actualizar(Request $request, $telefono)
+    {
+        try {
+            // --- 1. VALIDACIÓN DE DORSAL ÚNICO (Para que no se repitan en el equipo) ---
             $jugadores = $this->database->getReference('jugadores')->getValue() ?? [];
-            
-            foreach ($jugadores as $j) {
-                // Verificamos que el jugador iterado tenga equipo y número para evitar errores de null
+            foreach ($jugadores as $key => $j) {
+                // Saltamos al jugador que estamos editando
+                if ($key === $telefono) continue;
+
                 if (isset($j['equipo']) && isset($j['numero'])) {
-                    // REGLA: Si el equipo es el mismo Y el número es el mismo -> ERROR
+                    // Si el equipo coincide y el dorsal coincide -> ERROR
                     if ($j['equipo'] === $request->equipo && (int)$j['numero'] === (int)$request->numero) {
                         return response()->json([
                             'error' => "El número {$request->numero} ya está ocupado en el equipo {$request->equipo}."
@@ -48,49 +91,25 @@ class JugadorController extends Controller
                 }
             }
 
-            $path = 'jugadores/' . $request->telefono;
-            $this->database->getReference($path)->set([
-                'nombre'           => $request->nombre,
-                'numero'           => (int)$request->numero,
-                'edad'             => $request->edad,
-                'direccion'        => $request->direccion,
-                'equipo'           => $request->equipo,
-                'partidos_jugados' => 0,
-                'goles'            => 0,
-                'estatus'            => 'activo', // Valor por defecto
-                'partidos_suspension'=> 0       
-            ]);
+            // --- 2. ACTUALIZACIÓN SEGURA (No toca goles ni partidos) ---
+            $jugadorRef = $this->database->getReference('jugadores/' . $telefono);
+            $updateData = [
+                'nombre'              => $request->nombre,
+                'numero'              => (int)$request->numero,
+                'equipo'              => $request->equipo,
+                'edad'                => (int)$request->edad,
+                'direccion'           => $request->direccion,
+                'estatus'             => $request->estatus ?? 'activo',
+                'partidos_suspension' => (int)($request->partidos_suspension ?? 0),
+            ];
 
-            return response()->json(['message' => '¡Registrado con éxito!']);
+            $jugadorRef->update($updateData);
+
+            return response()->json(['message' => '¡Jugador actualizado correctamente!']);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-    public function actualizar(Request $request, $telefono)
-        {
-            try {
-                $jugadorRef = $this->database->getReference('jugadores/' . $telefono);
-                $datosActuales = $jugadorRef->getValue();
-
-                if (!$datosActuales) return response()->json(['error' => 'No existe el jugador'], 404);
-
-                // Actualizamos los datos del jugador (incluyendo los partidos de castigo que pusiste en el modal)
-                $jugadorRef->update([
-                    'nombre'              => $request->nombre,
-                    'numero'              => (int)$request->numero,
-                    'equipo'              => $request->equipo,
-                    'edad'                => $request->edad,
-                    'direccion'           => $request->direccion,
-                    'estatus'             => $request->estatus ?? 'activo',
-                    'partidos_suspension' => (int)($request->partidos_suspension ?? 0)
-                ]);
-
-                return response()->json(['message' => '¡Jugador actualizado!']);
-            } catch (\Exception $e) {
-                return response()->json(['error' => $e->getMessage()], 500);
-            }
-        }
 
     public function listarTodos() {
         $jugadores = $this->database->getReference('jugadores')->getValue();

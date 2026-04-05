@@ -54,7 +54,10 @@
                             @forelse($jugadores as $telefono => $j)
                             <tr class="hover:bg-blue-900/5 transition">
                                 <td class="px-6 py-4">
-                                    <div class="flex flex-col">
+                                    <div class="flex items-center gap-3">
+                                        <div class="size-8 flex-shrink-0 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[15px] font-black text-blue-400">
+                                            {{ $j['numero'] ?? '0' }}
+                                        </div>
                                         <div class="flex items-center gap-2">
                                             <span class="text-white font-bold" data-field="nombre">{{ $j['nombre'] }}</span>
                                             @if(($j['estatus'] ?? 'activo') === 'lesionado')
