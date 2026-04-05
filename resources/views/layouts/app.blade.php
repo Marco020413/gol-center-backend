@@ -116,11 +116,11 @@
             window.changeTab(lastTab);
         }
 
-        // 3. CARGA DE DATOS BASE (SIN BLOQUEO AWAIT)
-        // Se ejecutan en paralelo mientras el usuario ya ve su pestaña
+        // 3. CARGA DE DATOS BASE
         window.llenarSelectsEquipos(); 
         window.llenarSelectsCampos();
         window.recuperarFixtureGuardado();
+        window.verificarProgresoLiguilla();
 
         // 4. SANEADOR DE JUGADORES Y FILTRADO INICIAL
         const sanearYFiltrarTabla = async () => {
@@ -291,9 +291,28 @@
         }
 
         // 11. LÓGICA DE FORMULARIO: ACTUALIZAR MARCADOR
+
         if (window.formActualizar) {
             window.formActualizar.onsubmit = async (e) => {
                 e.preventDefault();
+
+                // 1. Verificar si se marcó cerrar acta
+                const checkCerrar = document.getElementById('confirmar_final'); // O 'confirmar_final' según tu ID de HTML
+                const esFinal = checkCerrar?.checked || false;
+
+                // 2. ALERT DE SEGURIDAD (Solo si esFinal es true)
+                if (esFinal) {
+                    const mensaje = "⚠️ ATENCIÓN: Estás marcando este partido como CERRADO.\n\n" +
+                                "- Se bloqueará la edición futura.\n" +
+                                "- Se sumarán los goles a los jugadores.\n" +
+                                "- Se actualizarán los puntos en la tabla.\n\n" +
+                                "¿Estás seguro de que los datos son correctos?";
+                    
+                    if (!confirm(mensaje)) {
+                        return; // Si el usuario cancela, no se envía nada
+                    }
+                }
+
                 const listaEstadisticas = {};
                 document.querySelectorAll('.fila-jugador-cedula').forEach(fila => {
                     const tel = fila.dataset.telefono;
@@ -301,22 +320,34 @@
                     const goles = fila.querySelector('.input-gol-jugador').value;
                     listaEstadisticas[tel] = { asistio, goles: parseInt(goles) || 0 };
                 });
+
                 const id = document.getElementById('edit_partido_id').value;
-                const esFinal = document.getElementById('confirmar_final')?.checked || false;
                 const data = {
                     goles_local: document.getElementById('goles_local').value,
                     goles_visitante: document.getElementById('goles_visitante').value,
                     confirmar_final: esFinal,
                     detalle_jugadores: listaEstadisticas 
                 };
+
                 try {
                     const res = await fetch(`/api/admin/partidos/actualizar/${id}`, {
                         method: 'PUT',
-                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}' 
+                        },
                         body: JSON.stringify(data)
                     });
-                    if (res.ok) { location.reload(); }
-                } catch (e) { alert("Error"); }
+
+                    if (res.ok) { 
+                        location.reload(); 
+                    } else {
+                        const errorData = await res.json();
+                        alert("⚠️ Error: " + (errorData.error || "No se pudo actualizar"));
+                    }
+                } catch (e) { 
+                    alert("Error de conexión"); 
+                }
             };
         }
 
@@ -326,6 +357,7 @@
             if (lastTab !== 'posiciones' && window.cargarTablaPosiciones) window.cargarTablaPosiciones();
             if (lastTab !== 'equipos_gest' && typeof cargarGestionEquipos === 'function') cargarGestionEquipos();
         }, 2000);
+        
     });
     
     window.addEventListener('focus', () => {
@@ -2087,129 +2119,7 @@
         }
     };
 
-    window.pintarFixtureVisual = function(partidos) {
-        const contenedor = document.getElementById('contenedorFixture');
-        if (!contenedor) return;
-
-        let leyenda = `
-            <div class="flex flex-wrap justify-center gap-4 mb-8 text-[10px] uppercase font-black tracking-widest text-slate-500">
-                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-slate-700"></span> Pendiente</div>
-                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-slate-500"></span> Programado</div>
-                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-red-500 animate-pulse"></span> En Vivo</div>
-                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-emerald-500"></span> Finalizado</div>
-            </div>
-        `;
-
-        contenedor.innerHTML = `
-            <h3 class="text-white font-black uppercase text-center mt-8 mb-4 tracking-tighter text-xl italic">⚽ Torneo de Copa</h3>
-            ${leyenda}
-        `;
-
-        const jornadas = {};
-        partidos.forEach(p => {
-            const jor = p.jornada || 1;
-            if (!jornadas[jor]) jornadas[jor] = [];
-            jornadas[jor].push(p);
-        });
-
-        Object.keys(jornadas).forEach(numJor => {
-            const esFaseFinal = ['OCTAVOS', 'CUARTOS', 'SEMIFINAL', 'FINAL'].includes(String(numJor).toUpperCase());
-            const textoTitulo = isNaN(numJor) ? numJor : `Semana ${numJor}`;
-
-            let htmlJornada = `
-                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl mb-8">
-                    <div class="flex items-center gap-4 mb-6">
-                        <span class="${esFaseFinal ? 'bg-amber-600' : 'bg-blue-600'} text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest"> 
-                            ${textoTitulo} 
-                        </span>
-                        <div class="h-px bg-slate-800 flex-1"></div>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            `;
-
-            jornadas[numJor].forEach(p => {
-                let statusConfig = {
-                    claseBorde: 'border-slate-800/50',
-                    claseBg: 'bg-slate-950/50',
-                    claseTexto: 'text-slate-400',
-                    badge: `<span class="text-[8px] bg-slate-800 text-slate-600 px-2 py-0.5 rounded-md uppercase font-bold">Sin Horario</span>`,
-                    indicador: 'text-slate-700'
-                };
-
-                const estaFinalizado = p.estatus === 'finalizado' || p.resultado_confirmado === true;
-                
-                // --- LÓGICA DE RESALTADO DE GANADOR ---
-                let claseGanadorLocal = "";
-                let claseGanadorVisitante = "";
-                const gl = parseInt(p.goles_local || 0);
-                const gv = parseInt(p.goles_visitante || 0);
-                const mostrarBadgeCampeon = p.jornada === 'FINAL' && p.resultado_confirmado === true && gl !== gv;
-
-                if (estaFinalizado) {
-                    statusConfig.claseBorde = p.jornada === 'FINAL' ? 'border-amber-500/50' : 'border-emerald-500/40';
-                    statusConfig.claseBg = p.jornada === 'FINAL' ? 'bg-amber-500/5' : 'bg-emerald-500/10';
-                    statusConfig.claseTexto = 'text-white';
-                    statusConfig.indicador = 'text-emerald-400 font-black';
-                    statusConfig.badge = `<span class="text-[8px] bg-emerald-600 text-white px-2 py-0.5 rounded-md uppercase font-black">Finalizado</span>`;
-
-                    if (gl > gv) {
-                        claseGanadorLocal = "text-amber-400 font-black scale-110 origin-right";
-                        claseGanadorVisitante = "text-slate-600 font-normal opacity-50";
-                    } else if (gv > gl) {
-                        claseGanadorVisitante = "text-amber-400 font-black scale-110 origin-left";
-                        claseGanadorLocal = "text-slate-600 font-normal opacity-50";
-                    } else {
-                        // Si hay empate, ambos se ven normales (blancos) para no confundir
-                        claseGanadorLocal = "text-white font-bold";
-                        claseGanadorVisitante = "text-white font-bold";
-                    }
-                } 
-                else if (p.estatus === 'en_curso') {
-                    statusConfig.claseBorde = 'border-red-500/50';
-                    statusConfig.claseBg = 'bg-red-500/5';
-                    statusConfig.claseTexto = 'text-white';
-                    statusConfig.indicador = 'text-red-500 animate-pulse';
-                    statusConfig.badge = `<span class="text-[8px] bg-red-600 text-white px-2 py-0.5 rounded-md uppercase font-black animate-pulse">En Vivo</span>`;
-                } 
-                else if (p.fecha && p.hora) {
-                    statusConfig.claseBorde = 'border-slate-600';
-                    statusConfig.claseBg = 'bg-slate-800/40';
-                    statusConfig.claseTexto = 'text-white';
-                    statusConfig.indicador = 'text-blue-500';
-                    statusConfig.badge = `<span class="text-[8px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-md uppercase font-bold">${p.hora} HS</span>`;
-                }
-
-                htmlJornada += `
-                    <button onclick="window.abrirAsignacionRapida('${p.equipo_local}', '${p.equipo_visitante}', '${p.id}')" 
-                            class="w-full flex flex-col gap-1 ${statusConfig.claseBg} p-4 rounded-2xl border ${statusConfig.claseBorde} hover:scale-[1.02] transition-all group relative overflow-hidden">
-                        
-                        ${mostrarBadgeCampeon ? '<div class="absolute -top-1 -right-1 text-[10px] bg-amber-500 text-black px-2 font-black rotate-12 shadow-lg">CAMPEÓN</div>' : ''}
-                        <div class="flex items-center justify-between w-full">
-                            <div class="flex-1 text-right text-[11px] uppercase truncate transition-all ${claseGanadorLocal || statusConfig.claseTexto}">
-                                ${p.equipo_local}
-                            </div>
-                            
-                            <div class="px-4 ${statusConfig.indicador} font-black text-[10px] italic">
-                                ${estaFinalizado ? gl + ' - ' + gv : 'VS'}
-                            </div>
-                            
-                            <div class="flex-1 text-left text-[11px] uppercase truncate transition-all ${claseGanadorVisitante || statusConfig.claseTexto}">
-                                ${p.equipo_visitante}
-                            </div>
-                        </div>
-
-                        <div class="flex justify-center items-center mt-1">
-                            ${statusConfig.badge}
-                        </div>
-                    </button>
-                `;
-            });
-
-            htmlJornada += `</div></div>`;
-            contenedor.innerHTML += htmlJornada;
-        });
-    };
-
+    
     window.limpiarTodo = async function() {
         // 1. Primer aviso de seguridad
         if(!confirm("⚠️ ¿BORRAR TODO? Esta acción eliminará todos los partidos del torneo actual. No se puede deshacer.")) return;
@@ -2330,6 +2240,118 @@
         }
     };
 
+    window.pintarFixtureVisual = function(partidos) {
+        const contenedor = document.getElementById('contenedorFixture');
+        if (!contenedor) return;
+
+        // 1. Cabecera y Leyenda (Sin cambios)
+        let leyenda = `
+            <div class="flex flex-wrap justify-center gap-4 mb-8 text-[10px] uppercase font-black tracking-widest text-slate-500">
+                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-slate-700"></span> Pendiente</div>
+                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-slate-500"></span> Programado</div>
+                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-red-500 animate-pulse"></span> En Vivo</div>
+                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-emerald-500"></span> Finalizado</div>
+            </div>
+        `;
+
+        contenedor.innerHTML = `
+            <h3 class="text-white font-black uppercase text-center mt-8 mb-4 tracking-tighter text-xl italic">⚽ Torneo de Copa</h3>
+            ${leyenda}
+        `;
+
+        // 2. Agrupamiento de jornadas
+        const jornadas = {};
+        partidos.forEach(p => {
+            const jor = p.jornada || 1;
+            if (!jornadas[jor]) jornadas[jor] = [];
+            jornadas[jor].push(p);
+        });
+
+        // --- 3. LÓGICA DE ORDENAMIENTO (EL TRUCO) ---
+        const jerarquiaLiguilla = { 'FINAL': 1, 'SEMIFINAL': 2, 'CUARTOS': 3, 'OCTAVOS': 4 };
+        
+        const jornadasOrdenadas = Object.keys(jornadas).sort((a, b) => {
+            const pesoA = jerarquiaLiguilla[String(a).toUpperCase()] || 99;
+            const pesoB = jerarquiaLiguilla[String(b).toUpperCase()] || 99;
+
+            // Si uno es liguilla y el otro no, la liguilla (menor peso) va primero
+            if (pesoA !== pesoB) return pesoA - pesoB;
+
+            // Si ambos son semanas numéricas, la mayor va primero (Semana 9 -> Semana 1)
+            return parseInt(b) - parseInt(a);
+        });
+
+        // 4. Renderizado siguiendo el nuevo orden
+        jornadasOrdenadas.forEach(numJor => {
+            const esFaseFinal = jerarquiaLiguilla[String(numJor).toUpperCase()];
+            const textoTitulo = isNaN(numJor) ? numJor : `Semana ${numJor}`;
+
+            let htmlJornada = `
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl mb-8">
+                    <div class="flex items-center gap-4 mb-6">
+                        <span class="${esFaseFinal ? 'bg-amber-600' : 'bg-blue-600'} text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-lg"> 
+                            ${textoTitulo} 
+                        </span>
+                        <div class="h-px bg-slate-800 flex-1"></div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            `;
+
+            jornadas[numJor].forEach(p => {
+                // ... (Toda tu lógica de statusConfig, estaFinalizado, gl, gv se queda EXACTAMENTE IGUAL)
+                let statusConfig = {
+                    claseBorde: 'border-slate-800/50',
+                    claseBg: 'bg-slate-950/50',
+                    claseTexto: 'text-slate-400',
+                    badge: `<span class="text-[8px] bg-slate-800 text-slate-600 px-2 py-0.5 rounded-md uppercase font-bold">Sin Horario</span>`,
+                    indicador: 'text-slate-700'
+                };
+
+                const estaFinalizado = p.estatus === 'finalizado' || p.resultado_confirmado === true;
+                let claseGanadorLocal = "";
+                let claseGanadorVisitante = "";
+                const gl = parseInt(p.goles_local || 0);
+                const gv = parseInt(p.goles_visitante || 0);
+                const mostrarBadgeCampeon = p.jornada === 'FINAL' && p.resultado_confirmado === true && gl !== gv;
+
+                if (estaFinalizado) {
+                    statusConfig.claseBorde = p.jornada === 'FINAL' ? 'border-amber-500/50' : 'border-emerald-500/40';
+                    statusConfig.claseBg = p.jornada === 'FINAL' ? 'bg-amber-500/5' : 'bg-emerald-500/10';
+                    statusConfig.claseTexto = 'text-white';
+                    statusConfig.indicador = 'text-emerald-400 font-black';
+                    statusConfig.badge = `<span class="text-[8px] bg-emerald-600 text-white px-2 py-0.5 rounded-md uppercase font-black">Finalizado</span>`;
+                    if (gl > gv) { claseGanadorLocal = "text-amber-400 font-black scale-110 origin-right"; claseGanadorVisitante = "text-slate-600 font-normal opacity-50"; }
+                    else if (gv > gl) { claseGanadorVisitante = "text-amber-400 font-black scale-110 origin-left"; claseGanadorLocal = "text-slate-600 font-normal opacity-50"; }
+                } else if (p.estatus === 'en_curso') {
+                    statusConfig.claseBorde = 'border-red-500/50'; statusConfig.claseBg = 'bg-red-500/5';
+                    statusConfig.claseTexto = 'text-white'; statusConfig.indicador = 'text-red-500 animate-pulse';
+                    statusConfig.badge = `<span class="text-[8px] bg-red-600 text-white px-2 py-0.5 rounded-md uppercase font-black animate-pulse">En Vivo</span>`;
+                } else if (p.fecha && p.hora) {
+                    statusConfig.claseBorde = 'border-slate-600'; statusConfig.claseBg = 'bg-slate-800/40';
+                    statusConfig.claseTexto = 'text-white'; statusConfig.indicador = 'text-blue-500';
+                    statusConfig.badge = `<span class="text-[8px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-md uppercase font-bold">${p.hora} HS</span>`;
+                }
+
+                htmlJornada += `
+                    <button onclick="window.abrirAsignacionRapida('${p.equipo_local}', '${p.equipo_visitante}', '${p.id}')" 
+                            class="w-full flex flex-col gap-1 ${statusConfig.claseBg} p-4 rounded-2xl border ${statusConfig.claseBorde} hover:scale-[1.02] transition-all group relative overflow-hidden">
+                        ${mostrarBadgeCampeon ? '<div class="absolute -top-1 -right-1 text-[10px] bg-amber-500 text-black px-2 font-black rotate-12 shadow-lg">CAMPEÓN</div>' : ''}
+                        <div class="flex items-center justify-between w-full">
+                            <div class="flex-1 text-right text-[11px] uppercase truncate ${claseGanadorLocal || statusConfig.claseTexto}">${p.equipo_local}</div>
+                            <div class="px-4 ${statusConfig.indicador} font-black text-[10px] italic">${estaFinalizado ? gl + ' - ' + gv : 'VS'}</div>
+                            <div class="flex-1 text-left text-[11px] uppercase truncate ${claseGanadorVisitante || statusConfig.claseTexto}">${p.equipo_visitante}</div>
+                        </div>
+                        <div class="flex justify-center items-center mt-1">${statusConfig.badge}</div>
+                    </button>
+                `;
+            });
+
+            htmlJornada += `</div></div>`;
+            contenedor.innerHTML += htmlJornada;
+        });
+    };
+
+
      // --- 1. RECUPERAR FIXTURE ---
     window.recuperarFixtureGuardado = async function() {
         try {
@@ -2338,21 +2360,31 @@
             const partidos = Object.keys(partidosData).map(id => ({ id, ...partidosData[id] }));
 
             if (partidos.length > 0) {
-                window.pintarFixtureVisual(partidos);
+                // --- 1. SEPARAR Y ORDENAR GRUPOS ---
+                const ordenLiguilla = { 'FINAL': 1, 'SEMIFINAL': 2, 'CUARTOS': 3, 'OCTAVOS': 4 };
+
+                // Grupo A: Liguilla (Ordenada por importancia)
+                const liguilla = partidos
+                    .filter(p => ordenLiguilla[String(p.jornada).toUpperCase()])
+                    .sort((a, b) => ordenLiguilla[String(a.jornada).toUpperCase()] - ordenLiguilla[String(b.jornada).toUpperCase()]);
+
+                // Grupo B: Fase Regular (Ordenada de Semana mayor a menor)
+                const regular = partidos
+                    .filter(p => !ordenLiguilla[String(p.jornada).toUpperCase()])
+                    .sort((a, b) => parseInt(b.jornada) - parseInt(a.jornada));
+
+                // Unimos ambos: Primero Liguilla, luego Regular
+                const partidosOrdenadosFinal = [...liguilla, ...regular];
+
+                // 2. Pintamos con el nuevo orden UX
+                window.pintarFixtureVisual(partidosOrdenadosFinal);
                 
-                // --- NUEVA LÓGICA AUTOMÁTICA ---
-                
-                // 1. Verificar si terminó la Fase Regular (para crear Octavos, Cuartos o Semis)
-                const tieneLiguilla = partidos.some(p => ['OCTAVOS', 'CUARTOS', 'SEMIFINAL', 'FINAL'].includes(p.jornada));
-                
+                // --- LÓGICA AUTOMÁTICA (INTACTA) ---
+                const tieneLiguilla = liguilla.length > 0;
                 if (!tieneLiguilla) {
-                    // Si no hay liguilla aún, checamos si ya terminó la fase regular
-                    const pendientesRegulares = partidos.filter(p => p.estatus !== 'finalizado');
-                    if (pendientesRegulares.length === 0) {
-                        await window.verificarFinFaseRegular();
-                    }
+                    const pendientesRegulares = regular.filter(p => p.estatus !== 'finalizado');
+                    if (pendientesRegulares.length === 0) await window.verificarFinFaseRegular();
                 } else {
-                    // 2. Si ya hay liguilla, verificar si la fase actual terminó para saltar a la siguiente
                     await window.verificarProgresoLiguilla();
                 }
             }
@@ -2392,7 +2424,11 @@
     };
     
     // --- 3. PROCESADOR DE LIGUILLA ---
+    window.isGenerandoLiguilla = false;
+
     window.prepararYGenerarLiguilla = async function(partidosActuales) {
+        if (window.isGenerandoLiguilla) return; // Si ya hay uno en marcha, abortamos
+        
         console.log("Calculando inicio de liguilla...");
 
         const calcularTablaLocal = (partidos) => {
@@ -2414,18 +2450,17 @@
         const tabla = calcularTablaLocal(partidosActuales);
         if (tabla.length < 2) return alert("No hay suficientes equipos con actas cerradas.");
 
-        // Determinamos cuántos clasifican
-        let clasificadosCount = 2;
-        if (tabla.length >= 16) clasificadosCount = 16;
-        else if (tabla.length >= 8) clasificadosCount = 8;
-        else if (tabla.length >= 4) clasificadosCount = 4;
+        let clasificadosCount = 0;
+        let nombreFase = '';
+
+        if (tabla.length >= 16) { clasificadosCount = 16; nombreFase = 'OCTAVOS'; } 
+        else if (tabla.length >= 8) { clasificadosCount = 8; nombreFase = 'CUARTOS'; } 
+        else if (tabla.length >= 4) { clasificadosCount = 4; nombreFase = 'SEMIFINAL'; } 
+        else if (tabla.length >= 2) { clasificadosCount = 2; nombreFase = 'FINAL'; }
+
+        if (clasificadosCount === 0) return alert("No hay suficientes equipos para generar liguilla.");
 
         const clasificados = tabla.slice(0, clasificadosCount);
-        let nombreFase = 'FINAL';
-        if (clasificadosCount === 16) nombreFase = 'OCTAVOS';
-        if (clasificadosCount === 8) nombreFase = 'CUARTOS';
-        if (clasificadosCount === 4) nombreFase = 'SEMIFINAL';
-
         const llaves = [];
         for (let i = 0; i < clasificadosCount / 2; i++) {
             llaves.push({
@@ -2441,24 +2476,33 @@
 
 
     // Función auxiliar para enviar los partidos generados
-    window.enviarLiguilla = async function(llaves) {
-        try {
-            const res = await fetch('/api/admin/partidos/generar-liguilla', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({ partidos: llaves })
-            });
+   window.enviarLiguilla = async function(llaves) {
+  
+    if (window.isGenerandoLiguilla) return;
 
-            if(res.ok) {
-                alert("🏆 Siguiente fase generada con éxito");
-                location.reload();
-            }
-        } catch (err) {
-            console.error("Error al enviar liguilla:", err);
+    try {
+        window.isGenerandoLiguilla = true; // ACTIVAMOS EL CANDADO
+
+        const res = await fetch('/api/admin/partidos/generar-liguilla', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ partidos: llaves })
+        });
+
+        if(res.ok) {
+            alert("🏆 Siguiente fase generada con éxito");
+            location.reload(); 
+        } else {
+            window.isGenerandoLiguilla = false; // Si falló el servidor, liberamos para reintentar
+            alert("Error al generar liguilla");
         }
+    } catch (err) {
+        window.isGenerandoLiguilla = false; // Si hubo error de red, liberamos
+        console.error("Error al enviar liguilla:", err);
+    }
     };
 
     
@@ -2517,13 +2561,10 @@
         if (faseActual === 'FINAL') {
             const pFinal = lista.find(p => String(p.jornada).toUpperCase() === 'FINAL');
             if (pFinal && pFinal.resultado_confirmado) {
-                // 1. Determinar ganador
                 const gl = parseInt(pFinal.goles_local || 0);
                 const gv = parseInt(pFinal.goles_visitante || 0);
                 const campeon = gl > gv ? pFinal.equipo_local : pFinal.equipo_visitante;
 
-                // 2. Guardar historial (Solo si no se ha guardado ya este torneo)
-                // Usamos un flag en localStorage para no repetir la petición en cada recarga
                 const idTorneoActual = "torneo_" + new Date().getFullYear(); 
                 if (localStorage.getItem('torneo_finalizado') !== idTorneoActual) {
                     await window.archivarTorneo(campeon, lista);
@@ -2541,10 +2582,18 @@
 
         if (todosTerminados) {
             const siguienteFase = fasesOrder[fasesOrder.indexOf(faseActual) + 1];
-            if (lista.some(p => String(p.jornada).toUpperCase() === siguienteFase)) return;
 
+            // --- BLOQUE DE SEGURIDAD ANTI-DUPLICADOS ---
+            // Si ya existen partidos registrados con el nombre de la siguiente fase, abortamos.
+            if (lista.some(p => String(p.jornada).toUpperCase() === siguienteFase)) {
+                console.log(`🚀 La fase ${siguienteFase} ya está generada. Deteniendo ejecución doble.`);
+                return; 
+            }
+
+            // Solo si NO existe la siguiente fase, pedimos confirmación
             if (confirm(`🔥 Fase de ${faseActual} terminada. ¿Generar llaves de ${siguienteFase}?`)) {
                 const ganadores = partidosDeFase.map(p => {
+                    // Lógica de desempate simple: el que metió más goles o el local por posición (según tu código)
                     return (parseInt(p.goles_local || 0) >= parseInt(p.goles_visitante || 0)) ? p.equipo_local : p.equipo_visitante;
                 });
 
@@ -2554,9 +2603,16 @@
                         equipo_local: ganadores[i * 2],
                         equipo_visitante: ganadores[i * 2 + 1],
                         jornada: siguienteFase,
-                        estatus: 'programado'
+                        estatus: 'programado',
+                        fecha: 'PENDIENTE',
+                        hora: '00:00',
+                        goles_local: 0,
+                        goles_visitante: 0,
+                        resultado_confirmado: false
                     });
                 }
+                
+                // Llamamos a la función de envío que ya tiene el candado 'isGenerandoLiguilla'
                 await window.enviarLiguilla(nuevasLlaves);
             }
         }
@@ -2797,9 +2853,11 @@
 
         } catch (e) { console.error("Error modal historial:", e); }
     };
+
     window.cerrarModalHistorial = function() {
         document.getElementById('modalDetallesHistorial').classList.add('hidden');
     };
+    
 </script>
 </body>
 </html>
