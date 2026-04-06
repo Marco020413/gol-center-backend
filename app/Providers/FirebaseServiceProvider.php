@@ -10,16 +10,16 @@ class FirebaseServiceProvider extends ServiceProvider
     public function register()
     {
         $this->app->singleton('firebase', function ($app) {
-            $credentials = env('FIREBASE_CREDENTIALS');
+            $credentials = env('FIREBASE_JSON');
+
             $factory = (new Factory);
 
-            // Validamos si la variable es un JSON (Railway) o una ruta (Local)
-            if (str_starts_with($credentials, '{')) {
-                // Es un JSON directo, lo decodificamos
-                $factory = $factory->withServiceAccount(json_decode($credentials, true));
+            if ($credentials && str_starts_with(trim($credentials), '{')) {
+                $jsonConfig = json_decode(trim($credentials), true);
+                $factory = $factory->withServiceAccount($jsonConfig);
             } else {
-                // Es una ruta de archivo, usamos base_path
-                $factory = $factory->withServiceAccount(base_path($credentials));
+                $path = env('FIREBASE_CREDENTIALS', 'storage/app/firebase-auth.json');
+                $factory = $factory->withServiceAccount(base_path($path));
             }
 
             return $factory->withDatabaseUri(env('FIREBASE_DATABASE_URL'));
@@ -33,7 +33,7 @@ class FirebaseServiceProvider extends ServiceProvider
             return $app->make('firebase')->createAuth();
         });
     }
-    
+
     public function boot()
     {
         //
