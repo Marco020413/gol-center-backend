@@ -5,7 +5,7 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use Kreait\Firebase\Factory;
 
-class FirebaseServiceProvider extends ServiceProvider
+class FirebaseConnProvider extends ServiceProvider
 {
     public function register()
     {

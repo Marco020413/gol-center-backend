@@ -18,7 +18,7 @@ class FirebaseAuth
         }
 
         try {
-            // 2. Usamos el servicio que registramos en el FirebaseServiceProvider
+            // 2. Usamos el servicio que registramos en el FirebaseConnProvider
             $auth = app('firebase.auth');
             $verifiedIdToken = $auth->verifyIdToken($token);
             

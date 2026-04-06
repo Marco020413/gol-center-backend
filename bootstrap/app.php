@@ -6,7 +6,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withProviders([
-        \App\Providers\FirebaseServiceProvider::class,
+        \App\Providers\FirebaseConnProvider::class,
     ])
 
     ->withRouting(
