@@ -7,6 +7,7 @@
 [phases.build]
     cmds = [
         'composer install --optimize-autoloader --no-interaction --ignore-platform-reqs',
+        'rm -f bootstrap/cache/*.php',
         'php artisan config:clear', 
         'php artisan cache:clear',
     ]
