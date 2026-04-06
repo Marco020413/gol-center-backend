@@ -9,5 +9,4 @@
         'composer install --optimize-autoloader --no-interaction --ignore-platform-reqs',
         'php artisan config:clear', 
         'php artisan cache:clear',
-        'chmod -R 775 storage bootstrap/cache'
     ]
