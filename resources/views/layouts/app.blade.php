@@ -84,6 +84,22 @@
     // ═══════════════════════════════════════════════════════════════════════════════
     // SECCIÓN 1: UTILIDADES (Helpers)
     // ═══════════════════════════════════════════════════════════════════════════════
+    // ChangeTab: Disponible inmediatamente para los botones del HTML
+    window.changeTab = function(tabName) {
+        localStorage.setItem('pestanaActiva', tabName);
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+        document.querySelectorAll('.tab-btn').forEach(b => {
+            b.classList.remove('text-blue-500', 'border-b-2', 'border-blue-500');
+            b.classList.add('text-slate-500');
+        });
+        const target = document.getElementById('content-' + tabName);
+        if(target) target.classList.remove('hidden');
+        const btnActivo = document.getElementById('btn-tab-' + tabName);
+        if(btnActivo) {
+            btnActivo.classList.remove('text-slate-500');
+            btnActivo.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
+        }
+    };
     
     // Debounce: Evita excesivas llamadas durante búsquedas
     function debounce(func, wait) {
@@ -645,63 +661,10 @@
             if(editMode) select.value = currentVal;
         } catch (e) { console.error("Error:", e); }
     }
-    
-    window.changeTab = function(tabName) {
-        // 1. Guardar en memoria el nombre de la pestaña
-        localStorage.setItem('pestanaActiva', tabName);
 
-        // 2. Ocultar todos los paneles
-        document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
-        
-        // 3. Resetear estilos de TODOS los botones
-        document.querySelectorAll('.tab-btn').forEach(b => {
-            b.classList.remove('text-blue-500', 'border-b-2', 'border-blue-500');
-            b.classList.add('text-slate-500');
-        });
-
-        // 4. Mostrar el panel objetivo
-        const target = document.getElementById('content-' + tabName);
-        if(target) target.classList.remove('hidden');
-
-        // 5. Activar estilo del botón (Validación robusta)
-        const btnId = 'btn-tab-' + tabName;
-        const btnActivo = document.getElementById(btnId);
-        
-        if(btnActivo) {
-            btnActivo.classList.remove('text-slate-500');
-            btnActivo.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
-        }
-
-        // --- CARGA DE DATOS SEGÚN PESTAÑA ---
-        const ahora = Date.now();
-        const necesitaCarga = !ultimaCarga[tabName] || (ahora - ultimaCarga[tabName] > 10000);
-
-        if (necesitaCarga) {
-            switch(tabName) {
-                case 'partidos': 
-                    window.limitePartidos = 5;
-                    if(typeof cargarPartidosCards === 'function') cargarPartidosCards(); 
-                    break;
-                case 'posiciones': 
-                    if(window.cargarTablaPosiciones) window.cargarTablaPosiciones(); 
-                    break;
-                case 'equipos_gest': 
-                    if(typeof cargarGestionEquipos === 'function') cargarGestionEquipos(); 
-                    break;
-                case 'roles': 
-                    if(typeof recuperarFixtureGuardado === 'function') recuperarFixtureGuardado(); 
-                    break;
-                case 'campos':
-                    if(typeof cargarCamposCards === 'function') cargarCamposCards();
-                    break;
-                case 'historial':
-                    if(typeof cargarHistorialSaloDeLaFama === 'function') cargarHistorialSaloDeLaFama();
-                    break;
-                }
-            ultimaCarga[tabName] = ahora;
-        }
-    };
-
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // SECCIÓN 10: HISTORIAL (Salón de la Fama)
+    // ═══════════════════════════════════════════════════════════════════════════════
     async function cargarGaleriaEscudos() {
         const contenedor = document.getElementById('contenedorEscudos');
         if(!contenedor) return;
@@ -814,19 +777,6 @@
             alert('❌ Error de conexión');
             btn.disabled = false;
             btn.innerText = 'Guardar Equipo';
-        }
-    }
-
-    // Limpiar el modal al abrir para "Nuevo Equipo"
-        function abrirModalEquipo() { 
-            if(!editMode) {
-                document.getElementById('formRegistroEquipo').reset();
-                document.getElementById('equipo_id_edit').value = '';
-                document.getElementById('tituloModalEquipo').innerText = 'Nuevo Equipo';
-                document.getElementById('previewContenedor').classList.add('hidden');
-            }
-            window.modalEquipo.classList.replace('hidden', 'flex'); 
-            cargarGaleriaEscudos(); 
         }
     };
 
