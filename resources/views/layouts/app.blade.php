@@ -81,12 +81,45 @@
     </footer>
 
     <script>
-    // Variables globales para el estado
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // SECCIÓN 1: UTILIDADES (Helpers)
+    // ═══════════════════════════════════════════════════════════════════════════════
+    
+    // Debounce: Evita excesivas llamadas durante búsquedas
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    // Intersection Observer: Lazy loading automático
+    const observerJugadores = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting && window.cargarMasJugadores) window.cargarMasJugadores();
+        });
+    }, { rootMargin: '100px' });
+
+    const observerPartidos = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting && window.cargarMasPartidos) window.cargarMasPartidos();
+        });
+    }, { rootMargin: '100px' });
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // SECCIÓN 2: VARIABLES DE ESTADO
+    // ═══════════════════════════════════════════════════════════════════════════════
     let editMode = false;
     let editTelefono = null;
     let cachePartidos = [];
     let cachePartidosLista = []; 
     let editCampoId = null;
+    let verificandoLiguilla = false;
     let ultimaCarga = {};
     let equiposCargados = false; 
     let limitePartidos = 5;
@@ -95,8 +128,10 @@
     let limiteJugadores = 15;
     let cacheHistorialCompleto = null;
 
-        // LISTENERS Y CONFIGURACIONES INICIALES
-    document.addEventListener('DOMContentLoaded', () => { 
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // SECCIÓN 3: INICIALIZACIÓN (DOMContentLoaded)
+    // ═══════════════════════════════════════════════════════════════════════════════
+    document.addEventListener('DOMContentLoaded', async () => { 
 
 
         window.modalJugador = document.getElementById('modalJugador');
@@ -116,7 +151,20 @@
             window.changeTab(lastTab);
         }
 
-        // 3. CARGA DE DATOS BASE
+        // 3. CARGA DE DATOS BASE (OPTIMIZADO: Parallel + Caching)
+        // Cargar todos los datos base en paralelo una sola vez al inicio
+        const datosBase = await Promise.all([
+            fetch('/api/equipos').then(r => r.json()).catch(() => ({})),
+            fetch('/api/campos').then(r => r.json()).catch(() => ({})),
+            fetch('/api/partidos').then(r => r.json()).catch(() => ({}))
+        ]);
+        
+        // Guardar en caché global para reuse
+        window.cacheEquiposData = datosBase[0];
+        window.cacheCamposData = datosBase[1];
+        window.cachePartidosData = datosBase[2];
+        
+        // Procesar datos base
         window.llenarSelectsEquipos(); 
         window.llenarSelectsCampos();
         window.recuperarFixtureGuardado();
@@ -150,20 +198,22 @@
         };
         setTimeout(sanearYFiltrarTabla, 300);
 
-        // 5. LISTENERS DE BÚSQUEDA Y FILTROS
+        // 5. LISTENERS DE BÚSQUEDA Y FILTROS (con debounce)
         const inputBusqueda = document.getElementById('busquedaJugador');
         const selectFiltroEquipo = document.getElementById('filtroEquipo');
+        
+        // Función de filtrado con reset de paginación
+        const ejecutarFiltro = () => {
+            window.limiteJugadores = 15;
+            if (typeof filtrarTabla === 'function') filtrarTabla();
+        };
+        
         if (inputBusqueda) {
-            inputBusqueda.addEventListener('input', () => { 
-                window.limiteJugadores = 15;
-                if (typeof filtrarTabla === 'function') filtrarTabla();
-            });
+            // Aplicar debounce de 300ms para búsquedas en vivo
+            inputBusqueda.addEventListener('input', debounce(ejecutarFiltro, 300));
         }
         if (selectFiltroEquipo) {
-            selectFiltroEquipo.addEventListener('change', () => { 
-                window.limiteJugadores = 15;
-                if (typeof filtrarTabla === 'function') filtrarTabla();
-            });
+            selectFiltroEquipo.addEventListener('change', ejecutarFiltro);
         }
 
         // 6. FUNCIÓN PARA ABRIR MODAL CREAR PARTIDO
@@ -386,7 +436,9 @@
         }
     }
 
-    // --- FUNCIONES DE APERTURA DE MODALES ---
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // SECCIÓN 4: MODALES (Abrir/Cerrar)
+    // ═══════════════════════════════════════════════════════════════════════════════
     window.abrirModal = function() { 
         document.querySelector('#modalJugador h3').innerText = 'Nuevo Jugador';
         document.getElementById('btnGuardar').innerText = 'Registrar Jugador :)';
@@ -433,8 +485,10 @@
             modal.classList.add('hidden');
         }
     };
-    // --- FUNCIONES GLOBALES ---
 
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // SECCIÓN 5: JUGADORES (CRUD, edición, filtros)
+    // ═══════════════════════════════════════════════════════════════════════════════
     window.toggleCamposSuspension = function() {
         const estatus = document.getElementById('edit_estatus').value;
         const contenedor = document.getElementById('contenedorPartidosSuspension');
@@ -648,11 +702,6 @@
         }
     };
 
-    function abrirModalEquipo() { 
-        window.modalEquipo.classList.replace('hidden', 'flex'); 
-        cargarGaleriaEscudos(); 
-    }
-
     async function cargarGaleriaEscudos() {
         const contenedor = document.getElementById('contenedorEscudos');
         if(!contenedor) return;
@@ -779,8 +828,11 @@
             window.modalEquipo.classList.replace('hidden', 'flex'); 
             cargarGaleriaEscudos(); 
         }
-    
-    // 1. CARGAR LISTA (Actualizado para que el botón de editar funcione con tu HTML)
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // SECCIÓN 7: EQUIPOS (CRUD, gestión, escudos)
+    // ═══════════════════════════════════════════════════════════════════════════════
     async function cargarGestionEquipos() {
         const contenedor = document.getElementById('listaEquiposCards');
         if(!contenedor) return;
@@ -833,22 +885,6 @@
         } catch (e) { console.error(e); }
     };
 
-    // 2. EDITAR EQUIPO (Corregido el error de innerText)
-    async function editarEquipo(id, nombre, escudo) {
-        editMode = true;
-        const titulo = document.getElementById('tituloModalEquipo');
-        if(titulo) titulo.innerText = 'Editar Equipo';
-        
-        document.getElementById('equipo_id_edit').value = id;
-        document.getElementById('nombreEquipoInput').value = nombre;
-        
-        // Mostramos el escudo actual en la vista previa
-        mostrarPreview(escudo, nombre);
-        
-        window.modalEquipo.classList.replace('hidden', 'flex');
-        cargarGaleriaEscudos();
-    }
-
     // 3. ELIMINAR SEGURO (Mantenemos tu versión exhaustiva)
     async function eliminarEquipoExhaustivo(id, nombre) {
         if(!confirm(`⚠️ ¿Seguro que quieres borrar a "${nombre}"?`)) return;
@@ -867,7 +903,14 @@
         }
     }
     
-    
+    // Inicializar observer para lazy loading
+    function inicializarObserverJugadores() {
+        const btnContenedor = document.getElementById('btnContenedorJugadores');
+        if (btnContenedor) {
+            observerJugadores.observe(btnContenedor);
+        }
+    }
+
     function filtrarTabla() {
         const busqueda = document.getElementById('busquedaJugador').value.toLowerCase().trim();
         const equipoFiltro = document.getElementById('filtroEquipo').value; 
@@ -878,8 +921,8 @@
 
         const filas = Array.from(tablaBody.querySelectorAll('tr'));
 
-        // 1. PRIMERA PASADA: Identificar quiénes cumplen con el filtro
-        let filasQueCumplen = filas.filter(fila => {
+        // 1. FILTRAR usando filter (más eficiente)
+        const filasQueCumplen = filas.filter(fila => {
             const nombreContenedor = fila.querySelector('[data-field="nombre"]');
             const nombreCompletoTexto = nombreContenedor?.innerText.toUpperCase() || "";
             const nombreSolo = nombreContenedor?.innerText.toLowerCase() || "";
@@ -918,17 +961,28 @@
             return a.querySelector('[data-field="nombre"]').innerText.localeCompare(b.querySelector('[data-field="nombre"]').innerText);
         });
 
-        // 3. APLICAR VISIBILIDAD Y LÍMITE
-        filas.forEach(f => f.style.display = "none"); // Ocultamos todas primero
-
-        // Solo mostramos las que cumplen, hasta el límite actual
-        filasQueCumplen.slice(0, limiteJugadores).forEach(f => {
-            f.style.display = "";
-            tablaBody.appendChild(f); // Re-inyectar para mantener el orden visual
+        // OPTIMIZADO: Usar DocumentFragment para minimizar reflows
+        const fragment = document.createDocumentFragment();
+        
+        // Ocultar todas las filas primero (solo cambiar display, no mover nodos)
+        filas.forEach(f => {
+            f.style.display = 'none';
+            f.dataset.visible = 'false';
         });
 
-        // 4. GESTIONAR BOTÓN "MOSTRAR MÁS"
+        // Mostrar solo las que cumplen el filtro, hasta el límite
+        filasQueCumplen.slice(0, limiteJugadores).forEach(f => {
+            f.style.display = '';
+            f.dataset.visible = 'true';
+            fragment.appendChild(f); // Re-ordenar en el fragment
+        });
+
+        // Aplicar todos los cambios de una vez
+        tablaBody.appendChild(fragment);
+
+        // 3. GESTIONAR BOTÓN "MOSTRAR MÁS" y reiniciar observer
         gestionarBotonVerMasJugadores(filasQueCumplen.length);
+        inicializarObserverJugadores();
     }
     
 
@@ -966,22 +1020,17 @@
     window.cargarMasJugadores = function() {
         limiteJugadores += 15;
         filtrarTabla();
+        // Desconectar el observer después de cargar para evitar más llamadas innecesarias
+        if (limiteJugadores >= document.querySelectorAll('#content-jugadores tbody tr[data-visible="true"]').length) {
+            observerJugadores.disconnect();
+        }
     };
 
-    window.verMenosJugadores = function() {
+window.verMenosJugadores = function() {
         limiteJugadores = 15;
         filtrarTabla();
         document.getElementById('content-jugadores').scrollIntoView({ behavior: 'smooth' });
     };
-
-   function abrirModalCrearPartido() {
-        const modal = document.getElementById('modalCrearPartido');
-        if (modal) {
-            modal.classList.replace('hidden', 'flex');
-            llenarSelectsEquipos(); 
-            llenarSelectsCampos();
-        }
-    }
 
     window.cerrarModalCrearPartido = function() {
         const modal = document.getElementById('modalCrearPartido');
@@ -1009,35 +1058,36 @@
         if (!selectLocal || !selectVisitante) return;
 
         try {
-            // SI NO HAY CACHÉ, HACEMOS EL FETCH UNA SOLA VEZ
-            if (!cacheEquiposData) {
+            // USAR CACHÉ GLOBAL SI ESTÁ DISPONIBLE (ya cargado al inicio)
+            if (!window.cacheEquiposData && !cacheEquiposData) {
                 const res = await fetch('/api/equipos');
                 cacheEquiposData = await res.json();
             }
+            const datos = window.cacheEquiposData || cacheEquiposData;
 
             const selects = [selectLocal, selectVisitante];
             selects.forEach(s => {
                 const currentVal = s.value;
                 s.innerHTML = '<option value="">Selecciona un club</option>';
-                for (const id in cacheEquiposData) {
+                for (const id in datos) {
                     const opt = document.createElement('option');
-                    opt.value = cacheEquiposData[id].nombre;
-                    opt.textContent = cacheEquiposData[id].nombre.toUpperCase();
+                    opt.value = datos[id].nombre;
+                    opt.textContent = datos[id].nombre.toUpperCase();
                     s.appendChild(opt);
                 }
                 if(currentVal) s.value = currentVal;
             });
         } catch (e) { console.error("Error al llenar selects:", e); }
     };
-    
 
-    // --- FUNCIONES GLOBALES ---
-
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // SECCIÓN 6: PARTIDOS (CRUD, filtros, estadísticas)
+    // ═══════════════════════════════════════════════════════════════════════════════
     async function cargarPartidosCards() {
         const contenedor = document.getElementById('contenedorListaPartidos');
         if (!contenedor) return;
 
-        // Feedback visual inmediato para mejorar la percepción de velocidad
+        // Feedback visual inmediato
         contenedor.innerHTML = `
             <div class="col-span-full py-20 text-center animate-pulse">
                 <div class="text-blue-500 font-black text-xs uppercase tracking-[0.3em]">Sincronizando Calendario...</div>
@@ -1045,14 +1095,17 @@
         `;
 
         try {
-            const res = await fetch('/api/partidos');
+            // USAR CACHÉ GLOBAL SI ESTÁ DISPONIBLE
+            let partidos;
+            if (window.cachePartidosData) {
+                partidos = window.cachePartidosData;
+            } else {
+                const res = await fetch('/api/partidos');
+                if (!res.ok) throw new Error("Error en servidor");
+                partidos = await res.json();
+                window.cachePartidosData = partidos; // Guardar en cache
+            }
             
-            // Si el servidor falla (Error 500), lanzamos error para el catch
-            if (!res.ok) throw new Error("Error en servidor");
-
-            const partidos = await res.json();
-            
-            // Protección contra datos vacíos
             if (!partidos || Object.keys(partidos).length === 0) {
                 contenedor.innerHTML = '<p class="text-slate-500 italic text-center py-10">No hay partidos programados.</p>';
                 return;
@@ -1210,6 +1263,8 @@
                         <span>➕ Cargar siguientes 5</span>
                         <span class="bg-blue-400/30 px-2 py-0.5 rounded-lg text-[8px]">${totalEncontrados - window.limitePartidos} restantes</span>
                     </button>
+                    <!-- Sentinel para Intersection Observer -->
+                    <div class="sentinel-partidos" data-total="${totalEncontrados}" data-actual="${window.limitePartidos}"></div>
                 `;
             }
 
@@ -1226,7 +1281,16 @@
         }
 
         contenedor.innerHTML = html;
+        inicializarObserverPartidos();
     };
+
+    function inicializarObserverPartidos() {
+        const contenedor = document.getElementById('contenedorListaPartidos');
+        const sentinel = contenedor?.querySelector('.sentinel-partidos');
+        if (sentinel) {
+            observerPartidos.observe(sentinel);
+        }
+    }
 
     // Funciones de control global
     window.cargarMasPartidos = function() {
@@ -1238,6 +1302,7 @@
         window.limitePartidos = 5;
         aplicarFiltrosPartidos();
         document.getElementById('content-partidos').scrollTo({ top: 0, behavior: 'smooth' });
+        inicializarObserverPartidos();
     };
 
     window.cerrarModalDetalle = function() {
@@ -1362,11 +1427,7 @@
 
    
     
-    function abrirModalCrearPartido() { window.modalCrearPartido.classList.replace('hidden', 'flex'); llenarSelectsEquipos(); }
-    function cerrarModalCrearPartido() { window.modalCrearPartido.classList.replace('flex', 'hidden'); }
-    
-    
-    async function llenarSelectsEquipos() {
+async function llenarSelectsEquipos() {
         const res = await fetch('/api/equipos');
         const equipos = await res.json();
         const selects = [document.getElementById('selectLocal'), document.getElementById('selectVisitante')];
@@ -1844,13 +1905,17 @@
         }
     };
 
-    // Cargar Canchas en el Tab
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // SECCIÓN 9: CAMPOS/CANCHAS (CRUD, gestión)
+    // ═══════════════════════════════════════════════════════════════════════════════
     async function obtenerDatosCampos(forzar = false) {
-        if (!cacheCamposData || forzar) {
+        // USAR CACHÉ GLOBAL SI ESTÁ DISPONIBLE
+        if (!cacheCamposData && !window.cacheCamposData || forzar) {
             const res = await fetch('/api/campos');
             cacheCamposData = await res.json();
+            window.cacheCamposData = cacheCamposData;
         }
-        return cacheCamposData;
+        return window.cacheCamposData || cacheCamposData;
     }
 
     // 1. Corregir cargarCamposCards (La pestaña de Canchas)
@@ -2351,8 +2416,9 @@
         });
     };
 
-
-     // --- 1. RECUPERAR FIXTURE ---
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // SECCIÓN 8: LIGUILLA/TORNEO (Generación, progreso, archivado)
+    // ═══════════════════════════════════════════════════════════════════════════════
     window.recuperarFixtureGuardado = async function() {
         try {
             const res = await fetch('/api/partidos');
@@ -2545,17 +2611,28 @@
     };
 
     window.verificarProgresoLiguilla = async function() {
-        const res = await fetch('/api/partidos');
-        const partidosData = await res.json();
-        const lista = Object.values(partidosData);
-
-        const fasesOrder = ['OCTAVOS', 'CUARTOS', 'SEMIFINAL', 'FINAL'];
-        let faseActual = "";
-        for (let f of fasesOrder) {
-            if (lista.some(p => String(p.jornada).toUpperCase() === f)) faseActual = f;
+        // Evitar ejecuciones múltiples simultáneas
+        if (verificandoLiguilla) {
+            console.log("⏳ Verificación de liguilla ya en progreso, saltando...");
+            return;
         }
+        verificandoLiguilla = true;
+        
+        try {
+            const res = await fetch('/api/partidos');
+            const partidosData = await res.json();
+            const lista = Object.values(partidosData);
 
-        if (!faseActual) return window.verificarFinFaseRegular();
+            const fasesOrder = ['OCTAVOS', 'CUARTOS', 'SEMIFINAL', 'FINAL'];
+            let faseActual = "";
+            for (let f of fasesOrder) {
+                if (lista.some(p => String(p.jornada).toUpperCase() === f)) faseActual = f;
+            }
+
+            if (!faseActual) {
+                verificandoLiguilla = false;
+                return window.verificarFinFaseRegular();
+            }
         
         // --- LÓGICA DE CIERRE DE TORNEO (FINAL) ---
         if (faseActual === 'FINAL') {
@@ -2612,13 +2689,16 @@
                     });
                 }
                 
-                // Llamamos a la función de envío que ya tiene el candado 'isGenerandoLiguilla'
+// Llamamos a la función de envío que ya tiene el candado 'isGenerandoLiguilla'
                 await window.enviarLiguilla(nuevasLlaves);
             }
         }
+        } finally {
+            verificandoLiguilla = false;
+        }
     };
-
-
+    
+    
     window.verHistorial = async function() {
         try {
             const res = await fetch('/api/historial');

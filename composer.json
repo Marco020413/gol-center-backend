@@ -5,7 +5,7 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
-        "php": "^8.2", 
+        "php": "^8.3",
         "ext-bcmath": "*",
         "ext-intl": "*",
         "ext-gd": "*",
@@ -37,7 +37,14 @@
     "scripts": {
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
-            "@php artisan package:discover --ansi"
+            "@php artisan package:discover --ansi",
+            "@php artisan config:clear --ansi",
+            "@php artisan cache:clear --ansi"
+        ],
+        "post-install-cmd": [
+            "@php artisan config:clear --ansi",
+            "@php artisan cache:clear --ansi",
+            "rm -f bootstrap/cache/*.php"
         ],
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
@@ -69,7 +76,7 @@
         },
         "platform-check": false,
         "platform": {
-            "php": "8.4.0"
+            "php": "8.3.0"
         }
     },
     "minimum-stability": "stable",
