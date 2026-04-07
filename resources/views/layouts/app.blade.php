@@ -99,6 +99,35 @@
             btnActivo.classList.remove('text-slate-500');
             btnActivo.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
         }
+        
+        // CARGAR DATOS SEGÚN PESTAÑA
+        const ahora = Date.now();
+        const necesitaCarga = !ultimaCarga[tabName] || (ahora - ultimaCarga[tabName] > 10000);
+        
+        if (necesitaCarga) {
+            switch(tabName) {
+                case 'partidos': 
+                    window.limitePartidos = 5;
+                    if(typeof cargarPartidosCards === 'function') cargarPartidosCards(); 
+                    break;
+                case 'posiciones': 
+                    if(window.cargarTablaPosiciones) window.cargarTablaPosiciones(); 
+                    break;
+                case 'equipos_gest': 
+                    if(typeof cargarGestionEquipos === 'function') cargarGestionEquipos(); 
+                    break;
+                case 'roles': 
+                    if(typeof recuperarFixtureGuardado === 'function') recuperarFixtureGuardado(); 
+                    break;
+                case 'campos':
+                    if(typeof cargarCamposCards === 'function') cargarCamposCards();
+                    break;
+                case 'historial':
+                    if(typeof cargarHistorialSaloDeLaFama === 'function') cargarHistorialSaloDeLaFama();
+                    break;
+            }
+            ultimaCarga[tabName] = ahora;
+        }
     };
     
     // Debounce: Evita excesivas llamadas durante búsquedas
@@ -114,18 +143,7 @@
         };
     }
 
-    // Intersection Observer: Lazy loading automático
-    const observerJugadores = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting && window.cargarMasJugadores) window.cargarMasJugadores();
-        });
-    }, { rootMargin: '100px' });
-
-    const observerPartidos = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting && window.cargarMasPartidos) window.cargarMasPartidos();
-        });
-    }, { rootMargin: '100px' });
+    // Notas: Intersection Observers removidos para evitar cargue automático undesired
 
     // ═══════════════════════════════════════════════════════════════════════════════
     // SECCIÓN 2: VARIABLES DE ESTADO
@@ -182,9 +200,9 @@
         
         // Procesar datos base
         window.llenarSelectsEquipos(); 
-        window.llenarSelectsCampos();
-        window.recuperarFixtureGuardado();
-        window.verificarProgresoLiguilla();
+        if(typeof window.llenarSelectsCampos === 'function') window.llenarSelectsCampos();
+        if(typeof window.recuperarFixtureGuardado === 'function') window.recuperarFixtureGuardado();
+        if(typeof window.verificarProgresoLiguilla === 'function') window.verificarProgresoLiguilla();
 
         // 4. SANEADOR DE JUGADORES Y FILTRADO INICIAL
         const sanearYFiltrarTabla = async () => {
@@ -236,8 +254,8 @@
         window.abrirModalCrearPartido = function() {
             if (window.modalCrearPartido) {
                 window.modalCrearPartido.classList.replace('hidden', 'flex');
-                if (typeof llenarSelectsEquipos === 'function') llenarSelectsEquipos(); 
-                if (typeof llenarSelectsCampos === 'function') llenarSelectsCampos(); 
+                if (typeof window.llenarSelectsEquipos === 'function') window.llenarSelectsEquipos(); 
+                if (typeof window.llenarSelectsCampos === 'function') window.llenarSelectsCampos(); 
             }
         };
 
@@ -853,14 +871,7 @@
         }
     }
     
-    // Inicializar observer para lazy loading
-    function inicializarObserverJugadores() {
-        const btnContenedor = document.getElementById('btnContenedorJugadores');
-        if (btnContenedor) {
-            observerJugadores.observe(btnContenedor);
-        }
-    }
-
+    // Lazy loading removido - solo botones manuales
     function filtrarTabla() {
         const busqueda = document.getElementById('busquedaJugador').value.toLowerCase().trim();
         const equipoFiltro = document.getElementById('filtroEquipo').value; 
@@ -930,9 +941,8 @@
         // Aplicar todos los cambios de una vez
         tablaBody.appendChild(fragment);
 
-        // 3. GESTIONAR BOTÓN "MOSTRAR MÁS" y reiniciar observer
+        // Gestionar botón "MOSTRAR MÁS"
         gestionarBotonVerMasJugadores(filasQueCumplen.length);
-        inicializarObserverJugadores();
     }
     
 
@@ -970,10 +980,6 @@
     window.cargarMasJugadores = function() {
         limiteJugadores += 15;
         filtrarTabla();
-        // Desconectar el observer después de cargar para evitar más llamadas innecesarias
-        if (limiteJugadores >= document.querySelectorAll('#content-jugadores tbody tr[data-visible="true"]').length) {
-            observerJugadores.disconnect();
-        }
     };
 
 window.verMenosJugadores = function() {
@@ -1047,13 +1053,21 @@ window.verMenosJugadores = function() {
         try {
             // USAR CACHÉ GLOBAL SI ESTÁ DISPONIBLE
             let partidos;
-            if (window.cachePartidosData) {
+            if (window.cachePartidosData && Object.keys(window.cachePartidosData).length > 0) {
                 partidos = window.cachePartidosData;
             } else {
                 const res = await fetch('/api/partidos');
-                if (!res.ok) throw new Error("Error en servidor");
-                partidos = await res.json();
-                window.cachePartidosData = partidos; // Guardar en cache
+                if (!res.ok) {
+                    contenedor.innerHTML = '<p class="text-red-500 text-[10px] text-center py-10">⚠️ Error del servidor. Intenta más tarde.</p>';
+                    return;
+                }
+                try {
+                    partidos = await res.json();
+                } catch(e) {
+                    console.error('Error parsing JSON:', e);
+                    return;
+                }
+                window.cachePartidosData = partidos;
             }
             
             if (!partidos || Object.keys(partidos).length === 0) {
@@ -1235,15 +1249,19 @@ window.verMenosJugadores = function() {
     };
 
     function inicializarObserverPartidos() {
-        const contenedor = document.getElementById('contenedorListaPartidos');
-        const sentinel = contenedor?.querySelector('.sentinel-partidos');
-        if (sentinel) {
-            observerPartidos.observe(sentinel);
-        }
+        // Solo observar si hay más partidos para cargar
+        function inicializarObserverPartidos() {
+        // Funcionalidad deshabilitada - solo botones manuales
     }
 
     // Funciones de control global
     window.cargarMasPartidos = function() {
+        // Verificar si ya se mostrou todo
+        const totalCargado = window.limitePartidos;
+        const hayMas = window.cachePartidosLista && totalCargado < window.cachePartidosLista.length;
+        
+        if (!hayMas) return;
+        
         window.limitePartidos += 5;
         aplicarFiltrosPartidos();
     };
@@ -1397,8 +1415,8 @@ async function llenarSelectsEquipos() {
         document.getElementById('modalCrearCampo').classList.replace('hidden', 'flex'); 
         }
 
-    function cerrarModalCampo() { 
-    // Corregido: de flex a hidden
+    window.cerrarModalCampo = function() { 
+        // Corregido: de flex a hidden
         document.getElementById('modalCrearCampo').classList.replace('flex', 'hidden'); 
         document.getElementById('formCrearCampo').reset();
                 
@@ -1661,13 +1679,17 @@ async function llenarSelectsEquipos() {
         if(!cuerpo) return;
 
         try {
-            const [resE, resP] = await Promise.all([
-                fetch('/api/equipos'),
-                fetch('/api/partidos')
-            ]);
-            
+            const resE = await fetch('/api/equipos');
+            if (!resE.ok) throw new Error('Error cargando equipos');
             const equipos = await resE.json();
-            const partidos = await resP.json();
+            
+            // Usar cache de partidos si está disponible
+            let partidos = window.cachePartidosData;
+            if (!partidos) {
+                const resP = await fetch('/api/partidos');
+                if (!resP.ok) throw new Error('Error cargando partidos');
+                partidos = await resP.json();
+            }
 
             // 1. Inicializar objeto de estadísticas
             let stats = {};
@@ -2884,10 +2906,13 @@ async function llenarSelectsEquipos() {
         } catch (e) { console.error("Error modal historial:", e); }
     };
 
-    window.cerrarModalHistorial = function() {
+window.cerrarModalHistorial = function() {
         document.getElementById('modalDetallesHistorial').classList.add('hidden');
     };
     
+    // Closing extra brace
+    }
+
 </script>
 </body>
 </html>
