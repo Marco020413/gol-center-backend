@@ -201,8 +201,13 @@
         // Procesar datos base
         window.llenarSelectsEquipos(); 
         if(typeof window.llenarSelectsCampos === 'function') window.llenarSelectsCampos();
-        if(typeof window.recuperarFixtureGuardado === 'function') window.recuperarFixtureGuardado();
-        if(typeof window.verificarProgresoLiguilla === 'function') window.verificarProgresoLiguilla();
+        
+        // Solo verificar liguilla una vez al inicio, no en cada cambio de pestaña
+        if (!sessionStorage.getItem('liguillaVerificada')) {
+            if(typeof window.recuperarFixtureGuardado === 'function') window.recuperarFixtureGuardado();
+            if(typeof window.verificarProgresoLiguilla === 'function') window.verificarProgresoLiguilla();
+            sessionStorage.setItem('liguillaVerificada', 'true');
+        }
 
         // 4. SANEADOR DE JUGADORES Y FILTRADO INICIAL
         const sanearYFiltrarTabla = async () => {
@@ -1068,6 +1073,34 @@ window.verMenosJugadores = function() {
                     return;
                 }
                 window.cachePartidosData = partidos;
+            }
+            
+            //Obtener equipos para escudos (si no están en cache)
+            let equiposData = window.cacheEquiposData;
+            if (!equiposData) {
+                const resE = await fetch('/api/equipos');
+                equiposData = await resE.json();
+                window.cacheEquiposData = equiposData;
+            }
+            
+            // Añadir escudos a cada partido
+            const escudoDefault = 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png';
+            for (const id in partidos) {
+                const p = partidos[id];
+                const idLocal = String(p.equipo_local || '').replace(/[^a-zA-Z0-9]/g, '-');
+                const idVisitante = String(p.equipo_visitante || '').replace(/[^a-zA-Z0-9]/g, '-');
+                
+                if (equiposData && equiposData[idLocal]) {
+                    p.escudo_local = equiposData[idLocal].escudo || escudoDefault;
+                } else {
+                    p.escudo_local = escudoDefault;
+                }
+                
+                if (equiposData && equiposData[idVisitante]) {
+                    p.escudo_visitante = equiposData[idVisitante].escudo || escudoDefault;
+                } else {
+                    p.escudo_visitante = escudoDefault;
+                }
             }
             
             if (!partidos || Object.keys(partidos).length === 0) {
@@ -2393,8 +2426,15 @@ async function llenarSelectsEquipos() {
     // ═══════════════════════════════════════════════════════════════════════════════
     window.recuperarFixtureGuardado = async function() {
         try {
-            const res = await fetch('/api/partidos');
-            const partidosData = await res.json();
+            // USAR CACHÉ GLOBAL SI ESTÁ DISPONIBLE
+            let partidosData = window.cachePartidosData;
+            if (!partidosData) {
+                const res = await fetch('/api/partidos');
+                if (!res.ok) throw new Error('Error cargando partidos');
+                partidosData = await res.json();
+                window.cachePartidosData = partidosData;
+            }
+            
             const partidos = Object.keys(partidosData).map(id => ({ id, ...partidosData[id] }));
 
             if (partidos.length > 0) {
@@ -2705,18 +2745,37 @@ async function llenarSelectsEquipos() {
         const contenedor = document.getElementById('contenedor-historial-tab');
         if (!contenedor) return;
 
+        // USAR CACHÉ GLOBAL SI ESTÁ DISPONIBLE
+        if (window.cacheHistorialData) {
+            renderizarHistorial(window.cacheHistorialData);
+            return;
+        }
+
         try {
             const res = await fetch('/api/historial');
             const data = await res.json();
-            contenedor.innerHTML = '';
+            
+            // Guardar en cache
+            window.cacheHistorialData = data;
+            renderizarHistorial(data);
+        } catch (e) {
+            console.error("Error al cargar historial:", e);
+        }
+    };
 
-            if (!data || Object.keys(data).length === 0) {
-                contenedor.innerHTML = '<p class="text-slate-700 uppercase font-black text-[10px]">No hay torneos archivados aún.</p>';
-                return;
-            }
+    function renderizarHistorial(data) {
+        const contenedor = document.getElementById('contenedor-historial-tab');
+        if (!contenedor) return;
+        
+        contenedor.innerHTML = '';
 
-            // Cambiamos Object.values por Object.entries para obtener la CLAVE (ID) y el VALOR (Torneo)
-            Object.entries(data).reverse().forEach(([idTorneo, torneo]) => {
+        if (!data || Object.keys(data).length === 0) {
+            contenedor.innerHTML = '<p class="text-slate-700 uppercase font-black text-[10px]">No hay torneos archivados aún.</p>';
+            return;
+        }
+
+        // Cambiamos Object.values por Object.entries para obtener la CLAVE (ID) y el VALOR (Torneo)
+        Object.entries(data).reverse().forEach(([idTorneo, torneo]) => {
                 contenedor.innerHTML += `
                     <div class="bg-slate-900 border border-slate-800 p-6 rounded-[30px] relative overflow-hidden group hover:border-amber-500/50 transition-all shadow-xl">
                         <div class="absolute -top-10 -right-10 size-32 bg-amber-500/5 blur-[40px] group-hover:bg-amber-500/10 transition-all"></div>
@@ -2743,13 +2802,9 @@ async function llenarSelectsEquipos() {
                         </div>
                     </div>
                 `;
-            });
-        } catch (e) {
-            console.error("Error cargando historial:", e);
-            contenedor.innerHTML = '<p class="text-red-500 uppercase font-black text-[10px]">Error al cargar los archivos.</p>';
+});
         }
     };
-
 
     window.verDetallesTorneo = async function(id) {
         const modal = document.getElementById('modalDetallesHistorial');
@@ -2909,9 +2964,6 @@ async function llenarSelectsEquipos() {
 window.cerrarModalHistorial = function() {
         document.getElementById('modalDetallesHistorial').classList.add('hidden');
     };
-    
-    // Closing extra brace
-    }
 
 </script>
 </body>

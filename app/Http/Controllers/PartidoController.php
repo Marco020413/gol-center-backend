@@ -18,51 +18,7 @@ class PartidoController extends Controller
     {
         try {
             $partidos = $this->database->getReference('partidos')->getValue() ?? [];
-            $equipos = $this->database->getReference('equipos')->getValue() ?? [];
-            
-            $ahora = \Carbon\Carbon::now('America/Mexico_City'); 
-            $listadoFormateado = [];
-            $escudoDefault = 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png';
-
-            foreach ($partidos as $id => $p) {
-                // Limpieza de IDs para buscar escudos
-                $idLocal = str_replace(['.', '#', '$', '[', ']', ' '], '-', $p['equipo_local'] ?? '');
-                $idVisitante = str_replace(['.', '#', '$', '[', ']', ' '], '-', $p['equipo_visitante'] ?? '');
-
-                // --- LÓGICA PARA MANEJAR PARTIDOS GENERADOS (PENDIENTES) ---
-                if (($p['fecha'] ?? '') === 'PENDIENTE') {
-                    $p['estatus'] = 'programado';
-                    $p['fecha_formateada'] = 'POR ASIGNAR';
-                } else {
-                    try {
-                        $fechaPartido = \Carbon\Carbon::parse($p['fecha'] . ' ' . ($p['hora'] ?? '00:00'), 'America/Mexico_City');
-                        $finPartido = $fechaPartido->copy()->addMinutes(100);
-
-                        if (!($p['resultado_confirmado'] ?? false)) {
-                            if ($ahora->lt($fechaPartido)) {
-                                $p['estatus'] = 'programado';
-                            } elseif ($ahora->between($fechaPartido, $finPartido)) {
-                                $p['estatus'] = 'en_curso';
-                            } else {
-                                $p['estatus'] = 'finalizado';
-                            }
-                        } else {
-                            $p['estatus'] = 'confirmado';
-                        }
-                        $p['fecha_formateada'] = $fechaPartido->format('d/m') . ' - ' . ($p['hora'] ?? '00:00');
-                    } catch (\Exception $e) {
-                        // Si falla el parseo por alguna razón, fallback seguro
-                        $p['estatus'] = 'programado';
-                        $p['fecha_formateada'] = $p['fecha'] ?? 'S/F';
-                    }
-                }
-
-                $p['escudo_local'] = $equipos[$idLocal]['escudo'] ?? $escudoDefault;
-                $p['escudo_visitante'] = $equipos[$idVisitante]['escudo'] ?? $escudoDefault;
-                
-                $listadoFormateado[$id] = $p;
-            }
-            return response()->json($listadoFormateado);
+            return response()->json($partidos);
         } catch (\Exception $e) { 
             return response()->json(['error' => $e->getMessage()], 500); 
         }
@@ -303,6 +259,20 @@ class PartidoController extends Controller
 
     public function guardarPodio(Request $request) {
         try {
+            $historialActual = $this->database->getReference('historial_torneos')->getValue() ?? [];
+            
+            // VERIFICAR SI YA EXISTE UN TORNEO CON FINAL (jornada FINAL ya archivada)
+            foreach ($historialActual as $id => $torneo) {
+                // Buscar si ya tiene la jornada FINAL en el resumen de partidos
+                if (isset($torneo['resumen_partidos'])) {
+                    foreach ($torneo['resumen_partidos'] as $partido) {
+                        if (isset($partido['jornada']) && strtoupper($partido['jornada']) === 'FINAL') {
+                            return response()->json(['error' => 'Ya existe un torneo archivado con FINAL. Usa "Limpiar Todo" si quieres iniciar uno nuevo.'], 400);
+                        }
+                    }
+                }
+            }
+            
             $idHistorial = 'torneo_' . date('Y_m_d_His');
             $datos = $request->all();
 
