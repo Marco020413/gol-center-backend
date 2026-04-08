@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class EquipoController extends Controller
 {
@@ -18,23 +19,49 @@ class EquipoController extends Controller
         // 1. Definimos el ID: Si es edición usamos el que viene, si no, generamos uno nuevo.
         $equipoId = $request->equipo_id_edit ?? str_replace(['.', '#', '$', '[', ']'], '-', $request->nombre);
         
-        $escudoUrl = $request->escudo_url; 
+        $escudoUrl = $request->escudo_url ?? null;
 
         if ($request->hasFile('escudo_file')) {
             $file = $request->file('escudo_file');
-            $name = time() . '_' . $file->getClientOriginalName();
+            
+            // Validar que sea imagen
+            if (!$file->isValid() || !in_array($file->getMimeType(), ['image/jpeg', 'image/png', 'image/gif', 'image/webp'])) {
+                return response()->json(['error' => 'El archivo debe ser una imagen válida (JPG, PNG, GIF, WEBP)'], 422);
+            }
+            
+            $originalName = $file->getClientOriginalName();
+            // Sanitizar nombre de archivo
+            $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+            $name = time() . '_' . $sanitizedName;
             $path = public_path('img/escudos');
-            if (!file_exists($path)) { mkdir($path, 0777, true); }
-            $file->move($path, $name);
-            $escudoUrl = '/img/escudos/' . $name;
+            
+            // Crear directorio con permisos correctos
+            if (!file_exists($path)) {
+                mkdir($path, 0755, true);
+            }
+            
+            // Mover archivo
+            $moved = $file->move($path, $name);
+            
+            if ($moved) {
+                $escudoUrl = '/img/escudos/' . $name;
+                Log::info('Escudo guardado: ' . $escudoUrl);
+            } else {
+                Log::error('Error al mover archivo de escudo');
+            }
+        }
+
+        // Si no hay escudo seleccionado ni subido, usar default
+        if (empty($escudoUrl)) {
+            $escudoUrl = 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png';
         }
 
         $this->database->getReference('equipos/' . $equipoId)->update([
             'nombre' => $request->nombre,
-            'escudo' => $escudoUrl ?? 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png'
+            'escudo' => $escudoUrl
         ]);
 
-        return response()->json(['message' => 'Equipo guardado']);
+        return response()->json(['message' => 'Equipo guardado', 'escudo' => $escudoUrl]);
     }
 
     public function listar()

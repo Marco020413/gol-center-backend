@@ -1777,6 +1777,7 @@ async function llenarSelectsEquipos() {
                 fragment.appendChild(tr);
             });
 
+            cuerpo.innerHTML = '';
             cuerpo.appendChild(fragment);
             window.cacheTablaPosiciones = cuerpo.innerHTML;
         } catch (e) { console.error("Error tabla posiciones:", e); }
