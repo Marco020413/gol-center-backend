@@ -56,7 +56,10 @@ class PartidoController extends Controller
                     'equipo' => $j['equipo'] ?? '',
                     'goles' => (int)($j['goles'] ?? 0),
                     'asistencias' => (int)($j['asistencias'] ?? 0),
-                    'partidos_jugados' => (int)($j['partidos_jugados'] ?? 0)
+                    'partidos_jugados' => (int)($j['partidos_jugados'] ?? 0),
+                    'numero' => (int)($j['numero'] ?? 0),
+                    'edad' => (int)($j['edad'] ?? 0),
+                    'estatus' => $j['estatus'] ?? 'activo'
                 ];
             }
             

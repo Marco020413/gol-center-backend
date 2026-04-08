@@ -169,12 +169,7 @@ function cerrarModalEquipo() {
 }
 
 // === MODAL DE JUGADOR ===
-let ultimoEquipoAbierto = null; // Guardar último equipo abierto
-
 function mostrarDetalleJugador(nombre, equipo, goles, pj) {
-    // Guardar referencia al equipo para poder regresar
-    ultimoEquipoAbierto = equipo;
-    
     // Cerrar modal de equipo
     cerrarModalEquipo();
     
@@ -185,7 +180,7 @@ function mostrarDetalleJugador(nombre, equipo, goles, pj) {
     const analizar = [];
     
     if (pj >= 5 && promedio >= 1) {
-        analizar.push({ icon: '🔥', text: 'Goleador prolífico - Alta efectividad', color: 'text-emerald-400' });
+        analizar.push({ icon: '🔥', text: 'Goleador prolifico - Alta efectividad', color: 'text-emerald-400' });
     } else if (pj >= 3 && promedio >= 0.5) {
         analizar.push({ icon: '⚡', text: 'Jugador determinante', color: 'text-blue-400' });
     } else if (pj >= 1 && promedio < 0.3 && promedio > 0) {
@@ -195,7 +190,7 @@ function mostrarDetalleJugador(nombre, equipo, goles, pj) {
     }
     
     if (goles >= 10) {
-        analizar.push({ icon: '🏆', text: 'Candidato a mejor del torneo', color: 'text-amber-400' });
+        analizar.push({ icon: '🏆', text: 'Candidato a bestia del tournament', color: 'text-amber-400' });
     } else if (goles >= 5) {
         analizar.push({ icon: '💎', text: 'Jugador valioso para el equipo', color: 'text-blue-400' });
     }
@@ -210,24 +205,18 @@ function mostrarDetalleJugador(nombre, equipo, goles, pj) {
     modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4';
     modal.innerHTML = `
         <div class="glass-card rounded-2xl p-6 max-w-sm w-full">
-            <!-- Header con back button -->
-            <div class="flex items-center gap-3 mb-4">
-                <button onclick="cerrarModalJugadorYRegresar()" class="text-slate-400 hover:text-white text-xl">
-                    ←
-                </button>
-                <h2 class="text-xl font-black text-white truncate flex-1">${nombre}</h2>
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-black text-white">${nombre}</h2>
+                <button onclick="cerrarModalJugador()" class="text-slate-400 hover:text-white text-2xl">&times;</button>
             </div>
             
-            <!-- Foto y Equipo -->
-            <div class="flex flex-col items-center mb-6">
-                <div class="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500 to-blue-600 flex items-center justify-center text-4xl mb-3">
-                    ⚽
-                </div>
+            <!-- Equipo -->
+            <div class="text-center mb-6">
                 <span class="px-4 py-2 bg-blue-500/20 rounded-full text-blue-400 text-sm font-bold">${equipo}</span>
             </div>
             
             <!-- Stats Principales -->
-            <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="grid grid-cols-2 gap-3 mb-6">
                 <div class="bg-emerald-500/20 rounded-xl p-4 text-center">
                     <div class="text-4xl font-black text-emerald-400">${goles}</div>
                     <div class="text-[10px] text-slate-400 uppercase">Goles</div>
@@ -266,14 +255,6 @@ function mostrarDetalleJugador(nombre, equipo, goles, pj) {
     modal.addEventListener('click', (e) => {
         if (e.target === modal) cerrarModalJugador();
     });
-}
-
-function cerrarModalJugadorYRegresar() {
-    cerrarModalJugador();
-    // Reabrir el modal del último equipo
-    if (ultimoEquipoAbierto) {
-        mostrarDetalleEquipo(ultimoEquipoAbierto);
-    }
 }
 
 function cerrarModalJugador() {
@@ -394,9 +375,9 @@ function cargarGoleadores(jugadores) {
     const contenedor = document.getElementById('contenedor-goleadores');
     if (!contenedor) return;
 
-    const goleadores = Object.values(jugadores || {})
-        .filter(j => (j.goles || 0) > 0)
-        .sort((a, b) => b.goles - a.goles)
+    const goleadores = Object.entries(jugadores || {})
+        .filter(([tel, j]) => (j.goles || 0) > 0)
+        .sort((a, b) => b[1].goles - a[1].goles)
         .slice(0, 3);
 
     if (goleadores.length === 0) {
@@ -407,7 +388,7 @@ function cargarGoleadores(jugadores) {
     // TOP 3 - HORIZONTAL
     contenedor.innerHTML = `
         <div class="flex flex-col md:flex-row items-stretch md:items-end gap-4">
-            ${goleadores.map((j, i) => {
+            ${goleadores.map(([telefono, j], i) => {
                 const isFirst = i === 0;
                 const orderClass = isFirst ? 'order-2 md:order-1 md:-mb-4' : i === 1 ? 'order-1 md:order-2' : 'order-3';
                 const sizeClass = isFirst ? 'md:scale-110' : '';
@@ -418,8 +399,8 @@ function cargarGoleadores(jugadores) {
                                    'from-orange-700/20 to-orange-900/10';
                 
                 return `
-                <div class="flex-1 ${orderClass} ${sizeClass}">
-                    <div class="glass-card rounded-2xl p-4 flex flex-col items-center ${glowClass} bg-gradient-to-b ${bgGradient} relative overflow-hidden h-full">
+                <div class="flex-1 ${orderClass} ${sizeClass}" onclick="abrirInfoJugador('${telefono}')" style="cursor:pointer">
+                    <div class="glass-card rounded-2xl p-4 flex flex-col items-center ${glowClass} bg-gradient-to-b ${bgGradient} relative overflow-hidden h-full hover:scale-105 transition-transform">
                         <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${isFirst ? 'from-amber-400 via-yellow-300 to-amber-400' : i === 1 ? 'from-slate-300 to-slate-400' : 'from-orange-400 to-orange-600'}"></div>
                         <div class="text-2xl mb-2">${medalEmoji}</div>
                         <div class="text-sm font-black text-white text-center leading-tight">${j.nombre}</div>
@@ -561,36 +542,23 @@ function cargarLiguilla(partidos) {
     const fases = {};
     liguilla.forEach(p => {
         let key = p.fase || p.jornada;
-        
-        // Si es número, formatear como "Jornada X"
-        if (key && !isNaN(parseInt(key))) {
-            key = 'Jornada ' + key;
-        }
-        
         if (!key && p.resultado_confirmado) key = 'Torneo Finalizado';
-        if (!key) key = 'Eliminación';
+        if (!key) key = 'Eliminas';
         if (!fases[key]) fases[key] = [];
         fases[key].push(p);
     });
 
     const ordenFases = {'Cuartos': 1, 'Semifinal': 2, 'Final': 3, 'Tercer Lugar': 4, 'Torneo Finalizado': 5};
     const fasesOrdenadas = Object.entries(fases).sort((a, b) => {
-        // Si ambas son "Jornada X", ordenar por número
-        if (a[0].startsWith('Jornada') && b[0].startsWith('Jornada')) {
-            return parseInt(a[0].replace('Jornada ', '')) - parseInt(b[0].replace('Jornada ', ''));
-        }
         return (ordenFases[a[0]] || 99) - (ordenFases[b[0]] || 99);
     });
 
     contenedor.innerHTML = fasesOrdenadas.map(([fase, matches]) => {
         const esFinal = fase === 'Final' || fase === 'Torneo Finalizado';
-        const esJornada = fase.startsWith('Jornada');
         const faseClass = esFinal 
             ? 'from-purple-500/30 to-blue-500/30 border-purple-500/30' 
-            : esJornada
-            ? 'from-blue-500/20 to-indigo-600/10 border-blue-500/20'
             : 'from-amber-500/20 to-orange-600/10 border-amber-500/20';
-        const badge = fase === 'Torneo Finalizado' ? '🎖️' : esFinal ? '🏆' : esJornada ? '📅' : '⚔️';
+        const badge = fase === 'Torneo Finalizado' ? '🎖️' : esFinal ? '🏆' : '⚔️';
         
         return `
         <div class="glass-card rounded-xl p-4 border ${faseClass}">
@@ -655,4 +623,82 @@ function cargarRoles(campos) {
                 `).join('')}
             </div>
         </div>`;
+}
+
+// Función para abrir modal de info de jugador
+function abrirInfoJugador(telefono) {
+    const j = datosGlobales?.jugadores?.[telefono];
+    if (!j) return;
+    
+    const modal = document.getElementById('modalInfoEquipo');
+    if (!modal) return;
+    
+    const nombre = document.getElementById('modalEqNombre');
+    const posicion = document.getElementById('modalEqPosicion');
+    const stats = document.getElementById('modalEqStats');
+    const jugadores = document.getElementById('modalEqJugadores');
+    
+    const dorsal = j.numero || 0;
+    
+    // Reemplazar la imagen del escudo por un círculo con el dorsal
+    const leftContent = modal.querySelector('.flex.items-center.gap-3');
+    if (leftContent) {
+        leftContent.innerHTML = `
+            <div class="size-12 rounded-full bg-blue-500/20 flex items-center justify-center">
+                <span class="text-xl font-black text-blue-400">${dorsal}</span>
+            </div>
+            <div>
+                <h3 id="modalEqNombre" class="text-xl font-black text-white uppercase">${j.nombre || 'Jugador'}</h3>
+                <p id="modalEqPosicion" class="text-xs text-slate-400">${j.equipo || 'Sin equipo'}</p>
+            </div>
+        `;
+    }
+    
+    // Mostrar stats
+    stats.innerHTML = `
+        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">Goles</div><div class="font-black text-emerald-400 text-lg">${j.goles || 0}</div></div>
+        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">PJ</div><div class="font-black text-white text-lg">${j.partidos_jugados || 0}</div></div>
+        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">Dorsal</div><div class="font-black text-blue-400 text-lg">${dorsal}</div></div>
+    `;
+    
+    // Mostrar más info del jugador - stuff menarik!
+    const pj = j.partidos_jugados || 0;
+    const goles = j.goles || 0;
+    const ratio = pj > 0 ? (goles / pj).toFixed(2) : '0.00';
+    
+    let infoExtra = '';
+    if (j.edad) infoExtra += `<span class="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-xs font-bold">${j.edad} años</span> `;
+    infoExtra += `<span class="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold">${ratio} gol/partido</span> `;
+    if (j.estatus && j.estatus !== 'activo') infoExtra += `<span class="bg-red-500 px-2 py-1 rounded text-xs">${j.estatus}</span> `;
+    
+    if (infoExtra) {
+        jugadores.innerHTML = `<div class="flex flex-wrap gap-2 justify-center">${infoExtra}</div>`;
+    } else {
+        jugadores.innerHTML = '<p class="text-slate-500 text-sm text-center py-4">Sin información adicional</p>';
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+function cerrarInfoEquipo() {
+    const modal = document.getElementById('modalInfoEquipo');
+    if (!modal) return;
+    
+    // Restaurar estructura original del modal
+    const leftContent = modal.querySelector('.flex.items-center.gap-3');
+    if (leftContent) {
+        leftContent.innerHTML = `
+            <img id="modalEqEscudo" src="" class="size-12 rounded-lg object-contain bg-white/10">
+            <div>
+                <h3 id="modalEqNombre" class="text-xl font-black text-white uppercase"></h3>
+                <p id="modalEqPosicion" class="text-xs text-slate-400"></p>
+            </div>
+        `;
+    }
+    
+    modal.classList.add('hidden');
+}
+
+function cerrarInfoEquipo() {
+    document.getElementById('modalInfoEquipo').classList.add('hidden');
 }

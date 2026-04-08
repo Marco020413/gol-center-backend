@@ -130,6 +130,25 @@
         &copy; 2026 Powered by <span class="text-slate-300">Gol Center Engine</span>
     </footer>
 
+    <!-- Modal Info Equipo -->
+    <div id="modalInfoEquipo" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarInfoEquipo()"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <img id="modalEqEscudo" src="" class="size-12 rounded-lg object-contain bg-white/10">
+                    <div>
+                        <h3 id="modalEqNombre" class="text-xl font-black text-white uppercase"></h3>
+                        <p id="modalEqPosicion" class="text-xs text-slate-400"></p>
+                    </div>
+                </div>
+                <button onclick="cerrarInfoEquipo()" class="text-slate-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            <div id="modalEqStats" class="grid grid-cols-4 gap-2 text-center mb-4"></div>
+            <div id="modalEqJugadores" class="max-h-60 overflow-y-auto space-y-2"></div>
+        </div>
+    </div>
+
     <script src="/js/client-logic.js"></script>
 </body>
 </html>
