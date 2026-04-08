@@ -286,12 +286,9 @@ function cargarJugadores(jugadores) {
     const contenedor = document.getElementById('contenedor-jugadores');
     if (!contenedor) return;
 
-    const lista = Object.values(jugadores || {})
-        .sort((a, b) => {
-            const ptsA = (a.goles || 0) * 1 + (a.asistencias || 0) * 0.5;
-            const ptsB = (b.goles || 0) * 1 + (b.asistencias || 0) * 0.5;
-            return ptsB - ptsA;
-        });
+    // Usar Object.entries para mantener el telefono como key
+    const lista = Object.entries(jugadores || {})
+        .sort((a, b) => (b[1].goles || 0) - (a[1].goles || 0));
 
     if (lista.length === 0) {
         contenedor.innerHTML = '<div class="p-8 text-center text-slate-500">No hay jugadores registrados.</div>';
@@ -310,44 +307,37 @@ function cargarJugadores(jugadores) {
                         <th class="px-4 py-3 text-left">Jugador</th>
                         <th class="px-4 py-3 text-center">Equipo</th>
                         <th class="px-4 py-3 text-center">PJ</th>
-                        <th class="px-4 py-3 text-center text-emerald-400">G</th>
-                        <th class="px-4 py-3 text-center text-blue-400">A</th>
-                        <th class="px-4 py-3 text-center text-amber-400">PTS</th>
+                        <th class="px-4 py-3 text-center text-emerald-400">Goles</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-800/50">
                     ${top10.map((j, i) => {
-                        const pts = (j.goles || 0) * 1 + (j.asistencias || 0) * 0.5;
                         const rowClass = i < 3 ? 'bg-gradient-to-r from-amber-500/10 to-transparent' : 'hover:bg-slate-800/30';
                         const rankClass = i === 0 ? 'text-amber-400 font-black' :
                                         i === 1 ? 'text-slate-300 font-bold' :
                                         i === 2 ? 'text-orange-400 font-bold' : 'text-blue-400 font-bold';
                         
                         return `
-                        <tr class="${rowClass} transition-colors">
+                        <tr class="${rowClass} transition-colors cursor-pointer hover:bg-blue-500/20" onclick="abrirInfoJugador('${j[0]}')">
                             <td class="px-4 py-3 ${rankClass}">${i + 1}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
                                     <span class="text-lg">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '⭐'}</span>
-                                    <span class="font-bold text-white">${j.nombre || 'Sin nombre'}</span>
+                                    <span class="font-bold text-white">${j[1].nombre || 'Sin nombre'}</span>
                                 </div>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="px-2 py-1 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">${j.equipo || '-'}</span>
+                                <span class="px-2 py-1 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">${j[1].equipo || '-'}</span>
                             </td>
-                            <td class="px-4 py-3 text-center text-slate-400">${j.partidos_jugados || 0}</td>
-                            <td class="px-4 py-3 text-center text-emerald-400 font-bold">${j.goles || 0}</td>
-                            <td class="px-4 py-3 text-center text-blue-400 font-bold">${j.asistencias || 0}</td>
-                            <td class="px-4 py-3 text-center">
-                                <span class="px-2 py-1 rounded-full bg-amber-500/20 text-amber-400 font-bold">${Math.round(pts * 10) / 10}</span>
-                            </td>
+                            <td class="px-4 py-3 text-center text-slate-400">${j[1].partidos_jugados || 0}</td>
+                            <td class="px-4 py-3 text-center text-emerald-400 font-bold">${j[1].goles || 0}</td>
                         </tr>`;
                     }).join('')}
                 </tbody>
             </table>
         </div>
         <div class="p-4 text-center text-slate-500 text-xs border-t border-slate-800/50">
-            Los demas jugadores solo visible al seleccionar su equipo
+            Toca un jugador para ver sus estadísticas
         </div>
     `;
 
@@ -558,7 +548,7 @@ function cargarLiguilla(partidos) {
         const faseClass = esFinal 
             ? 'from-purple-500/30 to-blue-500/30 border-purple-500/30' 
             : 'from-amber-500/20 to-orange-600/10 border-amber-500/20';
-        const badge = fase === 'Torneo Finalizado' ? '🎖️' : esFinal ? '🏆' : '⚔️';
+        const badge = fase === 'Torneo Finalizado' ? '🎖️' : esFinal ? '🏆' : 'Jornada';
         
         return `
         <div class="glass-card rounded-xl p-4 border ${faseClass}">
@@ -633,51 +623,125 @@ function abrirInfoJugador(telefono) {
     const modal = document.getElementById('modalInfoEquipo');
     if (!modal) return;
     
-    const nombre = document.getElementById('modalEqNombre');
-    const posicion = document.getElementById('modalEqPosicion');
     const stats = document.getElementById('modalEqStats');
     const jugadores = document.getElementById('modalEqJugadores');
+    if (!stats || !jugadores) return;
     
     const dorsal = j.numero || 0;
+    const pj = j.partidos_jugados || 0;
+    const goles = j.goles || 0;
+    const promedioGoles = pj > 0 ? (goles / pj).toFixed(2) : '0.00';
+    const posicionEnRanking = obtenerPosicionRanking(telefono);
+    const equipo = j.equipo || 'Sin equipo';
     
-    // Reemplazar la imagen del escudo por un círculo con el dorsal
+    // Reemplazar contenido del modal
     const leftContent = modal.querySelector('.flex.items-center.gap-3');
     if (leftContent) {
         leftContent.innerHTML = `
-            <div class="size-12 rounded-full bg-blue-500/20 flex items-center justify-center">
-                <span class="text-xl font-black text-blue-400">${dorsal}</span>
+            <div class="size-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                <span class="text-2xl font-black text-white">${dorsal}</span>
             </div>
             <div>
                 <h3 id="modalEqNombre" class="text-xl font-black text-white uppercase">${j.nombre || 'Jugador'}</h3>
-                <p id="modalEqPosicion" class="text-xs text-slate-400">${j.equipo || 'Sin equipo'}</p>
+                <p id="modalEqPosicion" class="text-xs text-blue-400 font-bold">${equipo}</p>
             </div>
         `;
     }
     
-    // Mostrar stats
+    // Stats con estilo mejorado
     stats.innerHTML = `
-        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">Goles</div><div class="font-black text-emerald-400 text-lg">${j.goles || 0}</div></div>
-        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">PJ</div><div class="font-black text-white text-lg">${j.partidos_jugados || 0}</div></div>
-        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">Dorsal</div><div class="font-black text-blue-400 text-lg">${dorsal}</div></div>
+        <div class="bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 rounded-xl p-3 border border-emerald-500/20">
+            <div class="text-[10px] text-emerald-400 uppercase font-bold">GOLES</div>
+            <div class="text-2xl font-black text-white">${goles}</div>
+        </div>
+        <div class="bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl p-3 border border-blue-500/20">
+            <div class="text-[10px] text-blue-400 uppercase font-bold">PARTIDOS</div>
+            <div class="text-2xl font-black text-white">${pj}</div>
+        </div>
+        <div class="bg-gradient-to-br from-amber-500/20 to-amber-600/10 rounded-xl p-3 border border-amber-500/20">
+            <div class="text-[10px] text-amber-400 uppercase font-bold">RATIO</div>
+            <div class="text-2xl font-black text-white">${promedioGoles}</div>
+            <div class="text-[8px] text-amber-500">gol/partido</div>
+        </div>
+        <div class="bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-xl p-3 border border-purple-500/20">
+            <div class="text-[10px] text-purple-400 uppercase font-bold">RANKING</div>
+            <div class="text-2xl font-black text-white">#${posicionEnRanking}</div>
+        </div>
     `;
     
-    // Mostrar más info del jugador - stuff menarik!
-    const pj = j.partidos_jugados || 0;
-    const goles = j.goles || 0;
-    const ratio = pj > 0 ? (goles / pj).toFixed(2) : '0.00';
-    
+    // Información adicional
     let infoExtra = '';
-    if (j.edad) infoExtra += `<span class="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-xs font-bold">${j.edad} años</span> `;
-    infoExtra += `<span class="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold">${ratio} gol/partido</span> `;
-    if (j.estatus && j.estatus !== 'activo') infoExtra += `<span class="bg-red-500 px-2 py-1 rounded text-xs">${j.estatus}</span> `;
-    
-    if (infoExtra) {
-        jugadores.innerHTML = `<div class="flex flex-wrap gap-2 justify-center">${infoExtra}</div>`;
-    } else {
-        jugadores.innerHTML = '<p class="text-slate-500 text-sm text-center py-4">Sin información adicional</p>';
+    if (j.edad) {
+        infoExtra += `
+            <div class="bg-slate-800/50 rounded-lg p-3 flex flex-col items-center">
+                <span class="text-xs text-slate-500 uppercase">Edad</span>
+                <span class="text-lg font-black text-white"> ${j.edad}</span>
+            </div>
+        `;
+    }
+    infoExtra += `
+        <div class="bg-slate-800/50 rounded-lg p-3 flex flex-col items-center">
+            <span class="text-xs text-slate-500 uppercase">Dorsal</span>
+            <span class="text-lg font-black text-blue-400">#${dorsal}</span>
+        </div>
+    `;
+    if (j.estatus && j.estatus !== 'activo') {
+        const estatusIcon = j.estatus === 'lesionado' ? '🏥' : '🚫';
+        const estatusColor = j.estatus === 'lesionado' ? 'bg-orange-500' : 'bg-red-500';
+        infoExtra += `
+            <div class="${estatusColor} rounded-lg p-3 flex flex-col items-center">
+                <span class="text-xs text-white uppercase font-bold">${estatusIcon} ${j.estatus}</span>
+            </div>
+        `;
     }
     
+    // Agregar sección de "Análisis" fake
+    const analisisIA = generarAnalisisIA(j, posicionEnRanking);
+    
+    jugadores.innerHTML = `
+        <div class="grid grid-cols-3 gap-2 mb-4">${infoExtra}</div>
+        <div class="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl p-4 border border-indigo-500/20">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-lg">🤖</span>
+                <span class="text-sm font-black text-indigo-400 uppercase">AI Analysis</span>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">${analisisIA}</p>
+        </div>
+    `;
+    
     modal.classList.remove('hidden');
+}
+
+function obtenerPosicionRanking(telefono) {
+    const lista = Object.entries(datosGlobales?.jugadores || {})
+        .sort((a, b) => (b[1].goles || 0) - (a[1].goles || 0));
+    const pos = lista.findIndex(([tel]) => tel === telefono);
+    return pos + 1;
+}
+
+function generarAnalisisIA(j, posicion) {
+    const pj = j.partidos_jugados || 0;
+    const goles = j.goles || 0;
+    const equipo = j.equipo || 'Sin equipo';
+    
+    let nivel = ' PRINCIPIANTE';
+    let icono = '🌱';
+    
+    if (posicion <= 3) {
+        nivel = ' ELITE';
+        icono = '🔥';
+    } else if (posicion <= 10) {
+        nivel = ' ESTRELLA';
+        icono = '⭐';
+    } else if (pj >= 10 && (goles / pj) >= 0.5) {
+        nivel = ' GOLEADOR';
+        icono = '⚽';
+    } else if (pj >= 5) {
+        nivel = ' TITULAR';
+        icono = '🎯';
+    }
+    
+    return `${icono} ${j.nombre || 'Jugador'} se encuentra en el ranking TOP #${posicion} con ${goles} goles en ${pj} partidos. Su rendimiento con ${equipo} es de ${(goles/pj || 0).toFixed(2)} goles por partido.${nivel === ' ELITE' ? ' ¡Jugador determinante!' : ''}`;
 }
 
 function cerrarInfoEquipo() {
