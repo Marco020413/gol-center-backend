@@ -442,29 +442,151 @@ function cargarPosiciones(equipos, partidos) {
         return;
     }
 
-    contenedor.innerHTML = tabla.map((t, i) => `
-        <div class="grid grid-cols-12 gap-1 px-4 py-3 items-center table-row border-b border-slate-800/30 last:border-0 transition-colors">
-            <div class="col-span-1 text-xs font-bold ${i < 3 ? 'text-blue-400' : 'text-slate-500'}">
-                ${i + 1}
-            </div>
-            
-            <div class="col-span-4 flex items-center gap-2">
-                <img src="${t.escudo || escudoDefault}" class="escudo-small" style="width:20px; height:20px;">
-                <span class="text-xs font-bold text-slate-200 truncate uppercase">${t.nombre}</span>
-            </div>
-            
-            <div class="col-span-1 text-center text-[11px] text-slate-400">${t.pj}</div>
-            <div class="col-span-1 text-center text-[11px] text-slate-400">${t.g}</div>
-            <div class="col-span-1 text-center text-[11px] text-slate-400">${t.e}</div>
-            <div class="col-span-1 text-center text-[11px] text-slate-400">${t.p}</div>
-            <div class="col-span-1 text-center text-[11px] text-emerald-500/80">${t.gf}</div>
-            <div class="col-span-1 text-center text-[11px] text-rose-500/80">${t.gc}</div>
-            
-            <div class="col-span-1 text-right text-xs font-black text-white">
-                ${t.pts}
-            </div>
+    // Tabla minimalista responsive clickeable
+    contenedor.innerHTML = `
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+                <thead class="bg-slate-800/50 text-slate-500 uppercase text-[9px] tracking-wider">
+                    <tr>
+                        <th class="px-3 py-2 text-center">#</th>
+                        <th class="px-3 py-2 text-left">Equipo</th>
+                        <th class="px-2 py-2 text-center">PJ</th>
+                        <th class="px-2 py-2 text-center hidden sm:table-cell">G</th>
+                        <th class="px-2 py-2 text-center hidden sm:table-cell">E</th>
+                        <th class="px-2 py-2 text-center hidden sm:table-cell">P</th>
+                        <th class="px-2 py-2 text-center text-emerald-400 font-bold">PTS</th>
+                        <th class="px-2 py-2 text-center hidden md:table-cell">GF</th>
+                        <th class="px-2 py-2 text-center hidden md:table-cell">GC</th>
+                        <th class="px-2 py-2 text-center hidden md:table-cell">DG</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/30">
+                    ${tabla.map((t, i) => {
+                        const dg = t.gf - t.gc;
+                        return `
+                        <tr class="hover:bg-blue-500/10 cursor-pointer transition-colors" onclick="abrirInfoEquipo('${t.nombre.replace(/'/g, "\\'")}')">
+                            <td class="px-3 py-3 text-center font-bold ${i < 3 ? 'text-amber-400' : 'text-slate-500'}">${i + 1}</td>
+                            <td class="px-3 py-3">
+                                <div class="flex items-center gap-2">
+                                    <img src="${t.escudo || escudoDefault}" class="size-5 rounded object-contain">
+                                    <span class="font-bold text-slate-200 truncate max-w-[100px]">${t.nombre}</span>
+                                </div>
+                            </td>
+                            <td class="px-2 py-3 text-center text-slate-400">${t.pj}</td>
+                            <td class="px-2 py-3 text-center text-slate-400 hidden sm:table-cell">${t.g}</td>
+                            <td class="px-2 py-3 text-center text-slate-400 hidden sm:table-cell">${t.e}</td>
+                            <td class="px-2 py-3 text-center text-slate-400 hidden sm:table-cell">${t.p}</td>
+                            <td class="px-2 py-3 text-center font-black text-emerald-400">${t.pts}</td>
+                            <td class="px-2 py-3 text-center text-slate-400 hidden md:table-cell">${t.gf}</td>
+                            <td class="px-2 py-3 text-center text-slate-400 hidden md:table-cell">${t.gc}</td>
+                            <td class="px-2 py-3 text-center font-bold ${dg >= 0 ? 'text-emerald-400' : 'text-red-400'} hidden md:table-cell">${dg > 0 ? '+' + dg : dg}</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
         </div>
-    `).join('');
+        <div class="p-3 text-center text-slate-500 text-[10px] border-t border-slate-800/30">
+            Toca un equipo para ver detalles
+        </div>
+    `;
+}
+
+// Función para abrir modal de equipo
+function abrirInfoEquipo(nombreEquipo) {
+    const eq = Object.values(datosGlobales.equipos || {}).find(e => e.nombre === nombreEquipo);
+    if (!eq) return;
+    
+    const modal = document.getElementById('modalInfoEquipo');
+    if (!modal) return;
+    
+    // Calcular stats
+    const statsEq = { pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0, ultimos: [] };
+    
+    Object.values(datosGlobales.partidos || {}).forEach(p => {
+        if (p.resultado_confirmado && (p.equipo_local === nombreEquipo || p.equipo_visitante === nombreEquipo)) {
+            const esLocal = p.equipo_local === nombreEquipo;
+            const gl = parseInt(p.goles_local || 0);
+            const gv = parseInt(p.goles_visitante || 0);
+            const miGoles = esLocal ? gl : gv;
+            const rivalGoles = esLocal ? gv : gl;
+            let resultado = '';
+            if (miGoles > rivalGoles) { resultado = 'G'; statsEq.g++; statsEq.pts += 3; }
+            else if (miGoles < rivalGoles) { resultado = 'P'; statsEq.p++; }
+            else { resultado = 'E'; statsEq.e++; statsEq.pts++; }
+            statsEq.pj++; statsEq.gf += miGoles; statsEq.gc += rivalGoles;
+            statsEq.ultimos.push(resultado);
+        }
+    });
+    
+    // Calcular posición
+    const equipos = datosGlobales.equipos || {};
+    const tablaStats = {};
+    for (const id in equipos) {
+        tablaStats[equipos[id].nombre] = { nombre: equipos[id].nombre, pts: 0 };
+    }
+    Object.values(datosGlobales.partidos || {}).forEach(p => {
+        if (p.resultado_confirmado && tablaStats[p.equipo_local] && tablaStats[p.equipo_visitante]) {
+            const gl = parseInt(p.goles_local || 0);
+            const gv = parseInt(p.goles_visitante || 0);
+            if (gl > gv) tablaStats[p.equipo_local].pts += 3;
+            else if (gl < gv) tablaStats[p.equipo_visitante].pts += 3;
+            else { tablaStats[p.equipo_local].pts++; tablaStats[p.equipo_visitante].pts++; }
+        }
+    });
+    const tablaOrdenada = Object.values(tablaStats).sort((a, b) => b.pts - a.pts);
+    const posicion = tablaOrdenada.findIndex(t => t.nombre === nombreEquipo) + 1;
+    
+    // Renderizar modal
+    const leftContent = modal.querySelector('.flex.items-center.gap-3');
+    if (leftContent) {
+        leftContent.innerHTML = `
+            <img src="${eq.escudo || escudoDefault}" class="size-14 rounded-lg object-contain bg-white/10">
+            <div>
+                <h3 class="text-lg font-black text-white uppercase">${nombreEquipo}</h3>
+                <p class="text-xs text-blue-400 font-bold">Posición #${posicion}</p>
+            </div>
+        `;
+    }
+    
+    const stats = document.getElementById('modalEqStats');
+    const jugadores = document.getElementById('modalEqJugadores');
+    
+    stats.innerHTML = `
+        <div class="bg-slate-800/50 rounded-lg p-2 text-center"><div class="text-[9px] text-slate-500 uppercase">PJ</div><div class="text-lg font-black text-white">${statsEq.pj}</div></div>
+        <div class="bg-slate-800/50 rounded-lg p-2 text-center"><div class="text-[9px] text-slate-500 uppercase">G</div><div class="text-lg font-black text-emerald-400">${statsEq.g}</div></div>
+        <div class="bg-slate-800/50 rounded-lg p-2 text-center"><div class="text-[9px] text-slate-500 uppercase">PTS</div><div class="text-lg font-black text-blue-400">${statsEq.pts}</div></div>
+        <div class="bg-slate-800/50 rounded-lg p-2 text-center"><div class="text-[9px] text-slate-500 uppercase">DG</div><div class="text-lg font-black ${statsEq.gf - statsEq.gc >= 0 ? 'text-emerald-400' : 'text-red-400'}">${statsEq.gf - statsEq.gc}</div></div>
+    `;
+    
+    // Últimos 5 partidos
+    const ultimos5 = statsEq.ultimos.slice(-5).reverse();
+    const ultimosHTML = ultimos5.map(r => {
+        const color = r === 'G' ? 'bg-emerald-500' : r === 'E' ? 'bg-amber-500' : 'bg-red-500';
+        return `<span class="size-6 rounded ${color} flex items-center justify-center text-[10px] font-black text-white">${r}</span>`;
+    }).join('');
+    
+    // Jugadores del equipo
+    const jugadoresEq = Object.values(datosGlobales.jugadores || {})
+        .filter(j => j.equipo === nombreEquipo)
+        .sort((a, b) => (b.goles || 0) - (a.goles || 0))
+        .slice(0, 5);
+    
+    const jugadoresHTML = jugadoresEq.length > 0 
+        ? jugadoresEq.map(j => `<div class="flex items-center justify-between bg-slate-800/30 rounded px-2 py-1"><span class="text-xs text-white">${j.nombre}</span><span class="text-xs font-bold text-emerald-400">${j.goles || 0}</span></div>`).join('')
+        : '<p class="text-slate-500 text-xs text-center">Sin jugadores</p>';
+    
+    jugadores.innerHTML = `
+        <div class="mb-3">
+            <div class="text-[9px] text-slate-500 uppercase mb-2">Últimos 5 partidos</div>
+            <div class="flex gap-1 justify-center">${ultimosHTML || '<span class="text-slate-500 text-xs">Sin partidos</span>'}</div>
+        </div>
+        <div>
+            <div class="text-[9px] text-slate-500 uppercase mb-2">Top Goleadores</div>
+            <div class="space-y-1">${jugadoresHTML}</div>
+        </div>
+    `;
+    
+    modal.classList.remove('hidden');
 }
 
 function cargarPartidos(partidos) {
@@ -761,8 +883,4 @@ function cerrarInfoEquipo() {
     }
     
     modal.classList.add('hidden');
-}
-
-function cerrarInfoEquipo() {
-    document.getElementById('modalInfoEquipo').classList.add('hidden');
 }
