@@ -65,8 +65,8 @@
             
             <nav class="flex gap-4">
                 <span class="text-sm text-slate-400 self-center hidden sm:block">Bienvenido, <strong>Admin</strong></span>
-                <button class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-semibold transition shadow-md shadow-blue-900/40">
-                    Cerrar Sesión
+                <button onclick="logout()" id="logout-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-semibold transition shadow-md shadow-blue-900/40 flex items-center gap-2">
+                    <span id="logout-icon">Cerrar Sesión</span>
                 </button>
             </nav>
         </div>
@@ -2964,6 +2964,28 @@ async function llenarSelectsEquipos() {
 window.cerrarModalHistorial = function() {
         document.getElementById('modalDetallesHistorial').classList.add('hidden');
     };
+
+// Logout function - use GET /logout
+window.logout = function() {
+    const btn = document.getElementById('logout-btn');
+    const icon = document.getElementById('logout-icon');
+    
+    // Show loading
+    btn.disabled = true;
+    icon.innerHTML = '<span class="animate-spin">⟳</span> Cerrando...';
+    
+    // Clear localStorage
+    localStorage.removeItem('admin_token');
+    
+    // Fade out animation
+    document.body.style.transition = 'opacity 0.3s ease-out';
+    document.body.style.opacity = '0';
+    
+    setTimeout(() => {
+        // Use window.location.href to force GET request (clears POST state)
+        window.location.href = '/logout';
+    }, 300);
+};
 
 </script>
 </body>

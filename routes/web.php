@@ -35,9 +35,12 @@ Route::post('/login', function () {
     }
 });
 
-// Logout
-Route::post('/logout', function () {
-    return response()->json(['message' => 'Logout'])->cookie('admin_token', '', -1);
+// Logout - clear cookie properly and redirect
+Route::get('/logout', function () {
+    // Clear the cookie by setting it to expire in the past
+    $response = redirect('/login');
+    $response->withCookie(cookie('admin_token', '', -1, '/', '', false, false));
+    return $response;
 });
 
 // Admin - verificar autenticación desde cookie o header
@@ -54,8 +57,16 @@ Route::get('/admin', function () {
         $verifiedIdToken = $auth->verifyIdToken($token);
         
         $jugadores = app(JugadorController::class)->listarTodos()->getData(true);
-        return view('welcome', ['jugadores' => $jugadores]);
+        
+        // Prevent browser caching
+        return response()->view('welcome', ['jugadores' => $jugadores])
+            ->withHeaders([
+                'Cache-Control' => 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma' => 'no-cache',
+                'Expires' => '0'
+            ]);
     } catch (\Exception $e) {
+        // Token inválido o expirado - redirigir
         return redirect('/login');
     }
 });
