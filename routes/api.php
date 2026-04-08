@@ -14,6 +14,9 @@ Route::get('/equipos/escudos', [App\Http\Controllers\EquipoController::class, 'l
 Route::delete('/admin/equipos/eliminar/{id}', [App\Http\Controllers\EquipoController::class, 'eliminar']);
 Route::delete('/admin/escudos/eliminar', [App\Http\Controllers\EquipoController::class, 'eliminarEscudoArchivo']);
 
+// ENDPOINT ÚNICO PARA CLIENTE PÚBLICO - Todo en una llamada
+Route::get('/publico', [App\Http\Controllers\PartidoController::class, 'datosPublicos']);
+
 // Rutas para Partidos
 Route::get('/partidos', [App\Http\Controllers\PartidoController::class, 'listar']);
 Route::post('/admin/partidos/crear', [App\Http\Controllers\PartidoController::class, 'crear']);
