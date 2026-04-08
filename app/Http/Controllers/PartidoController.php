@@ -381,13 +381,17 @@ class PartidoController extends Controller
             $historialRef = $this->database->getReference('historial_torneos');
             $historialActual = $historialRef->getValue() ?? [];
 
+            // Aceptar ambos formatos: nuevo (admin) y antiguo
             $nuevoTorneo = [
-                'fecha' => date('Y-m-d H:i:s'),
-                'primer_lugar' => $request->primer_lugar,
-                'segundo_lugar' => $request->segundo_lugar,
-                'tercer_lugar' => $request->tercer_lugar,
-                'goleador' => $request->goleador,
-                'goles_goleador' => $request->goles_goleador
+                'fecha' => $request->fecha_finalizacion ?? date('Y-m-d H:i:s'),
+                'nombre_torneo' => $request->nombre_torneo ?? 'Torneo de Copa ' . date('Y'),
+                'primer_lugar' => $request->primer_lugar ?? $request->campeon ?? '',
+                'segundo_lugar' => $request->segundo_lugar ?? $request->subCampeon ?? '',
+                'tercer_lugar' => $request->tercer_lugar ?? '',
+                'goleador' => $request->goleador ?? $request->max_goleador ?? '',
+                'goles_goleador' => (int)($request->goles_goleador ?? $request->goles_max_goleador ?? 0),
+                'resumen_partidos' => $request->resumen_partidos ?? [],
+                'tabla_final' => $request->tabla_final ?? []
             ];
 
             $historialActual[] = $nuevoTorneo;

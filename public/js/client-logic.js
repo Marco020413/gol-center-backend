@@ -26,7 +26,225 @@ document.addEventListener('DOMContentLoaded', async () => {
     cargarPartidos(datosGlobales.partidos);
     cargarLiguilla(datosGlobales.partidos);
     cargarRoles(datosGlobales.campos);
+    cargarHistorial();
 });
+
+async function cargarHistorial() {
+    const contenedor = document.getElementById('contenedor-historial');
+    if (!contenedor) return;
+    
+    try {
+        const res = await fetch('/api/historial?_=' + Date.now());
+        const historial = await res.json();
+        
+        if (!historial || Object.keys(historial).length === 0) {
+            contenedor.innerHTML = '<div class="col-span-full text-center py-8 text-slate-500">No hay torneos en el historial aún.</div>';
+            return;
+        }
+        
+        // Guardar para usar en modal de detalles
+        window.historialData = historial;
+        
+        const tournaments = Object.values(historial).reverse();
+        
+        contenedor.innerHTML = tournaments.map((t, index) => {
+            const fechaRaw = t.fecha || t.fecha_finalizacion || null;
+            const fechaStr = fechaRaw ? new Date(fechaRaw).toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Sin fecha';
+            
+            const champion = t.campeon || t.primer_lugar || 'Sin campeón';
+            const numPartidos = t.resumen_partidos ? Object.keys(t.resumen_partidos).length : 0;
+            
+            return `
+            <div onclick="verDetallesTorneoPublico(${index})" class="glass-card rounded-xl p-4 border border-amber-500/20 bg-gradient-to-b from-amber-500/10 to-transparent cursor-pointer hover:border-amber-500/50 transition-all">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] text-amber-400 font-bold uppercase">${fechaStr}</span>
+                    <span class="text-lg">🏆</span>
+                </div>
+                <div class="text-center mb-3">
+                    <div class="text-lg font-black text-white uppercase">${champion}</div>
+                    <div class="text-[10px] text-amber-500 font-bold uppercase">Campeón</div>
+                </div>
+                <div class="pt-3 border-t border-slate-700/50 flex justify-between items-center">
+                    <span class="text-slate-500 text-[8px] font-bold uppercase">${numPartidos} Partidos</span>
+                    <span class="text-amber-500 text-[8px] font-bold uppercase hover:text-white transition">Ver Detalles →</span>
+                </div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        console.error('Error cargando historial:', e);
+        contenedor.innerHTML = '<div class="col-span-full text-center py-8 text-slate-500">Error al cargar historial.</div>';
+    }
+}
+
+function verDetallesTorneoPublico(index) {
+    let modal = document.getElementById('modalDetallesHistorial');
+    if (!modal) {
+        modal = crearModalHistorialPublico();
+    }
+    
+    const historial = window.historialData;
+    if (!historial) return;
+    
+    const tournaments = Object.values(historial).reverse();
+    const t = tournaments[index];
+    if (!t) return;
+    
+    // Header
+    document.getElementById('historial-titulo').innerText = t.nombre_torneo || `Torneo ${new Date(t.fecha_finalizacion || t.fecha).getFullYear()}`;
+    document.getElementById('historial-subtitulo').innerText = `CAMPEÓN: ${t.campeon || t.primer_lugar || 'Sin campeón'}`;
+    
+    // Tabla de posiciones
+    const tablaBody = document.getElementById('historial-tabla-body');
+    tablaBody.innerHTML = '';
+    
+    let tablaData = t.tabla_final || [];
+    
+    if (tablaData.length === 0 && t.resumen_partidos) {
+        let stats = {};
+        Object.values(t.resumen_partidos).forEach(p => {
+            const loc = p.local || p.equipo_local;
+            const vis = p.visitante || p.equipo_visitante;
+            const gl = parseInt(p.goles_local || 0);
+            const gv = parseInt(p.goles_visitante || 0);
+            
+            if (!stats[loc]) stats[loc] = { nombre: loc, pj: 0, pts: 0, gf: 0 };
+            if (!stats[vis]) stats[vis] = { nombre: vis, pj: 0, pts: 0, gf: 0 };
+            
+            stats[loc].pj++; stats[vis].pj++;
+            stats[loc].gf += gl; stats[vis].gf += gv;
+            
+            if (gl > gv) stats[loc].pts += 3;
+            else if (gv > gl) stats[vis].pts += 3;
+            else { stats[loc].pts += 1; stats[vis].pts += 1; }
+        });
+        tablaData = Object.values(stats).sort((a, b) => b.pts - a.pts);
+    }
+    
+    tablaData.forEach(eq => {
+        tablaBody.innerHTML += `
+            <tr class="border-b border-slate-800/50 hover:bg-white/5 transition">
+                <td class="px-4 py-3 font-bold text-white text-[11px] uppercase">${eq.nombre || eq.equipo}</td>
+                <td class="px-4 py-3 text-center text-slate-400 font-bold">${eq.pj || 0}</td>
+                <td class="px-4 py-3 text-center text-amber-500 font-black text-xs">${eq.pts || eq.puntos || 0}</td>
+                <td class="px-4 py-3 text-center text-slate-400 font-bold">${eq.gf || eq.goles_favor || 0}</td>
+            </tr>`;
+    });
+    
+    // Partidos
+    const partidosContenedor = document.getElementById('historial-partidos');
+    partidosContenedor.innerHTML = '';
+    const partidos = t.resumen_partidos || t.partidos || {};
+    
+    Object.values(partidos).forEach(p => {
+        const local = p.local || p.equipo_local;
+        const visitante = p.visitante || p.equipo_visitante;
+        const gl = p.goles_local ?? 0;
+        const gv = p.goles_visitante ?? 0;
+        
+        partidosContenedor.innerHTML += `
+            <div class="flex items-center justify-between bg-slate-800/30 p-3 rounded-xl border border-slate-800 mb-2">
+                <span class="text-slate-500 text-[8px] font-black uppercase w-16">${p.jornada || 'Match'}</span>
+                <div class="flex-1 flex justify-center items-center gap-4">
+                    <span class="text-white font-bold text-[10px] uppercase w-24 text-right">${local}</span>
+                    <span class="bg-slate-900 px-3 py-1 rounded-lg text-amber-500 font-black italic text-xs min-w-[50px] text-center">${gl} - ${gv}</span>
+                    <span class="text-white font-bold text-[10px] uppercase w-24 text-left">${visitante}</span>
+                </div>
+            </div>`;
+    });
+    
+    // Goleadores del torneo
+    const statsFinales = document.getElementById('historial-stats');
+    statsFinales.innerHTML = '';
+    
+    let goleadoresTorneo = {};
+    Object.values(partidos).forEach(partido => {
+        const detalle = partido.detalle_jugadores || {};
+        Object.entries(detalle).forEach(([tel, info]) => {
+            if (info.goles > 0) {
+                const nombreReal = info.nombre || tel;
+                if (!goleadoresTorneo[tel]) {
+                    goleadoresTorneo[tel] = { nombre: nombreReal, goles: 0 };
+                }
+                goleadoresTorneo[tel].goles += info.goles;
+            }
+        });
+    });
+    
+    const rankingGoleadores = Object.values(goleadoresTorneo).sort((a, b) => b.goles - a.goles).slice(0, 6);
+    
+    if (rankingGoleadores.length > 0) {
+        let htmlGoleadores = `<div class="col-span-full">
+            <h4 class="text-amber-500 text-[8px] font-black uppercase tracking-[0.2em] mb-3 italic">Máximos Goleadores</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">`;
+        
+        rankingGoleadores.forEach((jugador, i) => {
+            const esPrimero = i === 0;
+            htmlGoleadores += `
+                <div class="flex justify-between items-center ${esPrimero ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-800/40 border-slate-700/50'} p-3 rounded-xl border">
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '⚽'}</span>
+                        <span class="text-white font-black text-[11px] uppercase italic">${jugador.nombre}</span>
+                    </div>
+                    <span class="${esPrimero ? 'text-amber-500' : 'text-white'} font-black text-sm">${jugador.goles}</span>
+                </div>`;
+        });
+        
+        htmlGoleadores += `</div></div>`;
+        statsFinales.innerHTML = htmlGoleadores;
+    } else {
+        statsFinales.innerHTML = '<p class="text-slate-500 text-[10px]">No hay datos de goleadores.</p>';
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+function crearModalHistorialPublico() {
+    const modal = document.createElement('div');
+    modal.id = 'modalDetallesHistorial';
+    modal.className = 'fixed inset-0 z-50 hidden';
+    modal.innerHTML = `
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="cerrarModalHistorialPublico()"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl max-h-[90vh] bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl overflow-y-auto">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h2 id="historial-titulo" class="text-2xl font-black text-white uppercase italic">Detalles del Torneo</h2>
+                    <p id="historial-subtitulo" class="text-amber-500 text-[10px] font-bold uppercase tracking-widest mt-1"></p>
+                </div>
+                <button onclick="cerrarModalHistorialPublico()" class="text-slate-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            <div class="mb-4">
+                <h3 class="text-sm font-bold text-slate-400 uppercase mb-2">Tabla de Posiciones</h3>
+                <div class="bg-slate-800/50 rounded-xl overflow-hidden">
+                    <table class="w-full text-xs">
+                        <thead class="bg-slate-800 text-slate-400 uppercase">
+                            <tr>
+                                <th class="px-4 py-2 text-left">Equipo</th>
+                                <th class="px-4 py-2 text-center">PJ</th>
+                                <th class="px-4 py-2 text-center">PTS</th>
+                                <th class="px-4 py-2 text-center">GF</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historial-tabla-body" class="text-slate-300"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="mb-4">
+                <h3 class="text-sm font-bold text-slate-400 uppercase mb-2">Partidos</h3>
+                <div id="historial-partidos" class="space-y-2 max-h-60 overflow-y-auto"></div>
+            </div>
+            <div>
+                <div id="historial-stats"></div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    return modal;
+}
+
+function cerrarModalHistorialPublico() {
+    const modal = document.getElementById('modalDetallesHistorial');
+    if (modal) modal.classList.add('hidden');
+}
 
 // === MODAL DE EQUIPO ===
 function mostrarDetalleEquipo(nombreEquipo) {
