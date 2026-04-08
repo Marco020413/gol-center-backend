@@ -27,7 +27,7 @@ class PartidoController extends Controller
     // Cache en memoria estático
     private static $cacheData = null;
     private static $cacheTime = 0;
-    private const CACHE_DURATION = 5;
+    private const CACHE_DURATION = 0;
 
     // ENDPOINT PÚBLICO OPTIMIZADO
     public function datosPublicos()
@@ -72,38 +72,30 @@ class PartidoController extends Controller
             }
             
             $partidosFiltrados = [];
-            $contador = 0;
             foreach ($partidos as $key => $p) {
-                if (!($p['resultado_confirmado'] ?? false)) {
-                    $partidosFiltrados[$key] = [
-                        'equipo_local' => $p['equipo_local'] ?? '',
-                        'equipo_visitante' => $p['equipo_visitante'] ?? '',
-                        'fecha' => $p['fecha'] ?? '',
-                        'hora' => $p['hora'] ?? '',
-                        'jornada' => $p['jornada'] ?? '',
-                        'tipo' => $p['tipo'] ?? '',
-                        'fase' => $p['fase'] ?? '',
-                        'resultado_confirmado' => false
-                    ];
-                } elseif ($contador < 50) {
-                    $partidosFiltrados[$key] = [
-                        'equipo_local' => $p['equipo_local'] ?? '',
-                        'equipo_visitante' => $p['equipo_visitante'] ?? '',
-                        'goles_local' => (int)($p['goles_local'] ?? 0),
-                        'goles_visitante' => (int)($p['goles_visitante'] ?? 0),
-                        'jornada' => $p['jornada'] ?? '',
-                        'tipo' => $p['tipo'] ?? '',
-                        'fase' => $p['fase'] ?? '',
-                        'resultado_confirmado' => true,
-                        'estatus' => $p['estatus'] ?? ''
-                    ];
-                    $contador++;
-                }
+                $partidoData = [
+                    'id' => $key,
+                    'equipo_local' => $p['equipo_local'] ?? '',
+                    'equipo_visitante' => $p['equipo_visitante'] ?? '',
+                    'fecha' => $p['fecha'] ?? '',
+                    'hora' => $p['hora'] ?? '',
+                    'jornada' => $p['jornada'] ?? '',
+                    'tipo' => $p['tipo'] ?? '',
+                    'fase' => $p['fase'] ?? '',
+                    'resultado_confirmado' => $p['resultado_confirmado'] ?? false,
+                    'estatus' => $p['estatus'] ?? '',
+                    'goles_local' => (int)($p['goles_local'] ?? 0),
+                    'goles_visitante' => (int)($p['goles_visitante'] ?? 0),
+                    'campo_id' => $p['campo_id'] ?? '',
+                    'detalle_jugadores' => $p['detalle_jugadores'] ?? null
+                ];
+                $partidosFiltrados[$key] = $partidoData;
             }
             
             $camposFiltrados = [];
             foreach ($campos as $key => $c) {
                 $camposFiltrados[$key] = [
+                    'id' => $key,
                     'nombre' => $c['nombre'] ?? $c['lugar'] ?? '',
                     'lugar' => $c['lugar'] ?? '',
                     'estado' => $c['estado'] ?? 'disponible'

@@ -3,7 +3,7 @@ const escudoDefault = 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png';
 // Cache para evitar múltiples llamadas
 let cacheData = null;
 let cacheTime = 0;
-const CACHE_DURATION = 30000; // 30 segundos
+const CACHE_DURATION = 5000; // 5 segundos
 
 let datosGlobales = null; // Guardar datos para usar en modal
 
@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     // UNA SOLA LLAMADA API para TODO
-    const res = await fetch('/api/publico');
+    const res = await fetch('/api/publico?_=' + Date.now());
     datosGlobales = await res.json(); // Guardar globally
     
     // Renderizar cada sección
@@ -275,7 +275,7 @@ function cargarEquipos(equipos) {
 
     contenedor.innerHTML = lista.map(e => `
         <div onclick="mostrarDetalleEquipo('${e.nombre}')" class="glass-card rounded-xl p-4 flex flex-col items-center gap-2 hover:border-blue-500/50 transition-all cursor-pointer">
-            <img src="${e.escudo || escudoDefault}" class="escudo-small" style="width:40px; height:40px;">
+            <img src="${e.escudo || escudoDefault}" onerror="this.src='${escudoDefault}'" class="escudo-small" style="width:40px; height:40px;">
             <span class="text-xs font-bold text-white text-center uppercase">${e.nombre}</span>
         </div>
     `).join('');
@@ -468,7 +468,7 @@ function cargarPosiciones(equipos, partidos) {
                             <td class="px-3 py-3 text-center font-bold ${i < 3 ? 'text-amber-400' : 'text-slate-500'}">${i + 1}</td>
                             <td class="px-3 py-3">
                                 <div class="flex items-center gap-2">
-                                    <img src="${t.escudo || escudoDefault}" class="size-5 rounded object-contain">
+                                    <img src="${t.escudo || escudoDefault}" onerror="this.src='${escudoDefault}'" class="size-5 rounded object-contain">
                                     <span class="font-bold text-slate-200 truncate max-w-[100px]">${t.nombre}</span>
                                 </div>
                             </td>
@@ -540,7 +540,7 @@ function abrirInfoEquipo(nombreEquipo) {
     const leftContent = modal.querySelector('.flex.items-center.gap-3');
     if (leftContent) {
         leftContent.innerHTML = `
-            <img src="${eq.escudo || escudoDefault}" class="size-14 rounded-lg object-contain bg-white/10">
+            <img src="${eq.escudo || escudoDefault}" onerror="this.src='${escudoDefault}'" class="size-14 rounded-lg object-contain bg-white/10">
             <div>
                 <h3 class="text-lg font-black text-white uppercase">${nombreEquipo}</h3>
                 <p class="text-xs text-blue-400 font-bold">Posición #${posicion}</p>
@@ -643,34 +643,43 @@ function cargarLiguilla(partidos) {
             const esFinalizado = p.estatus === 'finalizado' || p.resultado_confirmado;
             const tieneFase = p.fase || p.jornada;
             return (esLiguilla || esFaseEliminatoria || esFinalizado) && tieneFase;
-        })
-        .sort((a, b) => (a.jornada || 0) - (b.jornada || 0));
+        });
 
     if (liguilla.length === 0) {
         contenedor.innerHTML = '<div class="col-span-full text-center py-8 text-slate-500">Aún no hay fase de liguilla o play-offs.</div>';
         return;
     }
 
+    // Agrupar por fase
     const fases = {};
     liguilla.forEach(p => {
         let key = p.fase || p.jornada;
-        if (!key && p.resultado_confirmado) key = 'Torneo Finalizado';
-        if (!key) key = 'Eliminas';
+        if (!key) key = 'Eliminatorias';
         if (!fases[key]) fases[key] = [];
         fases[key].push(p);
     });
 
-    const ordenFases = {'Cuartos': 1, 'Semifinal': 2, 'Final': 3, 'Tercer Lugar': 4, 'Torneo Finalizado': 5};
+    // Orden de fases
+    const ordenFases = {'Cuartos': 1, 'Semifinal': 2, 'Final': 3, 'Tercer Lugar': 4};
     const fasesOrdenadas = Object.entries(fases).sort((a, b) => {
         return (ordenFases[a[0]] || 99) - (ordenFases[b[0]] || 99);
     });
 
+    // Guardar todos los partidos para buscarlos después (preservando el array completo)
+    window.liguillaPartidos = [...liguilla];
+
+    // Crear mapa para buscar por índice
+    window.liguillaIndexMap = {};
+    liguilla.forEach((p, idx) => {
+        window.liguillaIndexMap[p.id] = idx;
+    });
+
     contenedor.innerHTML = fasesOrdenadas.map(([fase, matches]) => {
-        const esFinal = fase === 'Final' || fase === 'Torneo Finalizado';
+        const esFinal = fase === 'Final';
         const faseClass = esFinal 
             ? 'from-purple-500/30 to-blue-500/30 border-purple-500/30' 
             : 'from-amber-500/20 to-orange-600/10 border-amber-500/20';
-        const badge = fase === 'Torneo Finalizado' ? '🎖️' : esFinal ? '🏆' : 'Jornada';
+        const badge = esFinal ? '🏆' : 'Jornada';
         
         return `
         <div class="glass-card rounded-xl p-4 border ${faseClass}">
@@ -678,12 +687,13 @@ function cargarLiguilla(partidos) {
                 ${badge} ${fase}
             </h3>
             <div class="space-y-3">
-                ${matches.map(p => {
+                ${matches.map((p) => {
                     const confirmado = p.resultado_confirmado;
                     const scoreClass = confirmado ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-900 text-slate-500';
+                    const idx = window.liguillaIndexMap[p.id];
                     
                     return `
-                    <div class="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 ${confirmado ? 'border-l-4 border-l-emerald-500' : ''}">
+                    <div class="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 ${confirmado ? 'border-l-4 border-l-emerald-500' : ''} cursor-pointer hover:bg-slate-700/50 transition" onclick="abrirDetallePartidoLiguilla('${p.id}')">
                         <div class="flex-1 text-center">
                             <div class="text-sm font-bold text-white">${p.equipo_local || '?'}</div>
                         </div>
@@ -698,6 +708,179 @@ function cargarLiguilla(partidos) {
             </div>
         </div>`;
     }).join('');
+}
+
+// Función para abrir detalle de partido en liguilla
+function abrirDetallePartidoLiguilla(partidoId) {
+    // Buscar el partido por ID
+    const idx = window.liguillaIndexMap?.[partidoId];
+    const partido = window.liguillaPartidos?.[idx];
+    if (!partido) return;
+    
+    const modal = document.getElementById('modalInfoEquipo');
+    if (!modal) return;
+    
+    // Obtener info de goleadores separada por equipo
+    // y lista de participantes desde detalle_jugadores (contiene 'asistio')
+    let goleadoresLocalHTML = '<p class="text-slate-500 text-xs text-center">Sin goleadores</p>';
+    let goleadoresVisitanteHTML = '<p class="text-slate-500 text-xs text-center">Sin goleadores</p>';
+    let participantesLocalHTML = '<p class="text-slate-500 text-xs text-center">Sin datos</p>';
+    let participantesVisitanteHTML = '<p class="text-slate-500 text-xs text-center">Sin datos</p>';
+    
+    if (partido.detalle_jugadores) {
+        const goleadoresLocal = [];
+        const goleadoresVisitante = [];
+        const participantesLocal = [];
+        const participantesVisitante = [];
+        
+        Object.entries(partido.detalle_jugadores).forEach(([tel, data]) => {
+            // data viene directamente de Firebase, tiene 'asistio', 'goles', etc.
+            const jugador = datosGlobales.jugadores?.[tel];
+            const nombre = jugador?.nombre || tel;
+            const dorsal = jugador?.numero || '#';
+            const equipoJugador = jugador?.equipo || '';
+            const esLocal = equipoJugador === partido.equipo_local;
+            const esVisitante = equipoJugador === partido.equipo_visitante;
+            
+            // Participantes (los que asistieron)
+            if (data.asistio === true) {
+                if (esLocal) {
+                    participantesLocal.push({ nombre, dorsal });
+                } else if (esVisitante) {
+                    participantesVisitante.push({ nombre, dorsal });
+                } else {
+                    participantesLocal.push({ nombre, dorsal });
+                }
+            }
+            
+            // Goleadores
+            if (data.goles > 0) {
+                if (esLocal) {
+                    goleadoresLocal.push({ nombre, goles: data.goles });
+                } else if (esVisitante) {
+                    goleadoresVisitante.push({ nombre, goles: data.goles });
+                } else {
+                    goleadoresLocal.push({ nombre, goles: data.goles });
+                }
+            }
+        });
+        
+        if (goleadoresLocal.length > 0) {
+            goleadoresLocalHTML = goleadoresLocal.map(g => `
+                <div class="flex items-center justify-between bg-slate-800/30 rounded px-2 py-1">
+                    <span class="text-xs text-white">${g.nombre}</span>
+                    <span class="text-xs font-bold text-emerald-400">${g.goles}</span>
+                </div>
+            `).join('');
+        }
+        
+        if (goleadoresVisitante.length > 0) {
+            goleadoresVisitanteHTML = goleadoresVisitante.map(g => `
+                <div class="flex items-center justify-between bg-slate-800/30 rounded px-2 py-1">
+                    <span class="text-xs text-white">${g.nombre}</span>
+                    <span class="text-xs font-bold text-emerald-400">${g.goles}</span>
+                </div>
+            `).join('');
+        }
+        
+        if (participantesLocal.length > 0) {
+            participantesLocalHTML = participantesLocal.map(p => `
+                <div class="text-xs text-slate-300 py-1 border-b border-slate-700/50 last:border-0">${p.dorsal} - ${p.nombre}</div>
+            `).join('');
+        }
+        
+        if (participantesVisitante.length > 0) {
+            participantesVisitanteHTML = participantesVisitante.map(p => `
+                <div class="text-xs text-slate-300 py-1 border-b border-slate-700/50 last:border-0">${p.dorsal} - ${p.nombre}</div>
+            `).join('');
+        }
+    }
+    
+    // Info del partido
+    const fecha = partido.fecha || 'Sin fecha';
+    const hora = partido.hora || 'Sin hora';
+    const campoId = partido.campo_id;
+    let campo = 'Sin sede';
+    if (campoId && datosGlobales.campos) {
+        const campoObj = Object.values(datosGlobales.campos).find(c => c.id === campoId || c.lugar === campoId);
+        if (campoObj) campo = campoObj.nombre || campoObj.lugar || 'Sin sede';
+    }
+    const jornada = partido.jornada || partido.fase || '-';
+    
+    // Estado del partido
+    let estado = 'Programado';
+    let estadoColor = 'bg-slate-500';
+    if (partido.resultado_confirmado) {
+        estado = 'Finalizado';
+        estadoColor = 'bg-emerald-500';
+    } else if (partido.estatus === 'en_juego' || partido.estatus === 'en vivo') {
+        estado = 'En Vivo';
+        estadoColor = 'bg-red-500 animate-pulse';
+    }
+    
+    // Renderizar modal
+    const leftContent = modal.querySelector('.flex.items-center.gap-3');
+    if (leftContent) {
+        const gl = parseInt(partido.goles_local || 0);
+        const gv = parseInt(partido.goles_visitante || 0);
+        const resultado = partido.resultado_confirmado ? `${gl} - ${gv}` : 'vs';
+        
+        leftContent.innerHTML = `
+            <div class="text-center">
+                <div class="text-xs text-slate-400 uppercase mb-1">${partido.equipo_local}</div>
+                <div class="text-3xl font-black text-white">${resultado}</div>
+                <div class="text-xs text-slate-400 uppercase mt-1">${partido.equipo_visitante}</div>
+            </div>
+        `;
+    }
+    
+    const stats = document.getElementById('modalEqStats');
+    const jugadores = document.getElementById('modalEqJugadores');
+    
+    stats.innerHTML = `
+        <div class="bg-slate-800/50 rounded-lg p-2 text-center"><div class="text-[9px] text-slate-500 uppercase">Fecha</div><div class="text-sm font-bold text-white">${fecha}</div></div>
+        <div class="bg-slate-800/50 rounded-lg p-2 text-center"><div class="text-[9px] text-slate-500 uppercase">Hora</div><div class="text-sm font-bold text-white">${hora}</div></div>
+        <div class="bg-slate-800/50 rounded-lg p-2 text-center"><div class="text-[9px] text-slate-500 uppercase">Sede</div><div class="text-sm font-bold text-white">${campo}</div></div>
+        <div class="${estadoColor} rounded-lg p-2 text-center"><div class="text-[9px] text-white uppercase font-bold">${estado}</div></div>
+    `;
+    
+    jugadores.innerHTML = `
+        <div class="mb-3">
+            <div class="text-[9px] text-slate-500 uppercase mb-2">Fase: ${jornada}</div>
+        </div>
+        <div class="mb-3">
+            <div class="flex gap-2 border-b border-slate-700 mb-3">
+                <button onclick="togglePartyTabs('goleadores', this)" class="px-3 py-1 text-[10px] font-bold uppercase text-blue-400 border-b-2 border-blue-400">Goleadores</button>
+                <button onclick="togglePartyTabs('participantes', this)" class="px-3 py-1 text-[10px] font-bold uppercase text-slate-500 border-b-2 border-transparent">Participantes</button>
+            </div>
+            <div id="tab-goleadores">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <div class="text-[9px] text-blue-400 uppercase mb-2 font-bold">${partido.equipo_local}</div>
+                        <div class="space-y-1">${goleadoresLocalHTML}</div>
+                    </div>
+                    <div>
+                        <div class="text-[9px] text-amber-400 uppercase mb-2 font-bold">${partido.equipo_visitante}</div>
+                        <div class="space-y-1">${goleadoresVisitanteHTML}</div>
+                    </div>
+                </div>
+            </div>
+            <div id="tab-participantes" class="hidden">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <div class="text-[9px] text-blue-400 uppercase mb-2 font-bold">${partido.equipo_local}</div>
+                        <div class="max-h-40 overflow-y-auto">${participantesLocalHTML}</div>
+                    </div>
+                    <div>
+                        <div class="text-[9px] text-amber-400 uppercase mb-2 font-bold">${partido.equipo_visitante}</div>
+                        <div class="max-h-40 overflow-y-auto">${participantesVisitanteHTML}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    modal.classList.remove('hidden');
 }
 
 // === ROLES DE JUEGO (CAMPOS) ===
@@ -883,4 +1066,21 @@ function cerrarInfoEquipo() {
     }
     
     modal.classList.add('hidden');
+}
+
+function togglePartyTabs(tabName, btn) {
+    document.querySelectorAll('#modalEqJugadores .border-b button').forEach(b => {
+        b.classList.remove('text-blue-400', 'border-blue-400');
+        b.classList.add('text-slate-500', 'border-transparent');
+    });
+    btn.classList.remove('text-slate-500', 'border-transparent');
+    btn.classList.add('text-blue-400', 'border-blue-400');
+    
+    if (tabName === 'goleadores') {
+        document.getElementById('tab-goleadores').classList.remove('hidden');
+        document.getElementById('tab-participantes').classList.add('hidden');
+    } else {
+        document.getElementById('tab-goleadores').classList.add('hidden');
+        document.getElementById('tab-participantes').classList.remove('hidden');
+    }
 }
