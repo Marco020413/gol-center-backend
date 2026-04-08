@@ -77,13 +77,17 @@ class JugadorController extends Controller
         try {
             // --- 1. VALIDACIÓN DE DORSAL ÚNICO (Para que no se repitan en el equipo) ---
             $jugadores = $this->database->getReference('jugadores')->getValue() ?? [];
+            $equipoRequest = strtolower(trim($request->equipo));
+            $numeroRequest = (int)$request->numero;
+            $telefonoEditando = (string)$telefono; // Normalizar a string
+            
             foreach ($jugadores as $key => $j) {
-                // Saltamos al jugador que estamos editando
-                if ($key === $telefono) continue;
+                // Saltamos al jugador que estamos editando - comparar como strings
+                if ((string)$key === $telefonoEditando) continue;
 
                 if (isset($j['equipo']) && isset($j['numero'])) {
-                    // Si el equipo coincide y el dorsal coincide -> ERROR
-                    if ($j['equipo'] === $request->equipo && (int)$j['numero'] === (int)$request->numero) {
+                    // Comparamos normalizando: trim + lowercase
+                    if (strtolower(trim($j['equipo'])) === $equipoRequest && (int)$j['numero'] === $numeroRequest) {
                         return response()->json([
                             'error' => "El número {$request->numero} ya está ocupado en el equipo {$request->equipo}."
                         ], 422);

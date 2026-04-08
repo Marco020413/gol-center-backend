@@ -178,14 +178,7 @@
         window.formPartidos = document.getElementById('formCrearPartido');
         window.formActualizar = document.getElementById('formActualizarMarcador');
 
-        // 2. PERSISTENCIA DE PESTAÑA (INSTANTÁNEA)
-        // Ejecutamos esto ANTES que las cargas pesadas para que no haya lag visual
-        const lastTab = localStorage.getItem('pestanaActiva') || 'jugadores';
-        if (typeof window.changeTab === 'function') {
-            window.changeTab(lastTab);
-        }
-
-        // 3. CARGA DE DATOS BASE (OPTIMIZADO: Parallel + Caching)
+        // 2. CARGA DE DATOS BASE (OPTIMIZADO: Parallel + Caching)
         // Cargar todos los datos base en paralelo una sola vez al inicio
         const datosBase = await Promise.all([
             fetch('/api/equipos').then(r => r.json()).catch(() => ({})),
@@ -207,6 +200,13 @@
             if(typeof window.recuperarFixtureGuardado === 'function') window.recuperarFixtureGuardado();
             if(typeof window.verificarProgresoLiguilla === 'function') window.verificarProgresoLiguilla();
             sessionStorage.setItem('liguillaVerificada', 'true');
+        }
+
+        // 3. PERSISTENCIA DE PESTAÑA (DESPUÉS DE CARGAR DATOS)
+        // Ahora los datos ya están disponibles para cualquier pestaña
+        const lastTab = localStorage.getItem('pestanaActiva') || 'jugadores';
+        if (typeof window.changeTab === 'function') {
+            window.changeTab(lastTab);
         }
 
         // 4. SANEADOR DE JUGADORES Y FILTRADO INICIAL
@@ -715,7 +715,7 @@
                     
                     <label class="cursor-pointer">
                         <input type="radio" name="escudo_url" value="${url}" class="hidden peer" onchange="mostrarPreview('${url}', '${nombreLimpio}')">
-                        <img src="${url}" class="size-12 mx-auto object-contain peer-checked:border-2 border-blue-500 rounded-lg bg-white/10 hover:scale-105 transition">
+                        <img src="${url}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/5323/5323982.png'" class="size-12 mx-auto object-contain peer-checked:border-2 border-blue-500 rounded-lg bg-white/10 hover:scale-105 transition">
                         <p class="text-[6px] mt-1 uppercase truncate text-slate-500 text-center">${nombreLimpio}</p>
                     </label>
                 `;
@@ -882,12 +882,11 @@
         const equipoFiltro = document.getElementById('filtroEquipo').value; 
         const orden = document.getElementById('ordenarPor').value;
         
-        const tablaBody = document.querySelector('#content-jugadores tbody');
+        const tablaBody = document.querySelector('#tablaPrincipalJugadores tbody');
         if (!tablaBody) return;
 
         const filas = Array.from(tablaBody.querySelectorAll('tr'));
-
-        // 1. FILTRAR usando filter (más eficiente)
+        
         const filasQueCumplen = filas.filter(fila => {
             const nombreContenedor = fila.querySelector('[data-field="nombre"]');
             const nombreCompletoTexto = nombreContenedor?.innerText.toUpperCase() || "";
@@ -915,7 +914,6 @@
             return coincideBusqueda && coincideFiltro;
         });
 
-        // 2. ORDENAR las filas que cumplen
         filasQueCumplen.sort((a, b) => {
             if (orden === 'goles') return (parseInt(b.cells[3].innerText) || 0) - (parseInt(a.cells[3].innerText) || 0);
             if (orden === 'pj') return (parseInt(b.cells[2].innerText) || 0) - (parseInt(a.cells[2].innerText) || 0);
@@ -927,34 +925,21 @@
             return a.querySelector('[data-field="nombre"]').innerText.localeCompare(b.querySelector('[data-field="nombre"]').innerText);
         });
 
-        // OPTIMIZADO: Usar DocumentFragment para minimizar reflows
         const fragment = document.createDocumentFragment();
-        
-        // Ocultar todas las filas primero (solo cambiar display, no mover nodos)
-        filas.forEach(f => {
-            f.style.display = 'none';
-            f.dataset.visible = 'false';
-        });
-
-        // Mostrar solo las que cumplen el filtro, hasta el límite
+        filas.forEach(f => f.style.display = 'none');
         filasQueCumplen.slice(0, limiteJugadores).forEach(f => {
             f.style.display = '';
-            f.dataset.visible = 'true';
-            fragment.appendChild(f); // Re-ordenar en el fragment
+            fragment.appendChild(f);
         });
-
-        // Aplicar todos los cambios de una vez
         tablaBody.appendChild(fragment);
 
-        // Gestionar botón "MOSTRAR MÁS"
         gestionarBotonVerMasJugadores(filasQueCumplen.length);
     }
     
 
     function gestionarBotonVerMasJugadores(totalFiltrados) {
+        // Crear o actualizar el contenedor del botón
         let btnContenedor = document.getElementById('btnContenedorJugadores');
-        
-        // Si no existe el contenedor del botón en el HTML, lo creamos después de la tabla
         if (!btnContenedor) {
             btnContenedor = document.createElement('div');
             btnContenedor.id = 'btnContenedorJugadores';
@@ -970,6 +955,7 @@
                     ➕ Ver más jugadores
                 </button>
             `;
+            btnContenedor.style.display = '';
         } else if (limiteJugadores > 15) {
             btnContenedor.innerHTML = `
                 <button onclick="window.verMenosJugadores()" 
@@ -977,8 +963,9 @@
                     ⬆️ Volver al principio
                 </button>
             `;
+            btnContenedor.style.display = '';
         } else {
-            btnContenedor.innerHTML = ''; // Si no hay nada que paginar, se limpia
+            btnContenedor.style.display = 'none';
         }
     }
 
@@ -987,7 +974,7 @@
         filtrarTabla();
     };
 
-window.verMenosJugadores = function() {
+    window.verMenosJugadores = function() {
         limiteJugadores = 15;
         filtrarTabla();
         document.getElementById('content-jugadores').scrollIntoView({ behavior: 'smooth' });
@@ -1707,24 +1694,20 @@ async function llenarSelectsEquipos() {
     };
 
     // Tabla de Posiciones - Fase Regular
-    window.cargarTablaPosiciones = async function() {
+    window.cargarTablaPosiciones = function() {
         const cuerpo = document.getElementById('tablaCuerpoPosiciones');
         if(!cuerpo) return;
 
-        try {
-            const resE = await fetch('/api/equipos');
-            if (!resE.ok) throw new Error('Error cargando equipos');
-            const equipos = await resE.json();
-            
-            // Usar cache de partidos si está disponible
-            let partidos = window.cachePartidosData;
-            if (!partidos) {
-                const resP = await fetch('/api/partidos');
-                if (!resP.ok) throw new Error('Error cargando partidos');
-                partidos = await resP.json();
-            }
+        // Usar cache local para evitar recálculos innecesarios
+        if (window.cacheTablaPosiciones) {
+            cuerpo.innerHTML = window.cacheTablaPosiciones;
+            return;
+        }
 
-            // 1. Inicializar objeto de estadísticas
+        try {
+            const equipos = window.cacheEquiposData || {};
+            const partidos = window.cachePartidosData || {};
+
             let stats = {};
             for (const id in equipos) {
                 stats[equipos[id].nombre] = {
@@ -1734,11 +1717,8 @@ async function llenarSelectsEquipos() {
                 };
             }
 
-            // 2. Procesar partidos (FILTRADO POR FASE REGULAR)
             Object.values(partidos).forEach(partido => {
-                // CONDICIÓN: Acta cerrada Y jornada numérica (Fase Regular)
                 const esFaseRegular = !isNaN(partido.jornada);
-                
                 if (partido.resultado_confirmado && esFaseRegular) {
                     const loc = partido.equipo_local;
                     const vis = partido.equipo_visitante;
@@ -1764,7 +1744,6 @@ async function llenarSelectsEquipos() {
                 }
             });
 
-            // 3. Ordenar (Pts > Diferencia > GF)
             const tablaOrdenada = Object.values(stats).sort((a, b) => {
                 if (b.pts !== a.pts) return b.pts - a.pts;
                 const difA = a.gf - a.gc;
@@ -1773,36 +1752,36 @@ async function llenarSelectsEquipos() {
                 return b.gf - a.gf;
             });
 
-            // 4. Dibujar la tabla
-            cuerpo.innerHTML = '';
+            const fragment = document.createDocumentFragment();
             tablaOrdenada.forEach((team, index) => {
                 const difG = team.gf - team.gc;
-                cuerpo.innerHTML += `
-                    <tr class="hover:bg-blue-500/5 transition-colors border-b border-slate-800/50">
-                        <td class="px-4 py-4 text-center text-slate-500 font-bold text-xs">${index + 1}</td>
-                        <td class="px-4 py-4">
-                            <div class="flex items-center gap-3">
-                                <img src="${team.escudo}" class="size-6 object-contain">
-                                <span class="text-white font-bold text-xs uppercase tracking-tight">${team.nombre}</span>
-                            </div>
-                        </td>
-                        <td class="px-2 py-4 text-center text-slate-300 text-xs">${team.pj}</td>
-                        <td class="px-2 py-4 text-center text-slate-400 text-xs hidden md:table-cell">${team.g}</td>
-                        <td class="px-2 py-4 text-center text-slate-400 text-xs hidden md:table-cell">${team.e}</td>
-                        <td class="px-2 py-4 text-center text-slate-400 text-xs hidden md:table-cell">${team.p}</td>
-                        <td class="px-3 py-4 text-center font-black text-white text-sm">${team.pts}</td>
-                        <td class="px-2 py-4 text-center text-slate-400 text-xs">${team.gf}</td>
-                        <td class="px-2 py-4 text-center text-slate-400 text-xs">${team.gc}</td>
-                        <td class="px-2 py-4 text-center font-bold ${difG > 0 ? 'text-green-500' : difG < 0 ? 'text-red-500' : 'text-slate-500'} text-xs">
-                            ${difG > 0 ? '+' + difG : difG}
-                        </td>
-                    </tr>
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-blue-500/5 transition-colors border-b border-slate-800/50';
+                tr.innerHTML = `
+                    <td class="px-4 py-4 text-center text-slate-500 font-bold text-xs">${index + 1}</td>
+                    <td class="px-4 py-4">
+                        <div class="flex items-center gap-3">
+                            <img src="${team.escudo || 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png'}" class="size-6 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/5323/5323982.png'">
+                            <span class="text-white font-bold text-xs uppercase tracking-tight">${team.nombre}</span>
+                        </div>
+                    </td>
+                    <td class="px-2 py-4 text-center text-slate-300 text-xs">${team.pj}</td>
+                    <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">${team.g}</td>
+                    <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">${team.e}</td>
+                    <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">${team.p}</td>
+                    <td class="px-2 py-4 text-center text-emerald-400 font-bold text-xs">${team.pts}</td>
+                    <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">${team.gf}</td>
+                    <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">${team.gc}</td>
+                    <td class="px-2 py-4 text-center ${difG >= 0 ? 'text-emerald-400' : 'text-red-400'} font-bold text-xs">${difG > 0 ? '+' + difG : difG}</td>
                 `;
+                fragment.appendChild(tr);
             });
 
+            cuerpo.appendChild(fragment);
+            window.cacheTablaPosiciones = cuerpo.innerHTML;
         } catch (e) { console.error("Error tabla posiciones:", e); }
     };
-   
+
    window.ejecutarGuardadoCancha = async function(id, data, nuevaSedeId = null) {
         if(nuevaSedeId) data.nueva_sede_id = nuevaSedeId;
 

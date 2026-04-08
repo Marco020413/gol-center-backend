@@ -39,8 +39,8 @@
                     </select>
                 </div>
 
-                <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-                    <table id="tablaPrincipalJugadores" class="w-full text-left">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl overflow-x-auto">
+                    <table id="tablaPrincipalJugadores" class="w-full text-left min-w-[600px]">
                         <thead class="bg-slate-800/50 text-slate-400 text-xs uppercase text-center">
                             <tr>
                                 <th class="px-6 py-4 text-left">Jugador</th>
@@ -116,12 +116,6 @@
             </div>
 
             <div id="content-partidos" class="tab-pane hidden space-y-4">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xl font-bold text-white uppercase tracking-tighter">Partidos de la Jornada</h2>
-                    <button onclick="abrirModalCrearPartido()" class="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-blue-500 shadow-lg shadow-blue-900/20">
-                        + PROGRAMAR PARTIDO
-                    </button>
-                </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div class="relative">
@@ -164,6 +158,29 @@
                                 </tr>
                             </thead>
                             <tbody id="tablaCuerpoPosiciones" class="divide-y divide-slate-800/50">
+                                @if(isset($tablaPosiciones) && count($tablaPosiciones) > 0)
+                                    @foreach($tablaPosiciones as $index => $team)
+                                    <tr class="hover:bg-blue-500/5 transition-colors border-b border-slate-800/50">
+                                        <td class="px-4 py-4 text-center text-slate-500 font-bold text-xs">{{ $index + 1 }}</td>
+                                        <td class="px-4 py-4">
+                                            <div class="flex items-center gap-3">
+                                                <img src="{{ $team['escudo'] ?? 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png' }}" class="size-6 object-contain">
+                                                <span class="text-white font-bold text-xs uppercase tracking-tight">{{ $team['nombre'] }}</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-2 py-4 text-center text-slate-300 text-xs">{{ $team['pj'] }}</td>
+                                        <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">{{ $team['g'] }}</td>
+                                        <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">{{ $team['e'] }}</td>
+                                        <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">{{ $team['p'] }}</td>
+                                        <td class="px-3 py-4 text-center font-black text-emerald-400 text-sm">{{ $team['pts'] }}</td>
+                                        <td class="px-2 py-4 text-center text-slate-300 text-xs">{{ $team['gf'] }}</td>
+                                        <td class="px-2 py-4 text-center text-slate-300 text-xs">{{ $team['gc'] }}</td>
+                                        <td class="px-2 py-4 text-center font-bold text-xs {{ ($team['gf'] - $team['gc']) >= 0 ? 'text-emerald-400' : 'text-red-400' }}">
+                                            {{ ($team['gf'] - $team['gc']) > 0 ? '+' . ($team['gf'] - $team['gc']) : ($team['gf'] - $team['gc']) }}
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                @endif
                                 </tbody>
                         </table>
                     </div>

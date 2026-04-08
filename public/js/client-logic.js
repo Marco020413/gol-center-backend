@@ -561,23 +561,36 @@ function cargarLiguilla(partidos) {
     const fases = {};
     liguilla.forEach(p => {
         let key = p.fase || p.jornada;
+        
+        // Si es número, formatear como "Jornada X"
+        if (key && !isNaN(parseInt(key))) {
+            key = 'Jornada ' + key;
+        }
+        
         if (!key && p.resultado_confirmado) key = 'Torneo Finalizado';
-        if (!key) key = 'Eliminas';
+        if (!key) key = 'Eliminación';
         if (!fases[key]) fases[key] = [];
         fases[key].push(p);
     });
 
     const ordenFases = {'Cuartos': 1, 'Semifinal': 2, 'Final': 3, 'Tercer Lugar': 4, 'Torneo Finalizado': 5};
     const fasesOrdenadas = Object.entries(fases).sort((a, b) => {
+        // Si ambas son "Jornada X", ordenar por número
+        if (a[0].startsWith('Jornada') && b[0].startsWith('Jornada')) {
+            return parseInt(a[0].replace('Jornada ', '')) - parseInt(b[0].replace('Jornada ', ''));
+        }
         return (ordenFases[a[0]] || 99) - (ordenFases[b[0]] || 99);
     });
 
     contenedor.innerHTML = fasesOrdenadas.map(([fase, matches]) => {
         const esFinal = fase === 'Final' || fase === 'Torneo Finalizado';
+        const esJornada = fase.startsWith('Jornada');
         const faseClass = esFinal 
             ? 'from-purple-500/30 to-blue-500/30 border-purple-500/30' 
+            : esJornada
+            ? 'from-blue-500/20 to-indigo-600/10 border-blue-500/20'
             : 'from-amber-500/20 to-orange-600/10 border-amber-500/20';
-        const badge = fase === 'Torneo Finalizado' ? '🎖️' : esFinal ? '🏆' : '⚔️';
+        const badge = fase === 'Torneo Finalizado' ? '🎖️' : esFinal ? '🏆' : esJornada ? '📅' : '⚔️';
         
         return `
         <div class="glass-card rounded-xl p-4 border ${faseClass}">
