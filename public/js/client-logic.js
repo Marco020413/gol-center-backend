@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     cargarPartidos(datosGlobales.partidos);
     cargarLiguilla(datosGlobales.partidos);
     cargarRoles(datosGlobales.campos);
-    cargarHistorial();
+    // El historial se carga solo al hacer click en la pestaña (lazy load)
 });
 
 async function cargarHistorial() {
@@ -575,6 +575,12 @@ function switchTab(tab) {
     if (activeBtn) {
         activeBtn.classList.replace('bg-slate-900', 'bg-blue-600');
         activeBtn.classList.replace('text-slate-400', 'text-white');
+    }
+    
+    // Cargar historial solo cuando se hace click en la pestaña (lazy load)
+    if (tab === 'historial' && activeBtn && activeBtn.dataset.loadHistorial === 'true') {
+        activeBtn.dataset.loadHistorial = 'false';
+        cargarHistorial();
     }
 }
 

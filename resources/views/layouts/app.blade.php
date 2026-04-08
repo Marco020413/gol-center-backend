@@ -2564,8 +2564,48 @@ async function llenarSelectsEquipos() {
 
     
     window.archivarTorneo = async function(campeon, todosLosPartidos) {
+        // VALIDACIÓN: No archivar si no hay partidos o si ya está archivado este año
+        const idTorneoActual = "torneo_" + new Date().getFullYear();
+        
+        if (localStorage.getItem('torneo_ya_archivado_' + idTorneoActual)) {
+            console.log("⏭️ Este torneo ya fue archivado anteriormente. Saltando...");
+            return;
+        }
+        
+        // Verificar que hay partidos reales para archivar
+        const partidosReales = Object.values(todosLosPartidos || {}).filter(p => 
+            p.equipo_local && p.equipo_visitante
+        );
+        
+        if (partidosReales.length === 0) {
+            console.log("⏭️ No hay partidos reales para archivar. Saltando...");
+            return;
+        }
+        
+        // Verificar que la mayoría tienen resultado confirmado
+        const confirmados = partidosReales.filter(p => p.resultado_confirmado === true);
+        if (confirmados.length < partidosReales.length * 0.5) {
+            console.log("⏭️ Menos del 50% de partidos confirmados. Saltando...");
+            return;
+        }
+        
         const loader = document.getElementById('overlay-carga');
         if(loader) loader.style.display = 'flex'; 
+
+        // Extraer tabla_final solo si existe el elemento
+        let tablaFinal = [];
+        const tablaCuerpo = document.querySelector('#tablaCuerpoPosiciones');
+        if (tablaCuerpo && tablaCuerpo.querySelectorAll('tr').length > 0) {
+            tablaFinal = Array.from(tablaCuerpo.querySelectorAll('tr')).map(tr => {
+                const span = tr.querySelector('td:nth-child(2) span');
+                return {
+                    nombre: span ? span.innerText : 'Unknown',
+                    pj: tr.querySelector('td:nth-child(3)')?.innerText || 0,
+                    pts: tr.querySelector('td:nth-child(7)')?.innerText || 0,
+                    gf: tr.querySelector('td:nth-child(8)')?.innerText || 0
+                };
+            }).filter(t => t.nombre && t.nombre !== 'Unknown');
+        }
 
         const dataHistorial = {
             nombre_torneo: "Torneo de Copa " + new Date().getFullYear(),
@@ -2573,12 +2613,7 @@ async function llenarSelectsEquipos() {
             campeon: campeon,
             resumen_partidos: todosLosPartidos,
             stats_finales: "Generado automáticamente",
-            tabla_final: Array.from(document.querySelectorAll('#tablaCuerpoPosiciones tr')).map(tr => ({
-                nombre: tr.querySelector('td:nth-child(2) span').innerText,
-                pj: tr.querySelector('td:nth-child(3)').innerText,
-                pts: tr.querySelector('td:nth-child(7)').innerText,
-                gf: tr.querySelector('td:nth-child(8)').innerText
-            }))
+            tabla_final: tablaFinal
         };
 
         try {
@@ -2592,11 +2627,13 @@ async function llenarSelectsEquipos() {
             });
 
             if (res.ok) {
-                if(loader) loader.style.display = 'none'; // OCULTAR CARGA
+                if(loader) loader.style.display = 'none';
+                // Marcar como archivado para esta sesión y año
+                localStorage.setItem('torneo_ya_archivado_' + idTorneoActual, 'true');
                 alert("📁 El torneo ha sido archivado en el historial. ¡Felicidades al campeón: " + campeon + "!");
             }
         } catch (err) {
-            if(loader) loader.style.display = 'none'; // OCULTAR EN CASO DE ERROR
+            if(loader) loader.style.display = 'none';
             console.error("Error al archivar:", err);
         }
     };
