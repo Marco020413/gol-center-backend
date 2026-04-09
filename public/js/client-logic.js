@@ -74,7 +74,6 @@ async function cargarHistorial() {
             </div>`;
         }).join('');
     } catch (e) {
-        console.error('Error cargando historial:', e);
         contenedor.innerHTML = '<div class="col-span-full text-center py-8 text-slate-500">Error al cargar historial.</div>';
     }
 }
@@ -1378,22 +1377,22 @@ window.descargarPDFJornada = async function(jornada) {
         nombreEquiposMap[nombreNormalizado.toLowerCase()] = nombreNormalizado;
     });
     
-    // Calcular stats de todos los partidos
-    partidosAcumulados.forEach(p => {
-        // Goleadores - solo de la jornada/fase seleccionada
-        const esMismaJornada = esJornadaNumerica 
-            ? (parseInt(p.jornada) === parseInt(jornada))
-            : (String(p.jornada || '').trim().toUpperCase() === jornadaStr);
-        
-        if (p.detalle_jugadores && esMismaJornada) {
+    // Calcular stats - para liguilla solo usar partidos de esa fase, no acumulados
+    const partidosParaEstadisticas = esJornadaNumerica ? partidosAcumulados : partidosJornada;
+    
+    partidosParaEstadisticas.forEach(p => {
+        // Goleadores - usar el ID del jugador (tel) como clave única para evitar duplicados
+        if (p.detalle_jugadores) {
             Object.entries(p.detalle_jugadores).forEach(([tel, data]) => {
                 if (data.asistio && data.goles > 0) {
                     const nombre = jugadores[tel]?.nombre || tel;
                     const equipo = jugadores[tel]?.equipo || '';
-                    if (!stats.goleadores[nombre]) {
-                        stats.goleadores[nombre] = { goles: 0, equipo: equipo };
+                    const dorsal = jugadores[tel]?.numero || 0;
+                    // Usar tel como clave única para evitar duplicados por nombre
+                    if (!stats.goleadores[tel]) {
+                        stats.goleadores[tel] = { key: tel, nombre: nombre, dorsal: dorsal, equipo: equipo, goles: 0 };
                     }
-                    stats.goleadores[nombre].goles += parseInt(data.goles || 0);
+                    stats.goleadores[tel].goles += parseInt(data.goles || 0);
                 }
             });
         }
@@ -1424,13 +1423,103 @@ window.descargarPDFJornada = async function(jornada) {
         }
     });
     
-    // Top goleadores - incluir empates
-    const goleadoresOrdenados = Object.entries(stats.goleadores || {}).sort((a, b) => b[1].goles - a[1].goles);
+    // Top goleadores - Top 10 con empates en la posición 10
+    const goleadoresOrdenados = Object.values(stats.goleadores || {}).sort((a, b) => b.goles - a.goles);
     let topGoleadores = [];
     if (goleadoresOrdenados.length > 0) {
-        const maxGoles = goleadoresOrdenados[0][1].goles;
-        topGoleadores = goleadoresOrdenados.filter(g => g[1].goles === maxGoles);
+        // Tomar los primeros 10
+        topGoleadores = goleadoresOrdenados.slice(0, 10);
+        // Si hay empates en la posición 10, incluir a todos
+        if (goleadoresOrdenados.length > 10) {
+            const posicion10Goles = topGoleadores[9]?.goles || 0;
+            const empatesPosicion10 = goleadoresOrdenados.filter(g => g.goles === posicion10Goles && !topGoleadores.includes(g));
+            topGoleadores = [...topGoleadores, ...empatesPosicion10];
+        }
     }
+    
+    // === CALCULAR POSICIÓN ANTERIOR Y GOLES DE LA JORNADA ACTUAL ===
+    let goleadoresAnteriores = {};
+    let golesJornadaActual = {};
+    let numJornada = null;
+    let posicionAnteriorMap = {}; // Declarar fuera del if para evitar error
+    
+    if (esJornadaNumerica) {
+        numJornada = parseInt(jornada);
+        const jornadaAnterior = numJornada - 1;
+        
+        if (jornadaAnterior > 0) {
+            // Calcular goleadores de jornadas anteriores
+            const partidosAnteriores = Object.values(partidos).filter(p => {
+                const pj = parseInt(p.jornada);
+                return !isNaN(pj) && pj <= jornadaAnterior && p.resultado_confirmado;
+            });
+            
+            partidosAnteriores.forEach(p => {
+                if (p.detalle_jugadores) {
+                    Object.entries(p.detalle_jugadores).forEach(([tel, data]) => {
+                        if (data.asistio && data.goles > 0) {
+                            const nombre = jugadores[tel]?.nombre || tel;
+                            if (!goleadoresAnteriores[nombre]) {
+                                goleadoresAnteriores[nombre] = 0;
+                            }
+                            goleadoresAnteriores[nombre] += parseInt(data.goles || 0);
+                        }
+                    });
+                }
+            });
+        }
+        
+        // Calcular posición anterior (basado en goleadoresAnteriores que tiene solo jornadas anteriores)
+        const goleadoresAnterioresOrdenados = Object.entries(goleadoresAnteriores).sort((a, b) => b[1] - a[1]);
+        goleadoresAnterioresOrdenados.forEach(([nombre], index) => {
+            posicionAnteriorMap[nombre] = index + 1;
+        });
+        
+        // Calcular适量的goles de esta jornada (acumulado actual - anterior)
+        Object.keys(stats.goleadores).forEach(nombre => {
+            const golesAnterior = goleadoresAnteriores[nombre] || 0;
+            const golesActual = stats.goleadores[nombre].goles;
+            golesJornadaActual[nombre] = golesActual - golesAnterior;
+        });
+    }
+    
+    // Agregar posición y cambios a cada jugador
+    topGoleadores = topGoleadores.map((g, i) => {
+        const posicionActual = i + 1;
+        const posicionAnterior = posicionAnteriorMap[g.nombre] || null;
+        let cambioPosicion = '';
+        let cambioStyle = '';
+        
+        if (posicionAnterior !== null && posicionAnterior !== posicionActual) {
+            const diferencia = posicionAnterior - posicionActual;
+            if (diferencia > 0) {
+                cambioPosicion = `▲${diferencia}`;
+                cambioStyle = 'color:#059669; font-weight:bold;'; // verdesubio
+            } else {
+                cambioPosicion = `▼${Math.abs(diferencia)}`;
+                cambioStyle = 'color:#dc2626; font-weight:bold;'; // rojo bajo
+            }
+        } else if (posicionAnterior === null && numJornada > 1) {
+            cambioPosicion = '🆕';
+            cambioStyle = 'color:#7c3aed; font-weight:bold;'; // morado nuevo
+        }
+        
+        const golesEstaJornada = esJornadaNumerica ? (golesJornadaActual[g.nombre] || 0) : null;
+        
+        // Para jornada 1 o liguilla, no mostrar cambios
+        const esPrimeraJornada = esJornadaNumerica && numJornada === 1;
+        const esLiguilla = !esJornadaNumerica;
+        
+        return { 
+            ...g, 
+            posicion: posicionActual, 
+            posicionAnterior: (esPrimeraJornada || esLiguilla) ? null : posicionAnterior,
+            cambioPosicion: (esPrimeraJornada || esLiguilla) ? '' : (cambioPosicion || '-'),
+            cambioStyle: (esPrimeraJornada || esLiguilla) ? '' : cambioStyle,
+            golesEstaJornada: (esPrimeraJornada || esLiguilla) ? null : golesEstaJornada,
+            esJornadaNumerica: esJornadaNumerica
+        };
+    });
     
     // Tabla de posiciones - solo para jornadas numéricas
     let tablaOrdenada = [];
@@ -1602,11 +1691,57 @@ window.descargarPDFJornada = async function(jornada) {
         
         <div class="page-break"></div>
         
-        <h2>🏆 TOP GOLEADORES</h2>
-        <table>
-            <tr><th class="text-left">Jugador</th><th class="text-left">Equipo</th><th>Goles</th></tr>
-            ${topGoleadores.length > 0 ? topGoleadores.map(([nombre, data]) => `<tr><td class="text-left">${nombre}</td><td class="text-left">${data.equipo || '-'}</td><td><b>${data.goles}</b></td></tr>`).join('') : '<tr><td colspan="3">Sin datos</td></tr>'}
+        <h2 style="font-size:16px; margin-bottom:10px;">🏆 ${esJornadaNumerica ? 'Top 10 Goleadores - Acumulado' : 'Goleadores: ' + jornadaStr}</h2>
+        <table style="width:100%; border-collapse: collapse; margin-bottom: 8px; font-size:11px;">
+            <tr style="background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); color: #fff;">
+                <th style="border:1px solid #334155; padding:8px; text-align:center; width:35px;">#</th>
+                <th style="border:1px solid #334155; padding:8px; text-align:left;">JUGADOR</th>
+                <th style="border:1px solid #334155; padding:8px; text-align:left; width:120px;">EQUIPO</th>
+                <th style="border:1px solid #334155; padding:8px; text-align:center; width:80px;">GOLES</th>
+                <th style="border:1px solid #334155; padding:8px; text-align:center; width:50px;">TEND.</th>
+            </tr>
+            ${topGoleadores.length > 0 ? topGoleadores.map((g, i) => {
+                const isTop3 = g.posicion <= 3;
+                const bgColor = isTop3 ? (g.posicion === 1 ? '#fef9c3' : g.posicion === 2 ? '#f1f5f9' : '#ffedd5') : '#fff';
+                const borderLeft = g.posicion === 1 ? '4px solid #eab308' : g.posicion === 2 ? '4px solid #94a3b8' : g.posicion === 3 ? '4px solid #fb923c' : '1px solid #334155';
+                const medal = g.posicion === 1 ? '🥇' : g.posicion === 2 ? '🥈' : g.posicion === 3 ? '🥉' : '';
+                const posicionText = g.posicion <= 3 ? '' : g.posicion;
+                
+                // Tendencia
+                let tendencia = '';
+                let tendenciaStyle = '';
+                if (g.cambioPosicion && g.cambioPosicion.startsWith('▲')) {
+                    tendencia = '▲';
+                    tendenciaStyle = 'color:#16a34a; font-size:18px; font-weight:bold;';
+                } else if (g.cambioPosicion && g.cambioPosicion.startsWith('▼')) {
+                    tendencia = '▼';
+                    tendenciaStyle = 'color:#dc2626; font-size:18px; font-weight:bold;';
+                } else if (g.cambioPosicion === '🆕') {
+                    tendencia = '🆕';
+                    tendenciaStyle = 'font-size:14px;';
+                } else {
+                    tendencia = '●';
+                    tendenciaStyle = 'color:#94a3b8; font-size:14px;';
+                }
+                
+                // Goles con los de esta jornada
+                const golesEstaJornada = g.golesEstaJornada || 0;
+                const golesDisplay = g.esJornadaNumerica && g.posicionAnterior !== null 
+                    ? `<span style="color:#059669; font-weight:bold;">${g.goles}</span><span style="color:#9333ea; font-size:10px;"> (+${golesEstaJornada})</span>`
+                    : `<span style="color:#059669; font-weight:bold;">${g.goles}</span>`;
+                
+                return `<tr style="background: ${bgColor}; border-left: ${borderLeft};">
+                    <td style="border:1px solid #334155; padding:8px; text-align:center; font-weight:bold; ${isTop3 ? 'color:#b45309;' : 'color:#64748b;'}">${medal || posicionText}</td>
+                    <td style="border:1px solid #334155; padding:8px; text-align:left; font-weight:bold; color:#1e293b;">${g.nombre}</td>
+                    <td style="border:1px solid #334155; padding:8px; text-align:left; color:#475569;">${g.equipo || '-'}</td>
+                    <td style="border:1px solid #334155; padding:8px; text-align:center; font-size:14px;">${golesDisplay}</td>
+                    <td style="border:1px solid #334155; padding:8px; text-align:center;">${g.esJornadaNumerica ? `<span style="${tendenciaStyle}">${tendencia}</span>` : '—'}</td>
+                </tr>`;
+            }).join('') : '<tr><td colspan="5" style="border:1px solid #334155; padding:12px; text-align:center;">Sin datos</td></tr>'}
         </table>
+        <p style="font-size:8px; color:#64748b; text-align:center;">
+            ${esJornadaNumerica ? '▲ Subió &nbsp;▼ Bajó &nbsp;● Sin cambios &nbsp;🆕 Nuevo en top &nbsp;(+X) Goles esta jornada' : 'Goles anotados exclusivamente en esta fase de eliminatoria'}
+        </p>
         
         ${proximosEncuentrosHTML}
         
