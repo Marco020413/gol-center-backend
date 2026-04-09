@@ -141,6 +141,12 @@
 
             <div id="content-posiciones" class="tab-pane hidden">
                 <div class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+                    <div class="flex justify-end p-4 border-b border-slate-800">
+                        <button onclick="window.descargarBackupPDF()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            📥 Backup PDF
+                        </button>
+                    </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
@@ -658,5 +664,275 @@
             txt.innerText = nombre;
         }
     }
+    
+    // Wrapper para el backup PDF - espera a que cargue el layout
+    window.descargarBackupPDF = async function() {
+        // Mostrar pantalla de carga
+        if (window.mostrarCarga) window.mostrarCarga('Generando Backup PDF...');
+        
+        // Si no existen los datos, trying cargar desde el layout o desde API
+        if (!window.datosTablaPosiciones || window.datosTablaPosiciones.length === 0) {
+            // Intentar obtener datos directamente
+            try {
+                const resP = await fetch('/api/partidos');
+                const resE = await fetch('/api/equipos');
+                const partidos = await resP.json();
+                const equipos = await resE.json();
+                
+                // Calcular stats
+                let stats = {};
+                Object.values(equipos || {}).forEach(eq => {
+                    stats[eq.nombre] = { nombre: eq.nombre, pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0 };
+                });
+                
+                Object.values(partidos || {}).forEach(p => {
+                    if (p.resultado_confirmado && !isNaN(p.jornada)) {
+                        const gl = parseInt(p.goles_local || 0), gv = parseInt(p.goles_visitante || 0);
+                        if (stats[p.equipo_local] && stats[p.equipo_visitante]) {
+                            stats[p.equipo_local].pj++; stats[p.equipo_visitante].pj++;
+                            stats[p.equipo_local].gf += gl; stats[p.equipo_local].gc += gv;
+                            stats[p.equipo_visitante].gf += gv; stats[p.equipo_visitante].gc += gl;
+                            if (gl > gv) { stats[p.equipo_local].g++; stats[p.equipo_local].pts += 3; stats[p.equipo_visitante].p++; }
+                            else if (gl < gv) { stats[p.equipo_visitante].g++; stats[p.equipo_visitante].pts += 3; stats[p.equipo_local].p++; }
+                            else { stats[p.equipo_local].e++; stats[p.equipo_visitante].e++; stats[p.equipo_local].pts++; stats[p.equipo_visitante].pts++; }
+                        }
+                    }
+                });
+                
+                window.datosTablaPosiciones = Object.values(stats).sort((a,b) => b.pts - a.pts);
+                window.cacheEquiposData = equipos;
+                window.cachePartidosData = partidos;
+            } catch(e) { console.error('Error:', e); }
+        }
+        
+        const datos = window.datosTablaPosiciones;
+        const equipos = window.cacheEquiposData || {};
+        const partidos = window.cachePartidosData || {};
+        
+        let jugadoresData = {};
+        try {
+            const resJ = await fetch('/api/jugadores');
+            jugadoresData = await resJ.json();
+        } catch(e) {}
+        
+        const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+        
+        // Agrupar partidos por jornada
+        const jornadas = {};
+        Object.values(partidos || {}).forEach(p => {
+            if (!p.jornada) return;
+            if (!jornadas[p.jornada]) jornadas[p.jornada] = [];
+            jornadas[p.jornada].push(p);
+        });
+        
+        // Partidos próximos (sin resultado)
+        const proximos = Object.values(partidos || {}).filter(p => !p.resultado_confirmado && p.jornada && p.fecha);
+        
+        let html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Resumen Gol Center - ${fecha}</title>
+            <style>
+                @page { size: A4; margin: 1cm; }
+                body { font-family: Arial, sans-serif; font-size: 11px; color: #000; }
+                h1 { font-size: 20px; text-align: center; margin-bottom: 5px; }
+                h2 { font-size: 14px; margin-top: 20px; border-bottom: 1px solid #000; padding-bottom: 5px; }
+                h3 { font-size: 12px; margin-top: 15px; color: #333; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+                th, td { border: 1px solid #000; padding: 4px 8px; text-align: center; }
+                th { background: #eee; }
+                .text-left { text-align: left; }
+                .text-right { text-align: right; }
+                .page-break { page-break-after: always; }
+                .score { font-weight: bold; font-size: 12px; }
+                
+                @media print {
+                    body > * { display: none !important; }
+                    #print-area-welcome { display: block !important; position: static !important; left: 0 !important; }
+                }
+            </style>
+        </head>
+        <body>
+            <div id="print-area-welcome">
+            <h1>⚽ GOL CENTER - RESUMEN</h1>
+            <p style="text-align:center; margin-bottom: 20px;">Fecha: ${fecha}</p>
+            
+            <h2>📊 TABLA DE POSICIONES</h2>
+            <table>
+                <tr><th>#</th><th class="text-left">Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>PTS</th><th>GF</th><th>GC</th><th>DG</th></tr>
+                ${(datos || []).map((t, i) => `<tr>
+                    <td>${i+1}</td>
+                    <td class="text-left">${t.nombre}</td>
+                    <td>${t.pj}</td>
+                    <td>${t.g}</td>
+                    <td>${t.e}</td>
+                    <td>${t.p}</td>
+                    <td><b>${t.pts}</b></td>
+                    <td>${t.gf}</td>
+                    <td>${t.gc}</td>
+                    <td>${t.gf - t.gc >= 0 ? '+'+(t.gf - t.gc) : t.gf - t.gc}</td>
+                </tr>`).join('')}
+            </table>
+            
+            <div class="page-break"></div>
+            
+            <h2>⚽ PARTIDOS JUGADOS</h2>`;
+            
+        // Agregar cada jornada
+        Object.keys(jornadas).sort((a,b) => parseInt(a) - parseInt(b)).forEach(j => {
+            const partidosJornada = jornadas[j].filter(p => p.resultado_confirmado);
+            if (partidosJornada.length === 0) return;
+            html += `
+            <h3>Jornada ${j}</h3>
+            <table>
+                <tr><th class="text-left">Local</th><th>Score</th><th class="text-left">Visitante</th><th>Fecha</th></tr>
+                ${partidosJornada.map(p => `<tr>
+                    <td class="text-left">${p.equipo_local || '-'}</td>
+                    <td class="score">${p.goles_local} - ${p.goles_visitante}</td>
+                    <td class="text-left">${p.equipo_visitante || '-'}</td>
+                    <td>${p.fecha || '-'}</td>
+                </tr>`).join('')}
+            </table>`;
+        });
+        
+        // Calcular estadísticas por jornada
+        const statsJornada = {};
+        
+        Object.values(partidos || {}).forEach(p => {
+            if (!p.jornada || !p.resultado_confirmado) return;
+            if (!statsJornada[p.jornada]) {
+                statsJornada[p.jornada] = {
+                    goleadores: {},
+                    equipos: {}
+                };
+            }
+            
+            // Usar detalle_jugadores para obtener goleadores
+            if (p.detalle_jugadores) {
+                Object.entries(p.detalle_jugadores).forEach(([tel, stats]) => {
+                    if (stats.asistio && stats.goles > 0) {
+                        const nombre = jugadoresData[tel]?.nombre || tel;
+                        const equipo = jugadoresData[tel]?.equipo || '';
+                        if (!statsJornada[p.jornada].goleadores[nombre]) {
+                            statsJornada[p.jornada].goleadores[nombre] = { goles: 0, equipo: equipo };
+                        }
+                        statsJornada[p.jornada].goleadores[nombre].goles += parseInt(stats.goles || 0);
+                    }
+                });
+            }
+            
+            const local = p.equipo_local;
+            const visitante = p.equipo_visitante;
+            if (local) {
+                if (!statsJornada[p.jornada].equipos[local]) {
+                    statsJornada[p.jornada].equipos[local] = { gf: 0, gc: 0 };
+                }
+                statsJornada[p.jornada].equipos[local].gf += parseInt(p.goles_local || 0);
+                statsJornada[p.jornada].equipos[local].gc += parseInt(p.goles_visitante || 0);
+            }
+            if (visitante) {
+                if (!statsJornada[p.jornada].equipos[visitante]) {
+                    statsJornada[p.jornada].equipos[visitante] = { gf: 0, gc: 0 };
+                }
+                statsJornada[p.jornada].equipos[visitante].gf += parseInt(p.goles_visitante || 0);
+                statsJornada[p.jornada].equipos[visitante].gc += parseInt(p.goles_local || 0);
+            }
+        });
+        
+        html += `
+            <div class="page-break"></div>
+            
+            <h2>📊 ESTADÍSTICAS POR JORNADA</h2>`;
+            
+        Object.keys(jornadas).sort((a,b) => parseInt(a) - parseInt(b)).forEach(j => {
+            const stats = statsJornada[j];
+            if (!stats) return;
+            
+            // Top goleadores - incluir todos los empatados en las posiciones 1, 2, 3
+            const goleadoresOrdenados = Object.entries(stats.goleadores || {})
+                .sort((a, b) => b[1].goles - a[1].goles);
+            
+            let topGoleadores = [];
+            if (goleadoresOrdenados.length > 0) {
+                const maxGoles = goleadoresOrdenados[0][1].goles;
+                topGoleadores = goleadoresOrdenados.filter(g => g[1].goles === maxGoles);
+                
+                if (goleadoresOrdenados.length > 1) {
+                    const segundoMax = goleadoresOrdenados[1][1].goles;
+                    if (segundoMax > 0 && segundoMax < maxGoles) {
+                        goleadoresOrdenados.slice(1).filter(g => g[1].goles === segundoMax).forEach(g => topGoleadores.push(g));
+                    }
+                }
+            }
+            
+            // Equipo más goleador - incluir todos los que igualen el máximo GF
+            const equiposArr = Object.entries(stats.equipos || {});
+            const maxGF = Math.max(...equiposArr.map(e => e[1].gf));
+            const equiposMasGoleadores = equiposArr.filter(e => e[1].gf === maxGF);
+            
+            // Equipo menos goleado - incluir todos los que igualen el mínimo GC
+            const minGC = Math.min(...equiposArr.map(e => e[1].gc));
+            const equiposMenosGoleados = equiposArr.filter(e => e[1].gc === minGC);
+            
+            html += `
+            <h3>Jornada ${j}</h3>
+            <table>
+                <tr><th colspan="3" style="background:#e0e7ff">🏆 Top Goleadores</th></tr>
+                <tr><th class="text-left">Jugador</th><th class="text-left">Equipo</th><th>Goles</th></tr>
+                ${topGoleadores.length > 0 ? topGoleadores.map(([nombre, data]) => `<tr><td class="text-left">${nombre}</td><td class="text-left">${data.equipo || '-'}</td><td><b>${data.goles}</b></td></tr>`).join('') : '<tr><td colspan="3" class="text-left">Sin datos</td></tr>'}
+            </table>
+            <table>
+                <tr>
+                    <th style="background:#dcfce7">🔥 Más Goleador (GF: ${maxGF})</th>
+                    <th style="background:#fee2e2">🛡️ Menos Goleado (GC: ${minGC})</th>
+                </tr>
+                <tr>
+                    <td class="text-left">${equiposMasGoleadores.map(e => e[0]).join(', ') || '-'}</td>
+                    <td class="text-left">${equiposMenosGoleados.map(e => e[0]).join(', ') || '-'}</td>
+                </tr>
+            </table>`;
+        });
+        
+        html += `
+            <div class="page-break"></div>
+            
+            <h2>📅 PRÓXIMOS PARTIDOS</h2>`;
+            
+        if (proximos.length > 0) {
+            html += `<table>
+                <tr><th>Jornada</th><th class="text-left">Local</th><th class="text-left">Visitante</th><th>Fecha</th><th>Hora</th></tr>
+                ${proximos.sort((a,b) => parseInt(a.jornada) - parseInt(b.jornada)).map(p => `<tr>
+                    <td>${p.jornada}</td>
+                    <td class="text-left">${p.equipo_local || '-'}</td>
+                    <td class="text-left">${p.equipo_visitante || '-'}</td>
+                    <td>${p.fecha || '-'}</td>
+                    <td>${p.hora || '-'}</td>
+                </tr>`).join('')}
+            </table>`;
+        } else {
+            html += `<p>No hay partidos programados</p>`;
+        }
+        
+        html += `
+            <p style="margin-top:20px; font-size:8px; text-align:center">Generado por Gol Center - ${new Date().toISOString()}</p>
+            </div>
+        </body>
+        </html>`;
+        
+        // Crear contenido de impresión en la misma página
+        const printDiv = document.createElement('div');
+        printDiv.id = 'print-area-welcome';
+        printDiv.innerHTML = html;
+        printDiv.style.cssText = 'position:absolute; left:-9999px; top:0; width:100%;';
+        document.body.appendChild(printDiv);
+        
+        // Ocultar pantalla de carga
+        if (window.ocultarCarga) window.ocultarCarga();
+        
+        // Imprimir y luego limpiar
+        window.print();
+        setTimeout(() => printDiv.remove(), 1000);
+    };
 </script>
 @endsection

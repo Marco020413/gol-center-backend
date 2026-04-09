@@ -49,8 +49,38 @@
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
     <div id="overlay-carga">
         <div class="spinner"></div>
-        <p class="text-white font-black uppercase tracking-widest mt-4 text-[10px]">Archivando Torneo en el Historial...</p>
+        <p id="texto-carga" class="text-white font-black uppercase tracking-widest mt-4 text-[10px]">Cargando...</p>
     </div>
+
+    <!-- Funciones de carga disponibles inmediatamente -->
+    <script>
+    // Función para mostrar pantalla de carga
+    window.mostrarCarga = function(texto) {
+        const loader = document.getElementById('overlay-carga');
+        const textoEl = document.getElementById('texto-carga');
+        if (loader) {
+            if (textoEl && texto) textoEl.innerText = texto;
+            loader.style.display = 'flex';
+        }
+    };
+
+    // Función para ocultar pantalla de carga
+    window.ocultarCarga = function() {
+        const loader = document.getElementById('overlay-carga');
+        if (loader) loader.style.display = 'none';
+    };
+    </script>
+
+    <!-- Main App Script -->
+    <script>
+    // Pantalla de carga al inicio (admin)
+    window.mostrarCarga('Cargando Panel de Administración...');
+
+    // Ocultar cuando la página esté completamente cargada
+    window.addEventListener('load', function() {
+        setTimeout(() => window.ocultarCarga(), 500);
+    });
+    </script>
     <header class="w-full bg-slate-900/80 border-b border-slate-800 backdrop-blur-md sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-4">
@@ -211,6 +241,9 @@
 
         // 4. SANEADOR DE JUGADORES Y FILTRADO INICIAL
         const sanearYFiltrarTabla = async () => {
+            // Solo ejecutar si existe la tabla de jugadores
+            if (!document.getElementById('tablaPrincipalJugadores')) return;
+            
             try {
                 const res = await fetch('/api/equipos');
                 const equiposActivos = await res.json();
@@ -878,9 +911,16 @@
     
     // Lazy loading removido - solo botones manuales
     function filtrarTabla() {
-        const busqueda = document.getElementById('busquedaJugador').value.toLowerCase().trim();
-        const equipoFiltro = document.getElementById('filtroEquipo').value; 
-        const orden = document.getElementById('ordenarPor').value;
+        const inputBusqueda = document.getElementById('busquedaJugador');
+        const selectEquipo = document.getElementById('filtroEquipo');
+        const selectOrden = document.getElementById('ordenarPor');
+        
+        // Verificar que existan los elementos
+        if (!inputBusqueda || !selectEquipo || !selectOrden) return;
+        
+        const busqueda = inputBusqueda.value.toLowerCase().trim();
+        const equipoFiltro = selectEquipo.value; 
+        const orden = selectOrden.value;
         
         const tablaBody = document.querySelector('#tablaPrincipalJugadores tbody');
         if (!tablaBody) return;
@@ -1699,7 +1739,7 @@ async function llenarSelectsEquipos() {
         if(!cuerpo) return;
 
         // Usar cache local para evitar recálculos innecesarios
-        if (window.cacheTablaPosiciones) {
+        if (window.cacheTablaPosiciones && window.datosTablaPosiciones) {
             cuerpo.innerHTML = window.cacheTablaPosiciones;
             return;
         }
@@ -1780,9 +1820,13 @@ async function llenarSelectsEquipos() {
             cuerpo.innerHTML = '';
             cuerpo.appendChild(fragment);
             window.cacheTablaPosiciones = cuerpo.innerHTML;
+            
+            // Guardar datos para backup
+            window.datosTablaPosiciones = tablaOrdenada;
         } catch (e) { console.error("Error tabla posiciones:", e); }
     };
 
+   
    window.ejecutarGuardadoCancha = async function(id, data, nuevaSedeId = null) {
         if(nuevaSedeId) data.nueva_sede_id = nuevaSedeId;
 
