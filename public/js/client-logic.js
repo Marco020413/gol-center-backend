@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     cargarPartidos(datosGlobales.partidos);
     cargarLiguilla(datosGlobales.partidos);
     cargarRoles(datosGlobales.campos);
+    
+    // Renderizar botones de descarga por jornada
+    renderizarBotonesDescargaJornadas();
     // El historial se carga solo al hacer click en la pestaña (lazy load)
 });
 
@@ -643,6 +646,16 @@ function cargarPosiciones(equipos, partidos) {
 
     Object.values(partidos || {}).forEach(partido => {
         if (partido.resultado_confirmado) {
+            // Solo incluir jornadas numéricas, excluir liguilla (CUARTOS, SEMIFINAL, FINAL)
+            const jornada = partido.jornada;
+            const esLiguilla = jornada && (
+                String(jornada).toUpperCase() === 'CUARTOS' ||
+                String(jornada).toUpperCase() === 'SEMIFINAL' ||
+                String(jornada).toUpperCase() === 'FINAL'
+            );
+            
+            if (esLiguilla) return;
+            
             const loc = partido.equipo_local;
             const vis = partido.equipo_visitante;
             const gl = parseInt(partido.goles_local || 0);
@@ -1307,4 +1320,387 @@ function togglePartyTabs(tabName, btn) {
         document.getElementById('tab-goleadores').classList.add('hidden');
         document.getElementById('tab-participantes').classList.remove('hidden');
     }
+}
+
+// === DESCARGAR PDF POR JORNADA ===
+window.descargarPDFJornada = async function(jornada) {
+    if (!datosGlobales) {
+        alert('Error: No hay datos cargados');
+        return;
+    }
+    
+    const partidos = datosGlobales.partidos || {};
+    const jugadores = datosGlobales.jugadores || {};
+    const equipos = datosGlobales.equipos || {};
+    
+    // Determinar si es jornada numérica o fase de liguilla
+    const esJornadaNumerica = !isNaN(parseInt(jornada));
+    const jornadaStr = String(jornada).trim().toUpperCase();
+    
+    let partidosJornada, partidosAcumulados;
+    
+    if (esJornadaNumerica) {
+        // Jornada numérica: filtrar por número
+        const numJornada = parseInt(jornada);
+        partidosJornada = Object.values(partidos).filter(p => 
+            parseInt(p.jornada) === numJornada && p.resultado_confirmado
+        );
+        
+        // Acumulativo hasta esa jornada
+        partidosAcumulados = Object.values(partidos).filter(p => {
+            const pj = parseInt(p.jornada);
+            return !isNaN(pj) && pj <= numJornada && p.resultado_confirmado;
+        });
+    } else {
+        // Fase de liguilla (CUARTOS, SEMIFINAL, FINAL) - filtrar por string
+        partidosJornada = Object.values(partidos).filter(p => 
+            String(p.jornada || '').trim().toUpperCase() === jornadaStr && p.resultado_confirmado
+        );
+        // Para liguilla no hay acumulado, solo esa fase
+        partidosAcumulados = partidosJornada;
+    }
+    
+    if (partidosJornada.length === 0) {
+        alert('No hay partidos jugados en ' + jornada);
+        return;
+    }
+    
+    const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+    
+    // Calcular estadísticas según el tipo
+    const stats = { goleadores: {}, equipos: {} };
+    
+    // Primero inicializar todos los equipos del catálogo
+    const nombreEquiposMap = {};
+    Object.values(equipos).forEach(eq => {
+        const nombreNormalizado = (eq.nombre || '').trim();
+        stats.equipos[nombreNormalizado] = { nombre: nombreNormalizado, gf: 0, gc: 0, pj: 0, g: 0, e: 0, p: 0, pts: 0 };
+        nombreEquiposMap[nombreNormalizado.toLowerCase()] = nombreNormalizado;
+    });
+    
+    // Calcular stats de todos los partidos
+    partidosAcumulados.forEach(p => {
+        // Goleadores - solo de la jornada/fase seleccionada
+        const esMismaJornada = esJornadaNumerica 
+            ? (parseInt(p.jornada) === parseInt(jornada))
+            : (String(p.jornada || '').trim().toUpperCase() === jornadaStr);
+        
+        if (p.detalle_jugadores && esMismaJornada) {
+            Object.entries(p.detalle_jugadores).forEach(([tel, data]) => {
+                if (data.asistio && data.goles > 0) {
+                    const nombre = jugadores[tel]?.nombre || tel;
+                    const equipo = jugadores[tel]?.equipo || '';
+                    if (!stats.goleadores[nombre]) {
+                        stats.goleadores[nombre] = { goles: 0, equipo: equipo };
+                    }
+                    stats.goleadores[nombre].goles += parseInt(data.goles || 0);
+                }
+            });
+        }
+        
+        // Equipos (acumulativo) - normalizar nombres
+        const localNorm = (p.equipo_local || '').trim();
+        const visitanteNorm = (p.equipo_visitante || '').trim();
+        const localNombre = nombreEquiposMap[localNorm.toLowerCase()] || localNorm;
+        const visitanteNombre = nombreEquiposMap[visitanteNorm.toLowerCase()] || visitanteNorm;
+        
+        if (localNombre && stats.equipos[localNombre]) {
+            stats.equipos[localNombre].gf += parseInt(p.goles_local || 0);
+            stats.equipos[localNombre].gc += parseInt(p.goles_visitante || 0);
+            stats.equipos[localNombre].pj++;
+            const gl = parseInt(p.goles_local || 0), gv = parseInt(p.goles_visitante || 0);
+            if (gl > gv) { stats.equipos[localNombre].g++; stats.equipos[localNombre].pts += 3; }
+            else if (gl < gv) { stats.equipos[localNombre].p++; }
+            else { stats.equipos[localNombre].e++; stats.equipos[localNombre].pts += 1; }
+        }
+        if (visitanteNombre && stats.equipos[visitanteNombre]) {
+            stats.equipos[visitanteNombre].gf += parseInt(p.goles_visitante || 0);
+            stats.equipos[visitanteNombre].gc += parseInt(p.goles_local || 0);
+            stats.equipos[visitanteNombre].pj++;
+            const gl = parseInt(p.goles_local || 0), gv = parseInt(p.goles_visitante || 0);
+            if (gv > gl) { stats.equipos[visitanteNombre].g++; stats.equipos[visitanteNombre].pts += 3; }
+            else if (gv < gl) { stats.equipos[visitanteNombre].p++; }
+            else { stats.equipos[visitanteNombre].e++; stats.equipos[visitanteNombre].pts += 1; }
+        }
+    });
+    
+    // Top goleadores - incluir empates
+    const goleadoresOrdenados = Object.entries(stats.goleadores || {}).sort((a, b) => b[1].goles - a[1].goles);
+    let topGoleadores = [];
+    if (goleadoresOrdenados.length > 0) {
+        const maxGoles = goleadoresOrdenados[0][1].goles;
+        topGoleadores = goleadoresOrdenados.filter(g => g[1].goles === maxGoles);
+    }
+    
+    // Tabla de posiciones - solo para jornadas numéricas
+    let tablaOrdenada = [];
+    if (esJornadaNumerica) {
+        tablaOrdenada = Object.values(stats.equipos)
+            .filter(t => t.pj > 0)
+            .sort((a, b) => {
+                if (b.pts !== a.pts) return b.pts - a.pts;
+                const difA = a.gf - a.gc;
+                const difB = b.gf - b.gc;
+                if (difB !== difA) return difB - difA;
+                return b.gf - a.gf;
+            });
+    }
+    
+    const tituloJornada = esJornadaNumerica ? 'JORNADA ' + jornada : jornada;
+    
+    // === LÓGICA DE PRÓXIMOS ENCUENTROS ===
+    let proximosEncuentrosHTML = '';
+    
+    if (esJornadaNumerica) {
+        // Obtener la última jornada numérica del torneo
+        const jornadasNumericas = window.getJornadasConResultados();
+        const ultimaJornada = jornadasNumericas.length > 0 ? Math.max(...jornadasNumericas) : 0;
+        const siguienteJornada = parseInt(jornada) + 1;
+        
+        if (siguienteJornada > ultimaJornada) {
+            // Es la última jornada - mostrar mensaje de fin de fase regular
+            proximosEncuentrosHTML = `
+            <div class="page-break"></div>
+            <h2>📅 PRÓXIMOS ENCUENTROS</h2>
+            <div style="text-align:center; padding: 20px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid #fbbf24;">
+                <p style="margin:0; color: #666;"><em>Fin de fase regular - Próximamente Liguilla</em></p>
+            </div>`;
+        } else {
+            // Buscar partidos programados para la siguiente jornada (tienen fecha o están pendientes)
+            const partidosProximos = Object.values(partidos).filter(p => 
+                parseInt(p.jornada) === siguienteJornada && 
+                (p.fecha || !p.resultado_confirmado)
+            );
+            
+            if (partidosProximos.length > 0) {
+                // Ordenar por fecha
+                partidosProximos.sort((a, b) => {
+                    if (!a.fecha) return 1;
+                    if (!b.fecha) return -1;
+                    return new Date(a.fecha) - new Date(b.fecha);
+                });
+                
+                proximosEncuentrosHTML = `
+                <div class="page-break"></div>
+                <h2>📅 PRÓXIMOS ENCUENTROS - JORNADA ${siguienteJornada}</h2>
+                <table style="width:100%; border-collapse: collapse; margin-bottom: 12px;">
+                    <tr style="background: #f3f4f6;">
+                        <th style="border:1px solid #000; padding:6px; text-align:left;">🏠 Local</th>
+                        <th style="border:1px solid #000; padding:6px; text-align:center;">VS</th>
+                        <th style="border:1px solid #000; padding:6px; text-align:right;">Visitante 🛫</th>
+                        <th style="border:1px solid #000; padding:6px; text-align:center;">📅 Fecha</th>
+                        <th style="border:1px solid #000; padding:6px; text-align:center;">🕐 Hora</th>
+                    </tr>
+                    ${partidosProximos.map(p => `<tr>
+                        <td style="border:1px solid #000; padding:6px; text-align:left; font-weight:bold;">${p.equipo_local || '-'}</td>
+                        <td style="border:1px solid #000; padding:6px; text-align:center; color: #6b7280;">VS</td>
+                        <td style="border:1px solid #000; padding:6px; text-align:right; font-weight:bold;">${p.equipo_visitante || '-'}</td>
+                        <td style="border:1px solid #000; padding:6px; text-align:center;">${p.fecha || 'Por definir'}</td>
+                        <td style="border:1px solid #000; padding:6px; text-align:center;">${p.hora || '-'}</td>
+                    </tr>`).join('')}
+                </table>`;
+            }
+        }
+    } else {
+        // Para liguilla: CUARTOS -> SEMIFINAL, SEMIFINAL -> FINAL, FINAL -> ocultar
+        const fasesOrden = { 'CUARTOS': 1, 'SEMIFINAL': 2, 'FINAL': 3 };
+        const faseActual = fasesOrden[jornadaStr] || 0;
+        
+        if (faseActual < 3) { // No es FINAL
+            const siguienteFase = faseActual === 1 ? 'SEMIFINAL' : 'FINAL';
+            const partidosProximos = Object.values(partidos).filter(p => 
+                String(p.jornada || '').trim().toUpperCase() === siguienteFase && 
+                (p.fecha || !p.resultado_confirmado)
+            );
+            
+            if (partidosProximos.length > 0) {
+                // Ordenar por fecha
+                partidosProximos.sort((a, b) => {
+                    if (!a.fecha) return 1;
+                    if (!b.fecha) return -1;
+                    return new Date(a.fecha) - new Date(b.fecha);
+                });
+                
+                const faseColor = siguienteFase === 'SEMIFINAL' ? '#8b5cf6' : '#f59e0b';
+                proximosEncuentrosHTML = `
+                <div class="page-break"></div>
+                <h2>📅 PRÓXIMOS ENCUENTROS - ${siguienteFase}</h2>
+                <table style="width:100%; border-collapse: collapse; margin-bottom: 12px;">
+                    <tr style="background: #f3f4f6;">
+                        <th style="border:1px solid #000; padding:6px; text-align:left;">🏠 Local</th>
+                        <th style="border:1px solid #000; padding:6px; text-align:center;">VS</th>
+                        <th style="border:1px solid #000; padding:6px; text-align:right;">Visitante 🛫</th>
+                        <th style="border:1px solid #000; padding:6px; text-align:center;">📅 Fecha</th>
+                        <th style="border:1px solid #000; padding:6px; text-align:center;">🕐 Hora</th>
+                    </tr>
+                    ${partidosProximos.map(p => `<tr>
+                        <td style="border:1px solid #000; padding:6px; text-align:left; font-weight:bold;">${p.equipo_local || '-'}</td>
+                        <td style="border:1px solid #000; padding:6px; text-align:center; color: #6b7280;">VS</td>
+                        <td style="border:1px solid #000; padding:6px; text-align:right; font-weight:bold;">${p.equipo_visitante || '-'}</td>
+                        <td style="border:1px solid #000; padding:6px; text-align:center;">${p.fecha || 'Por definir'}</td>
+                        <td style="border:1px solid #000; padding:6px; text-align:center;">${p.hora || '-'}</td>
+                    </tr>`).join('')}
+                </table>`;
+            }
+        }
+    }
+    
+    let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>${tituloJornada} - Gol Center</title>
+        <style>
+            @page { size: A4; margin: 1cm; }
+            body { font-family: Arial, sans-serif; font-size: 11px; color: #000; }
+            h1 { font-size: 20px; text-align: center; margin-bottom: 5px; }
+            h2 { font-size: 14px; margin-top: 20px; border-bottom: 1px solid #000; padding-bottom: 5px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+            th, td { border: 1px solid #000; padding: 4px 8px; text-align: center; }
+            th { background: #eee; }
+            .text-left { text-align: left; }
+            .page-break { page-break-after: always; }
+            @media print { body > * { display: none !important; } #print-jornada { display: block !important; position: static !important; left: 0 !important; } }
+        </style>
+    </head>
+    <body>
+        <div id="print-jornada">
+        <h1>⚽ ${tituloJornada}</h1>
+        <p style="text-align:center; margin-bottom: 20px;">Fecha: ${fecha}</p>
+        
+        ${esJornadaNumerica ? `
+        <h2>📊 TABLA DE POSICIONES</h2>
+        <table>
+            <tr><th>#</th><th class="text-left">Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>PTS</th><th>GF</th><th>GC</th><th>DG</th></tr>
+            ${tablaOrdenada.map((t, i) => `<tr>
+                <td>${i+1}</td>
+                <td class="text-left">${t.nombre}</td>
+                <td>${t.pj}</td>
+                <td>${t.g}</td>
+                <td>${t.e}</td>
+                <td>${t.p}</td>
+                <td><b>${t.pts}</b></td>
+                <td>${t.gf}</td>
+                <td>${t.gc}</td>
+                <td>${t.gf - t.gc >= 0 ? '+'+(t.gf - t.gc) : t.gf - t.gc}</td>
+            </tr>`).join('')}
+        </table>
+        
+        <div class="page-break"></div>
+        ` : ''}
+        
+        <h2>⚽ PARTIDOS JUGADOS - ${esJornadaNumerica ? 'JORNADA ' + jornada : jornada}</h2>
+        <table>
+            <tr><th class="text-left">Local</th><th>Score</th><th class="text-left">Visitante</th><th>Fecha</th></tr>
+            ${partidosJornada.map(p => `<tr>
+                <td class="text-left">${p.equipo_local || '-'}</td>
+                <td><b>${p.goles_local} - ${p.goles_visitante}</b></td>
+                <td class="text-left">${p.equipo_visitante || '-'}</td>
+                <td>${p.fecha || '-'}</td>
+            </tr>`).join('')}
+        </table>
+        
+        <div class="page-break"></div>
+        
+        <h2>🏆 TOP GOLEADORES</h2>
+        <table>
+            <tr><th class="text-left">Jugador</th><th class="text-left">Equipo</th><th>Goles</th></tr>
+            ${topGoleadores.length > 0 ? topGoleadores.map(([nombre, data]) => `<tr><td class="text-left">${nombre}</td><td class="text-left">${data.equipo || '-'}</td><td><b>${data.goles}</b></td></tr>`).join('') : '<tr><td colspan="3">Sin datos</td></tr>'}
+        </table>
+        
+        ${proximosEncuentrosHTML}
+        
+        <p style="margin-top:20px; font-size:8px; text-align:center">Generado por Gol Center - ${new Date().toISOString()}</p>
+        </div>
+    </body>
+    </html>`;
+    
+    const printDiv = document.createElement('div');
+    printDiv.id = 'print-jornada';
+    printDiv.innerHTML = html;
+    printDiv.style.cssText = 'position:absolute; left:-9999px; top:0; width:100%;';
+    document.body.appendChild(printDiv);
+    
+    window.print();
+    setTimeout(() => printDiv.remove(), 1000);
+};
+
+// Obtener jornadas disponibles para mostrar botón de descarga (SOLO NÚMEROS)
+window.getJornadasConResultados = function() {
+    if (!datosGlobales || !datosGlobales.partidos) return [];
+    
+    const jornadas = new Set();
+    Object.values(datosGlobales.partidos).forEach(p => {
+        if (p.jornada && p.resultado_confirmado) {
+            const j = String(p.jornada).trim().toUpperCase();
+            // Solo incluir si es un número (1, 2, 3...) - exclude CUARTOS, SEMIFINAL, FINAL
+            if (j !== 'CUARTOS' && j !== 'SEMIFINAL' && j !== 'FINAL' && !isNaN(parseInt(j))) {
+                jornadas.add(parseInt(j));
+            }
+        }
+    });
+    
+    return Array.from(jornadas).sort((a, b) => a - b);
+};
+
+// Obtener fases de liguilla (CUARTOS, SEMIFINAL, FINAL)
+window.getFasesLiguilla = function() {
+    if (!datosGlobales || !datosGlobales.partidos) return [];
+    
+    const fasesSet = new Set();
+    Object.values(datosGlobales.partidos).forEach(p => {
+        if (p.jornada && p.resultado_confirmado) {
+            const jornada = String(p.jornada).trim().toUpperCase();
+            if (jornada === 'CUARTOS' || jornada === 'SEMIFINAL' || jornada === 'FINAL') {
+                fasesSet.add(jornada);
+            }
+        }
+    });
+    
+    // Orden específico: CUARTOS -> SEMIFINAL -> FINAL
+    const orden = { 'CUARTOS': 1, 'SEMIFINAL': 2, 'FINAL': 3 };
+    return Array.from(fasesSet).sort((a, b) => (orden[a] || 99) - (orden[b] || 99));
+};
+
+// Renderizar botones de descarga por jornada
+function renderizarBotonesDescargaJornadas() {
+    const contenedor = document.getElementById('contenedor-botones-jornadas');
+    if (!contenedor) return;
+    
+    const jornadas = window.getJornadasConResultados();
+    const fases = window.getFasesLiguilla();
+    
+    
+    if (jornadas.length === 0 && fases.length === 0) {
+        contenedor.innerHTML = '<span class="text-slate-500 text-sm">No hay jornadas finalizadas aún</span>';
+        return;
+    }
+    
+    let html = '';
+    
+    // Botones de jornadas numéricas
+    if (jornadas.length > 0) {
+        html += '<div class="w-full mb-2"><span class="text-xs font-bold text-slate-400">JORNADAS</span></div>';
+        jornadas.forEach(function(j) {
+            html += '<button data-jornada="' + j + '" class="btn-pdf-jornada bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition">📄 Jornada ' + j + '</button>';
+        });
+    }
+    
+    // Botones de fases de liguilla
+    if (fases.length > 0) {
+        html += '<div class="w-full mt-4 mb-2"><span class="text-xs font-bold text-slate-400">LIGUILLA / PLAY-OFFS</span></div>';
+        fases.forEach(function(f) {
+            html += '<button data-jornada="' + f + '" class="btn-pdf-liguilla bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition">🏆 ' + f + '</button>';
+        });
+    }
+    
+    contenedor.innerHTML = html;
+    
+    // Agregar event listeners después de crear el HTML
+    contenedor.querySelectorAll('.btn-pdf-jornada, .btn-pdf-liguilla').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const jornada = this.getAttribute('data-jornada');
+            window.descargarPDFJornada(jornada);
+        });
+    });
 }
