@@ -65,7 +65,7 @@
             
             <div class="flex gap-2 overflow-x-auto pb-4 mb-6 no-scrollbar">
                 <button onclick="switchTab('general')" class="tab-btn active bg-blue-600 text-white px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest whitespace-nowrap">Tabla Posiciones</button>
-                <button onclick="switchTab('ranking')" class="tab-btn bg-slate-900 text-slate-400 px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest border border-slate-800 whitespace-nowrap">Ranking Jugadores</button>
+                <button onclick="switchTab('ranking')" class="tab-btn bg-slate-900 text-slate-400 px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest border border-slate-800 whitespace-nowrap">📊 Rankings</button>
                 <button onclick="switchTab('equipos')" class="tab-btn bg-slate-900 text-slate-400 px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest border border-slate-800 whitespace-nowrap">Equipos</button>
                 <button onclick="switchTab('liguilla')" class="tab-btn bg-slate-900 text-slate-400 px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest border border-slate-800 whitespace-nowrap">Liguilla / Play-offs</button>
                 <button onclick="switchTab('roles')" class="tab-btn bg-slate-900 text-slate-400 px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest border border-slate-800 whitespace-nowrap">Canchas</button>
@@ -91,8 +91,26 @@
             </div>
             
             <div id="tab-ranking" class="tab-content hidden">
-                <div id="contenedor-jugadores" class="glass-card rounded-xl overflow-hidden">
-                    <div class="p-8 text-center animate-pulse text-slate-500">Cargando Ranking...</div>
+                <!-- Goleadores Table -->
+                <div class="mb-6">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-xl">⚽</span>
+                        <h3 class="text-lg font-bold text-white">Top Goleadores</h3>
+                    </div>
+                    <div id="contenedor-jugadores" class="glass-card rounded-xl overflow-hidden">
+                        <div class="p-8 text-center animate-pulse text-slate-500">Cargando...</div>
+                    </div>
+                </div>
+                
+                <!-- Porteros Table -->
+                <div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-xl">🧤</span>
+                        <h3 class="text-lg font-bold text-white">Guante de Oro - Porteros</h3>
+                    </div>
+                    <div id="contenedor-porteros" class="glass-card rounded-xl overflow-hidden">
+                        <div class="p-8 text-center animate-pulse text-slate-500">Cargando...</div>
+                    </div>
                 </div>
             </div>
             

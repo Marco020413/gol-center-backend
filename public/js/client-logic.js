@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     cargarJugadores(datosGlobales.jugadores);
     cargarEquipos(datosGlobales.equipos);
     cargarPosiciones(datosGlobales.equipos, datosGlobales.partidos);
+    cargarPorteros(datosGlobales.equipos, datosGlobales.partidos);
     cargarPartidos(datosGlobales.partidos);
     cargarLiguilla(datosGlobales.partidos);
     cargarRoles(datosGlobales.campos);
@@ -723,6 +724,105 @@ function cargarPosiciones(equipos, partidos) {
         </div>
         <div class="p-3 text-center text-slate-500 text-[10px] border-t border-slate-800/30">
             Toca un equipo para ver detalles
+        </div>
+    `;
+}
+
+// === CARGAR PORTEROS (GUANTE DE ORO) ===
+function cargarPorteros(equipos, partidos) {
+    const contenedor = document.getElementById('contenedor-porteros');
+    if (!contenedor) return;
+    
+    // Calculate stats (same logic as cargarPosiciones but for GC ranking)
+    const stats = {};
+    for (const id in equipos) {
+        const eqNombre = equipos[id].nombre;
+        stats[eqNombre] = {
+            nombre: eqNombre,
+            escudo: equipos[id].escudo || '',
+            portero_nombre: equipos[id].portero_nombre || eqNombre + ' (Portero)',
+            pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0
+        };
+    }
+
+    Object.values(partidos || {}).forEach(partido => {
+        if (partido.resultado_confirmado) {
+            const jornada = partido.jornada;
+            const esLiguilla = jornada && (
+                String(jornada).toUpperCase() === 'CUARTOS' ||
+                String(jornada).toUpperCase() === 'SEMIFINAL' ||
+                String(jornada).toUpperCase() === 'FINAL'
+            );
+            
+            if (esLiguilla) return;
+            
+            const loc = partido.equipo_local;
+            const vis = partido.equipo_visitante;
+            const gl = parseInt(partido.goles_local || 0);
+            const gv = parseInt(partido.goles_visitante || 0);
+
+            if (stats[loc] && stats[vis]) {
+                stats[loc].pj++; stats[vis].pj++;
+                stats[loc].gf += gl; stats[loc].gc += gv;
+                stats[vis].gf += gv; stats[vis].gc += gl;
+                if (gl > gv) { stats[loc].pts += 3; stats[loc].g++; stats[vis].p++; }
+                else if (gv > gl) { stats[vis].pts += 3; stats[vis].g++; stats[loc].p++; }
+                else { stats[loc].pts++; stats[vis].pts++; stats[loc].e++; stats[vis].e++; }
+            }
+        }
+    });
+
+    // Filter and sort: menor GC = mejor, luego mayor PJ para desempate
+    const porteros = Object.values(stats)
+        .filter(t => t.pj > 0)
+        .sort((a, b) => {
+            if (a.gc !== b.gc) return a.gc - b.gc;
+            return b.pj - a.pj;
+        });
+
+    if (porteros.length === 0) {
+        contenedor.innerHTML = '<div class="p-8 text-center text-slate-500">No hay porteros con partidos jugados.</div>';
+        return;
+    }
+
+    const top10 = porteros.slice(0, 10);
+
+    contenedor.innerHTML = `
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+                <thead class="bg-slate-800/80 text-slate-400 uppercase tracking-wider text-[10px]">
+                    <tr>
+                        <th class="px-3 py-3 text-center">#</th>
+                        <th class="px-3 py-3 text-left">🧤 Portero</th>
+                        <th class="px-3 py-3 text-left">Equipo</th>
+                        <th class="px-3 py-3 text-center">PJ</th>
+                        <th class="px-3 py-3 text-center text-rose-400">GC</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/50">
+                    ${top10.map((t, i) => {
+                        const rowClass = i < 3 ? 'bg-gradient-to-r from-green-500/10 to-transparent' : 'hover:bg-slate-800/30';
+                        const rankClass = i === 0 ? 'text-green-400 font-black' :
+                                        i === 1 ? 'text-slate-300 font-bold' :
+                                        i === 2 ? 'text-yellow-400 font-bold' : 'text-blue-400 font-bold';
+                        const gcClass = t.gc <= 5 ? 'text-green-400' : t.gc <= 10 ? 'text-yellow-400' : 'text-rose-400';
+                        
+                        return `
+                        <tr class="${rowClass} transition-colors">
+                            <td class="px-3 py-3 ${rankClass}">${i + 1}</td>
+                            <td class="px-3 py-3 font-bold text-white">${t.portero_nombre}</td>
+                            <td class="px-3 py-3">
+                                <span class="px-2 py-1 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">${t.nombre}</span>
+                            </td>
+                            <td class="px-3 py-3 text-center text-slate-400">${t.pj}</td>
+                            <td class="px-3 py-3 text-center font-bold ${gcClass}">${t.gc}</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+        <div class="p-4 text-center text-slate-500 text-xs border-t border-slate-800/50">
+            Guante de Oro 🧤 - Menos GC = Mejor
         </div>
     `;
 }
