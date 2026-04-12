@@ -30,6 +30,10 @@
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .tab-btn { transition: all 0.2s ease; }
         .tab-btn:hover { transform: translateY(-1px); }
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        details[open] summary span { transform: rotate(180deg); }
+        details > summary span { transition: transform 0.2s ease; display: inline-block; }
     </style>
 </head>
 <body class="bg-[#020617] text-slate-200 min-h-screen">
@@ -73,45 +77,39 @@
             </div>
             
             <div id="tab-general" class="tab-content">
-                <div class="grid grid-cols-12 gap-1 px-4 py-4 bg-slate-800/50 text-[10px] font-bold uppercase tracking-tighter text-slate-400">
-                    <div class="col-span-1">#</div>
-                    <div class="col-span-4">Equipo</div>
-                    <div class="col-span-1 text-center">PJ</div>
-                    <div class="col-span-1 text-center">G</div>
-                    <div class="col-span-1 text-center">E</div>
-                    <div class="col-span-1 text-center">P</div>
-                    <div class="col-span-1 text-center">GF</div>
-                    <div class="col-span-1 text-center">GC</div>
-                    <div class="col-span-1 text-right">PTS</div>
-                </div>
-                
-                <div id="contenedor-posiciones" class="bg-slate-900/50 rounded-b-xl overflow-hidden">
+                <div id="contenedor-posiciones" class="bg-slate-900/50 rounded-xl overflow-hidden">
                     <div class="p-10 text-center text-slate-500 italic">Cargando posiciones...</div>
                 </div>
             </div>
             
             <div id="tab-ranking" class="tab-content hidden">
-                <!-- Goleadores Table -->
-                <div class="mb-6">
-                    <div class="flex items-center gap-2 mb-3">
+                <!-- Goleadores - Collapsible -->
+                <details class="mb-4" open>
+                    <summary class="flex items-center gap-2 cursor-pointer list-none p-3 bg-slate-800/50 rounded-t-xl hover:bg-slate-800/70 transition select-none">
                         <span class="text-xl">⚽</span>
-                        <h3 class="text-lg font-bold text-white">Top Goleadores</h3>
+                        <h3 class="text-lg font-bold text-white flex-1">Top Goleadores</h3>
+                        <span class="text-slate-400 text-sm">▼</span>
+                    </summary>
+                    <div class="glass-card rounded-b-xl overflow-hidden">
+                        <div id="contenedor-jugadores">
+                            <div class="p-8 text-center animate-pulse text-slate-500">Cargando...</div>
+                        </div>
                     </div>
-                    <div id="contenedor-jugadores" class="glass-card rounded-xl overflow-hidden">
-                        <div class="p-8 text-center animate-pulse text-slate-500">Cargando...</div>
-                    </div>
-                </div>
+                </details>
                 
-                <!-- Porteros Table -->
-                <div>
-                    <div class="flex items-center gap-2 mb-3">
+                <!-- Porteros - Collapsible -->
+                <details class="mb-4">
+                    <summary class="flex items-center gap-2 cursor-pointer list-none p-3 bg-slate-800/50 rounded-t-xl hover:bg-slate-800/70 transition select-none">
                         <span class="text-xl">🧤</span>
-                        <h3 class="text-lg font-bold text-white">Guante de Oro - Porteros</h3>
+                        <h3 class="text-lg font-bold text-white flex-1">Guante de Oro - Porteros</h3>
+                        <span class="text-slate-400 text-sm">▼</span>
+                    </summary>
+                    <div class="glass-card rounded-b-xl overflow-hidden">
+                        <div id="contenedor-porteros">
+                            <div class="p-8 text-center animate-pulse text-slate-500">Cargando...</div>
+                        </div>
                     </div>
-                    <div id="contenedor-porteros" class="glass-card rounded-xl overflow-hidden">
-                        <div class="p-8 text-center animate-pulse text-slate-500">Cargando...</div>
-                    </div>
-                </div>
+                </details>
             </div>
             
             <div id="tab-equipos" class="tab-content hidden">
