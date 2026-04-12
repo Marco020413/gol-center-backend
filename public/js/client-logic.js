@@ -679,53 +679,52 @@ function cargarPosiciones(equipos, partidos) {
         return;
     }
 
-    // Tabla minimalista responsive clickeable
+    // Tabla de posiciones
     contenedor.innerHTML = `
-        <div class="overflow-x-auto scrollbar-thin">
-            <table class="w-full text-[10px] sm:text-xs">
-                <thead class="bg-slate-800/80 text-slate-400 uppercase text-[9px] tracking-wider sticky top-0">
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+                <thead class="bg-slate-800/80 text-slate-400 uppercase tracking-wider text-[10px]">
                     <tr>
-                        <th class="px-2 py-2 text-center w-10">#</th>
-                        <th class="px-2 py-2 text-left min-w-[120px]">Equipo</th>
-                        <th class="px-2 py-2 text-center w-8">PJ</th>
-                        <th class="px-2 py-2 text-center w-8 hidden sm:table-cell">G</th>
-                        <th class="px-2 py-2 text-center w-8 hidden sm:table-cell">E</th>
-                        <th class="px-2 py-2 text-center w-8 hidden sm:table-cell">P</th>
-                        <th class="px-2 py-2 text-center w-10 font-bold text-emerald-400">PTS</th>
-                        <th class="px-2 py-2 text-center w-8 hidden md:table-cell">GF</th>
-                        <th class="px-2 py-2 text-center w-8 hidden md:table-cell">GC</th>
-                        <th class="px-2 py-2 text-center w-10 hidden md:table-cell">DG</th>
+                        <th class="px-3 py-3 text-center">#</th>
+                        <th class="px-3 py-3 text-left">Equipo</th>
+                        <th class="px-3 py-3 text-center">PJ</th>
+                        <th class="px-3 py-3 text-center">G</th>
+                        <th class="px-3 py-3 text-center">E</th>
+                        <th class="px-3 py-3 text-center">P</th>
+                        <th class="px-3 py-3 text-center text-emerald-400 font-bold">PTS</th>
+                        <th class="px-3 py-3 text-center">GF</th>
+                        <th class="px-3 py-3 text-center">GC</th>
+                        <th class="px-3 py-3 text-center">DG</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-800/30">
+                <tbody class="divide-y divide-slate-800/50">
                     ${tabla.map((t, i) => {
                         const dg = t.gf - t.gc;
                         return `
                         <tr class="hover:bg-blue-500/10 cursor-pointer transition-colors" onclick="abrirInfoEquipo('${t.nombre.replace(/'/g, "\\'")}')">
-                            <td class="px-2 py-2 text-center font-bold ${i < 3 ? 'text-amber-400' : 'text-slate-500'}">${i + 1}</td>
-                            <td class="px-2 py-2">
+                            <td class="px-3 py-3 text-center font-bold ${i < 3 ? 'text-amber-400' : 'text-slate-500'}">${i + 1}</td>
+                            <td class="px-3 py-3">
                                 <div class="flex items-center gap-2">
-                                    <img src="${t.escudo || escudoDefault}" onerror="this.src='${escudoDefault}'" class="size-4 sm:size-5 rounded object-contain">
-                                    <span class="font-bold text-slate-200 truncate max-w-[80px] sm:max-w-[120px]">${t.nombre}</span>
+                                    <img src="${t.escudo || escudoDefault}" onerror="this.src='${escudoDefault}'" class="size-5 rounded object-contain">
+                                    <span class="font-bold text-slate-200">${t.nombre}</span>
                                 </div>
                             </td>
-                            <td class="px-2 py-2 text-center text-slate-400">${t.pj}</td>
-                            <td class="px-2 py-2 text-center text-slate-400 hidden sm:table-cell">${t.g}</td>
-                            <td class="px-2 py-2 text-center text-slate-400 hidden sm:table-cell">${t.e}</td>
-                            <td class="px-2 py-2 text-center text-slate-400 hidden sm:table-cell">${t.p}</td>
-                            <td class="px-2 py-2 text-center font-bold text-emerald-400">${t.pts}</td>
-                            <td class="px-2 py-2 text-center text-slate-400 hidden md:table-cell">${t.gf}</td>
-                            <td class="px-2 py-2 text-center text-slate-400 hidden md:table-cell">${t.gc}</td>
-                            <td class="px-2 py-2 text-center hidden md:table-cell ${dg >= 0 ? 'text-emerald-400' : 'text-red-400'}">${dg > 0 ? '+' + dg : dg}</td>
+                            <td class="px-3 py-3 text-center text-slate-400">${t.pj}</td>
+                            <td class="px-3 py-3 text-center text-slate-400">${t.g}</td>
+                            <td class="px-3 py-3 text-center text-slate-400">${t.e}</td>
+                            <td class="px-3 py-3 text-center text-slate-400">${t.p}</td>
+                            <td class="px-3 py-3 text-center font-bold text-emerald-400">${t.pts}</td>
+                            <td class="px-3 py-3 text-center text-slate-400">${t.gf}</td>
+                            <td class="px-3 py-3 text-center text-slate-400">${t.gc}</td>
+                            <td class="px-3 py-3 text-center font-bold ${dg >= 0 ? 'text-emerald-400' : 'text-red-400'}">${dg > 0 ? '+' + dg : dg}</td>
                         </tr>`;
                     }).join('')}
                 </tbody>
             </table>
         </div>
-        <div class="p-2 text-center text-slate-500 text-[9px] border-t border-slate-800/30 sm:hidden">
-            Desliza para más datos →
-        </div>
-    `;
+        <div class="p-3 text-center text-slate-500 text-[10px] border-t border-slate-800/30">
+            Toca un equipo para ver detalles
+        </div>`;
 }
 
 // === CARGAR PORTEROS (GUANTE DE ORO) ===
