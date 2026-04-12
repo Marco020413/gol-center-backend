@@ -43,4 +43,5 @@ Route::post('/admin/partidos/generar-torneo', [App\Http\Controllers\PartidoContr
 Route::prefix('admin')->group(function () {
     Route::post('/jugadores/registrar', [JugadorController::class, 'registrar']);
     Route::post('/equipos/registrar', [EquipoController::class, 'registrar']);
+    Route::put('/equipos/actualizar/{id}', [EquipoController::class, 'registrar']);
 });

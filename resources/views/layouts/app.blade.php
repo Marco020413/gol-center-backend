@@ -732,11 +732,17 @@
 
             if (escudos.length === 0) {
                 contenedor.innerHTML = '<p class="col-span-4 text-[10px] text-slate-500 italic py-4">No hay escudos.</p>';
+                return;
             }
 
+            const escudoActual = window.escudoSeleccionado || equipoState?.escudoRespaldo || '';
+            
             escudos.forEach((url) => {
                 const nombreArchivo = url.split('/').pop();
                 const nombreLimpio = nombreArchivo.includes('_') ? nombreArchivo.split('_').slice(1).join('_') : nombreArchivo;
+                
+                // Verificar si es el escudo actual del equipo
+                const esActivo = escudoActual && url === escudoActual;
 
                 const div = document.createElement('div');
                 div.className = 'relative group';
@@ -747,9 +753,9 @@
                     </button>
                     
                     <label class="cursor-pointer">
-                        <input type="radio" name="escudo_url" value="${url}" class="hidden peer" onchange="mostrarPreview('${url}', '${nombreLimpio}')">
-                        <img src="${url}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/5323/5323982.png'" class="size-12 mx-auto object-contain peer-checked:border-2 border-blue-500 rounded-lg bg-white/10 hover:scale-105 transition">
-                        <p class="text-[6px] mt-1 uppercase truncate text-slate-500 text-center">${nombreLimpio}</p>
+                        <input type="radio" name="escudo_url" value="${url}" class="hidden peer" ${esActivo ? 'checked' : ''} onchange="mostrarPreview('${url}', '${nombreArchivo}'); window.escudoSeleccionado = '${url}';">
+                        <img src="${url}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/5323/5323982.png'" class="size-12 mx-auto object-contain ${esActivo ? 'border-2 border-blue-500' : ''} rounded-lg bg-white/10 hover:scale-105 transition">
+                        <p class="text-[6px] mt-1 uppercase truncate text-slate-500 text-center ${esActivo ? 'text-blue-400' : ''}">${nombreLimpio}</p>
                     </label>
                 `;
                 contenedor.appendChild(div);
@@ -767,74 +773,229 @@
         contenedor.classList.add('flex');
         img.src = url;
         txt.innerText = nombre;
+        
+        // Anclar escudo seleccionado
+        window.escudoSeleccionado = url;
     }
     
 
-    async function editarEquipo(id, nombre, escudo) {
-        editMode = true; 
-        
-        const modal = document.getElementById('modalEquipo');
-        const titulo = document.getElementById('tituloModalEquipo');
-        const inputId = document.getElementById('equipo_id_edit');
-        const inputNombre = document.getElementById('nombreEquipoInput');
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // EQUIPOS - Estado y Elementos
+    // ═══════════════════════════════════════════════════════════════════════════════
+    const equipoElements = {
+        modal: () => document.getElementById('modalEquipo'),
+        btn: () => document.getElementById('btnGuardarEquipo'),
+        inputNombre: () => document.getElementById('nombreEquipoInput'),
+        selectPortero: () => document.getElementById('selectPortero'),
+        inputId: () => document.getElementById('equipo_id_edit'),
+        titulo: () => document.getElementById('tituloModalEquipo'),
+        form: () => document.getElementById('formRegistroEquipo')
+    };
 
-        if(titulo) titulo.innerText = 'Editar Equipo';
-        if(inputId) inputId.value = id;
-        if(inputNombre) inputNombre.value = nombre;
+    let equipoState = {
+        editMode: false,
+        guardando: false,
+        porterosCargados: false,
+        escudoRespaldo: '',
+        escudoSeleccionado: '',
+        equipoData: null
+    };
+
+    async function editarEquipo(id, nombre, escudo) {
+        equipoState.editMode = !!id;
+        equipoState.guardando = false;
+        equipoState.porterosCargados = false;
+
+        const data = window.equiposData?.[id] || { nombre, escudo };
+        equipoState.equipoData = data;
+        equipoState.escudoRespaldo = data.escudo || '';
         
-        if(typeof mostrarPreview === 'function') {
-            mostrarPreview(escudo, nombre);
+        // GUARDAR escudo actual para que no se borre al guardar
+        window.escudoSeleccionado = data.escudo || '';
+        equipoState.escudoSeleccionado = data.escudo || '';
+
+        // Preview: si es edición, mostrar escudo actual; si es nuevo, ocultar
+        const previewContenedor = document.getElementById('previewContenedor');
+        const previewImg = document.getElementById('imgPreview');
+        const previewTxt = document.getElementById('namePreview');
+        
+        if (id && data.escudo) {
+            // Mostrar escudo actual en edición
+            if (previewContenedor && previewImg && previewTxt) {
+                previewContenedor.classList.remove('hidden');
+                previewContenedor.classList.add('flex');
+                previewImg.src = data.escudo;
+                previewTxt.innerText = data.escudo.split('/').pop();
+            }
+        } else if (previewContenedor) {
+            // Ocultar en nuevo equipo
+            previewContenedor.classList.add('hidden');
+            previewContenedor.classList.remove('flex');
         }
         
-        if(modal) {
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-        }
+        // UI Inicial
+        equipoElements.titulo().innerText = id ? 'Editar Equipo' : 'Nuevo Equipo';
+        equipoElements.inputId().value = id || '';
+        equipoElements.inputNombre().value = data.nombre || '';
         
-        if(typeof cargarGaleriaEscudos === 'function') cargarGaleriaEscudos();
+        // Toggle Modal
+        const modal = equipoElements.modal();
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+
+        // Botón en estado de carga
+        const btn = equipoElements.btn();
+        btn.disabled = true;
+        btn.innerText = id ? 'Cargando porteros...' : 'Guardar Equipo';
+
+        if (typeof cargarGaleriaEscudos === 'function') cargarGaleriaEscudos();
+
+        // Carga de porteros
+        if (id && data.nombre) {
+            await cargarJugadoresEquipo(data.nombre);
+        } else {
+            resetSelectPortero();
+            validarEstadoBoton();
+        }
+    }
+
+    async function cargarJugadoresEquipo(equipoNombre) {
+        const select = equipoElements.selectPortero();
+        resetSelectPortero(false);
+
+        const btn = equipoElements.btn();
+        
+        try {
+            const res = await fetch('/api/jugadores');
+            const jugadores = await res.json();
+
+            const fragment = document.createDocumentFragment();
+            const porteroIdActual = equipoState.equipoData?.portero_id;
+
+            Object.entries(jugadores)
+                .filter(([_, j]) => j.equipo === equipoNombre && j.estatus === 'activo')
+                .sort((a, b) => a[1].nombre.localeCompare(b[1].nombre))
+                .forEach(([telefono, j]) => {
+                    const opt = new Option(`${j.nombre} (#${j.numero || '?'})`, telefono);
+                    if (telefono === porteroIdActual) opt.selected = true;
+                    fragment.appendChild(opt);
+                });
+
+            select.appendChild(fragment);
+        } catch (e) {
+            console.error('Error:', e);
+        } finally {
+            equipoState.porterosCargados = true;
+            validarEstadoBoton();
+        }
     }
 
     async function registrarNuevoEquipo() {
-        const form = document.getElementById('formRegistroEquipo');
         const btn = document.getElementById('btnGuardarEquipo');
+        
+        if (equipoState.guardando) {
+            return;
+        }
+
+        const nombre = document.getElementById('nombreEquipoInput').value.trim();
+        if (!nombre) {
+            return alert('⚠️ Nombre obligatorio');
+        }
+
+        const tieneNuevaImagen = document.getElementById('inputEscudo')?.files?.length > 0;
+        const nuevoEscudo = window.escudoSeleccionado || null;
+        const escudoAnterior = equipoState.escudoRespaldo || null;
+        const esEdicion = !!document.getElementById('equipo_id_edit').value;
+
+        const escudoFinal = nuevoEscudo || (esEdicion ? escudoAnterior : null);
+
+        if (!escudoFinal && !tieneNuevaImagen && !esEdicion) {
+            return alert('⚠️ Selecciona un escudo');
+        }
+
+        equipoState.guardando = true;
+        
+        if (btn) {
+            btn.innerText = 'Verificando...';
+            btn.disabled = true;
+        }
+
         const equipoId = document.getElementById('equipo_id_edit').value;
-        
-        btn.innerText = 'Procesando...';
-        btn.disabled = true;
-
+        const form = document.getElementById('formRegistroEquipo');
         const data = new FormData(form);
-
-        const url = equipoId 
-            ? `/api/admin/equipos/actualizar/${equipoId}` 
-            : '/api/admin/equipos/registrar';
         
-        if (equipoId) data.append('_method', 'PUT');
+        if (equipoId) {
+            data.append('_method', 'PUT');
+        }
+        
+        if (escudoFinal) {
+            data.append('escudo_url', escudoFinal);
+        }
+
+        const select = document.getElementById('selectPortero');
+        if (select && select.value) {
+            data.append('portero_id', select.value);
+            data.append('portero_nombre', select.options[select.selectedIndex].text);
+        }
 
         try {
+            const url = equipoId ? `/api/admin/equipos/actualizar/${equipoId}` : '/api/admin/equipos/registrar';
             const response = await fetch(url, {
-                method: 'POST', 
+                method: 'POST',
                 body: data,
-                headers: {
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                }
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
             });
 
             if (response.ok) {
-                alert(equipoId ? '✅ Equipo actualizado' : '✅ Equipo guardado');
-                location.reload();
+                cerrarModalEquipo();
+                await cargarGestionEquipos();
+                window.equiposData = null;
+                window.escudoSeleccionado = '';
+                alert('✅ Equipo guardado');
             } else {
-                const errorData = await response.json();
-                alert('❌ Error: ' + (errorData.message || 'No se pudo guardar'));
+                throw await response.json();
+            }
+        } catch (e) {
+            alert('❌ Error: ' + (e.message || e.error || 'Error de conexión'));
+            equipoState.guardando = false;
+            if (btn) {
                 btn.innerText = 'Guardar Equipo';
                 btn.disabled = false;
             }
-        } catch (e) {
-            console.error(e);
-            alert('❌ Error de conexión');
-            btn.disabled = false;
+        }
+    }
+
+    function resetSelectPortero(disabled = true) {
+        const select = equipoElements.selectPortero();
+        select.innerHTML = '<option value="">-- Seleccionar jugador --</option>';
+        select.disabled = disabled;
+    }
+
+    function validarEstadoBoton() {
+        const btn = equipoElements.btn();
+        const nombreValido = equipoElements.inputNombre().value.trim().length > 0;
+        
+        btn.disabled = !(nombreValido && equipoState.porterosCargados);
+        if (!btn.disabled && !equipoState.guardando) {
             btn.innerText = 'Guardar Equipo';
         }
-    };
+    }
+
+    function validarFormularioEquipo() {
+        validarEstadoBoton();
+    }
+
+    function cerrarModalEquipo() {
+        const modal = equipoElements.modal();
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        equipoState = { 
+            ...equipoState, 
+            guardando: false, 
+            porterosCargados: false,
+            escudoSeleccionado: ''
+        };
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════════
     // SECCIÓN 7: EQUIPOS (CRUD, gestión, escudos)
@@ -849,6 +1010,8 @@
             
             for (const id in equipos) {
                 const eq = equipos[id];
+                window.equiposData = window.equiposData || {};
+                window.equiposData[id] = eq;
                 contenedor.innerHTML += `
                     <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between shadow-lg">
                         <div class="flex items-center gap-4">

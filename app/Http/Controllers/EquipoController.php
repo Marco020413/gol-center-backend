@@ -58,7 +58,9 @@ class EquipoController extends Controller
 
         $this->database->getReference('equipos/' . $equipoId)->update([
             'nombre' => $request->nombre,
-            'escudo' => $escudoUrl
+            'escudo' => $escudoUrl,
+            'portero_id' => $request->portero_id ?? null,
+            'portero_nombre' => $request->portero_nombre ?? null
         ]);
 
         return response()->json(['message' => 'Equipo guardado', 'escudo' => $escudoUrl]);

@@ -322,33 +322,39 @@
 </div>
 
 <div id="modalEquipo" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center z-[110] p-4">
-    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
-        <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-blue-600/10">
-            <h3 id="tituloModalEquipo" class="text-xl font-bold text-white uppercase tracking-tighter">Gestión de Equipo</h3>
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden max-h-[90vh]">
+        <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-blue-600/10 shrink-0">
+            <h3 id="tituloModalEquipo" class="text-lg font-bold text-white uppercase tracking-tighter">Gestión de Equipo</h3>
             <button onclick="cerrarModalEquipo()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
         </div>
-        <form id="formRegistroEquipo" method="POST" enctype="multipart/form-data" class="p-6 space-y-4 text-sm">
+        <form id="formRegistroEquipo" method="POST" enctype="multipart/form-data" class="p-4 space-y-3 text-sm overflow-y-auto max-h-[calc(90vh-60px)]" onsubmit="event.preventDefault(); registrarNuevoEquipo();">
             @csrf
             <input type="hidden" name="equipo_id_edit" id="equipo_id_edit">
             <div>
                 <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Nombre</label>
-                <input type="text" name="nombre" id="nombreEquipoInput" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                <input type="text" name="nombre" id="nombreEquipoInput" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500" oninput="validarFormularioEquipo()">
             </div>
             <div>
                 <label class="block text-[10px] font-bold uppercase text-slate-500 mb-2">Escudo</label>
-                <div id="previewContenedor" class="hidden mb-4 p-4 bg-blue-600/10 border border-blue-500/30 rounded-xl flex items-center gap-4">
-                    <img id="imgPreview" src="" class="size-16 object-contain rounded-lg bg-white/10">
-                    <p id="namePreview" class="text-white font-bold text-sm truncate"></p>
+                <div id="previewContenedor" class="hidden mb-2 p-2 bg-blue-600/10 border border-blue-500/30 rounded-lg flex items-center gap-2">
+                    <img id="imgPreview" src="" class="size-10 object-contain rounded bg-white/10">
+                    <p id="namePreview" class="text-white font-bold text-xs truncate"></p>
                 </div>
-                <div id="contenedorEscudos" class="grid grid-cols-4 gap-3 bg-slate-950/50 p-3 rounded-xl border border-slate-800 text-center text-white font-bold max-h-40 overflow-y-auto"></div>
-                <div class="mt-3">
-                    <label class="cursor-pointer flex items-center justify-center border-2 border-dashed border-slate-700 rounded-lg hover:border-blue-500 transition py-2">
-                        <span class="text-[10px] text-blue-500 font-bold" id="fileName">+ SUBIR NUEVO ESCUDO</span>
+                <div id="contenedorEscudos" class="grid grid-cols-4 gap-2 bg-slate-950/50 p-2 rounded-lg border border-slate-800 text-center text-white font-bold max-h-24 overflow-y-auto"></div>
+                <div class="mt-2">
+                    <label class="cursor-pointer flex items-center justify-center border-2 border-dashed border-slate-700 rounded-lg hover:border-blue-500 transition py-1">
+                        <span class="text-[10px] text-blue-500 font-bold" id="fileName">+ SUBIR ESCUDO</span>
                         <input type="file" name="escudo_file" id="inputEscudo" class="hidden" accept="image/*" onchange="updateFileName(this)">
                     </label>
                 </div>
             </div>
-            <button type="submit" id="btnGuardarEquipo" class="w-full bg-blue-600 font-bold py-3 rounded-xl transition uppercase text-xs">Guardar Equipo</button>
+            <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Asignar Portero 🧤</label>
+                <select name="portero_id" id="selectPortero" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-blue-500">
+                    <option value="">-- Seleccionar jugador --</option>
+                </select>
+            </div>
+            <button type="submit" id="btnGuardarEquipo" class="w-full bg-blue-600 font-bold py-3 rounded-lg transition uppercase text-xs shrink-0 mt-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Guardar Equipo</button>
         </form>
     </div>
 </div>
@@ -662,6 +668,10 @@
             contenedor.classList.add('flex');
             img.src = url;
             txt.innerText = nombre;
+            window.escudoSeleccionado = url;
+            if (typeof equipoState !== 'undefined') {
+                equipoState.escudoSeleccionado = url;
+            }
         }
     }
     
