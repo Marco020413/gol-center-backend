@@ -1523,6 +1523,7 @@ window.descargarPDFJornada = async function(jornada) {
     
     // Tabla de posiciones - solo para jornadas numéricas
     let tablaOrdenada = [];
+    let recordsEquiposHTML = '';
     if (esJornadaNumerica) {
         tablaOrdenada = Object.values(stats.equipos)
             .filter(t => t.pj > 0)
@@ -1533,6 +1534,33 @@ window.descargarPDFJornada = async function(jornada) {
                 if (difB !== difA) return difB - difA;
                 return b.gf - a.gf;
             });
+        
+        // === RECORD DE EQUIPOS: Más Goleador y Menos Goleado ===
+        const equiposConPartidos = Object.values(stats.equipos).filter(t => t.pj > 0);
+        
+        if (equiposConPartidos.length > 0) {
+            // Máximo GF (más goles a favor)
+            const maxGF = Math.max(...equiposConPartidos.map(t => t.gf));
+            const masGoleadores = equiposConPartidos.filter(t => t.gf === maxGF).map(t => t.nombre);
+            
+            // Mínimo GC (menos goles en contra)
+            const minGC = Math.min(...equiposConPartidos.map(t => t.gc));
+            const menosGoleados = equiposConPartidos.filter(t => t.gc === minGC).map(t => t.nombre);
+            
+            recordsEquiposHTML = `
+            <div style="display:flex; gap:20px; margin-top:15px;">
+                <div style="flex:1; border:2px solid #16a34a; border-radius:8px; padding:12px; background:#f0fdf4;">
+                    <div style="font-weight:bold; color:#16a34a; font-size:12px; margin-bottom:5px;">🔥 MÁS GOLEADOR (GF)</div>
+                    <div style="font-size:14px; font-weight:bold; color:#1e293b;">${masGoleadores.join(', ')}</div>
+                    <div style="font-size:16px; font-weight:bold; color:#16a34a;">${maxGF} goles</div>
+                </div>
+                <div style="flex:1; border:2px solid #3b82f6; border-radius:8px; padding:12px; background:#eff6ff;">
+                    <div style="font-weight:bold; color:#3b82f6; font-size:12px; margin-bottom:5px;">🛡️ MENOS GOLEADO (GC)</div>
+                    <div style="font-size:14px; font-weight:bold; color:#1e293b;">${menosGoleados.join(', ')}</div>
+                    <div style="font-size:16px; font-weight:bold; color:#3b82f6;">${minGC} goles</div>
+                </div>
+            </div>`;
+        }
     }
     
     const tituloJornada = esJornadaNumerica ? 'JORNADA ' + jornada : jornada;
@@ -1572,20 +1600,14 @@ window.descargarPDFJornada = async function(jornada) {
                 proximosEncuentrosHTML = `
                 <div class="page-break"></div>
                 <h2>📅 PRÓXIMOS ENCUENTROS - JORNADA ${siguienteJornada}</h2>
-                <table style="width:100%; border-collapse: collapse; margin-bottom: 12px;">
-                    <tr style="background: #f3f4f6;">
-                        <th style="border:1px solid #000; padding:6px; text-align:left;">🏠 Local</th>
-                        <th style="border:1px solid #000; padding:6px; text-align:center;">VS</th>
-                        <th style="border:1px solid #000; padding:6px; text-align:right;">Visitante 🛫</th>
-                        <th style="border:1px solid #000; padding:6px; text-align:center;">📅 Fecha</th>
-                        <th style="border:1px solid #000; padding:6px; text-align:center;">🕐 Hora</th>
-                    </tr>
+                <table>
+                    <tr><th class="text-left">🏠 Local</th><th>VS</th><th class="text-right">Visitante 🛫</th><th>📅 Fecha</th><th>🕐 Hora</th></tr>
                     ${partidosProximos.map(p => `<tr>
-                        <td style="border:1px solid #000; padding:6px; text-align:left; font-weight:bold;">${p.equipo_local || '-'}</td>
-                        <td style="border:1px solid #000; padding:6px; text-align:center; color: #6b7280;">VS</td>
-                        <td style="border:1px solid #000; padding:6px; text-align:right; font-weight:bold;">${p.equipo_visitante || '-'}</td>
-                        <td style="border:1px solid #000; padding:6px; text-align:center;">${p.fecha || 'Por definir'}</td>
-                        <td style="border:1px solid #000; padding:6px; text-align:center;">${p.hora || '-'}</td>
+                        <td class="text-left bold">${p.equipo_local || '-'}</td>
+                        <td style="color:#94a3b8;">VS</td>
+                        <td class="text-right bold">${p.equipo_visitante || '-'}</td>
+                        <td>${p.fecha || 'Por definir'}</td>
+                        <td>${p.hora || '-'}</td>
                     </tr>`).join('')}
                 </table>`;
             }
@@ -1614,20 +1636,14 @@ window.descargarPDFJornada = async function(jornada) {
                 proximosEncuentrosHTML = `
                 <div class="page-break"></div>
                 <h2>📅 PRÓXIMOS ENCUENTROS - ${siguienteFase}</h2>
-                <table style="width:100%; border-collapse: collapse; margin-bottom: 12px;">
-                    <tr style="background: #f3f4f6;">
-                        <th style="border:1px solid #000; padding:6px; text-align:left;">🏠 Local</th>
-                        <th style="border:1px solid #000; padding:6px; text-align:center;">VS</th>
-                        <th style="border:1px solid #000; padding:6px; text-align:right;">Visitante 🛫</th>
-                        <th style="border:1px solid #000; padding:6px; text-align:center;">📅 Fecha</th>
-                        <th style="border:1px solid #000; padding:6px; text-align:center;">🕐 Hora</th>
-                    </tr>
+                <table>
+                    <tr><th class="text-left">🏠 Local</th><th>VS</th><th class="text-right">Visitante 🛫</th><th>📅 Fecha</th><th>🕐 Hora</th></tr>
                     ${partidosProximos.map(p => `<tr>
-                        <td style="border:1px solid #000; padding:6px; text-align:left; font-weight:bold;">${p.equipo_local || '-'}</td>
-                        <td style="border:1px solid #000; padding:6px; text-align:center; color: #6b7280;">VS</td>
-                        <td style="border:1px solid #000; padding:6px; text-align:right; font-weight:bold;">${p.equipo_visitante || '-'}</td>
-                        <td style="border:1px solid #000; padding:6px; text-align:center;">${p.fecha || 'Por definir'}</td>
-                        <td style="border:1px solid #000; padding:6px; text-align:center;">${p.hora || '-'}</td>
+                        <td class="text-left bold">${p.equipo_local || '-'}</td>
+                        <td style="color:#94a3b8;">VS</td>
+                        <td class="text-right bold">${p.equipo_visitante || '-'}</td>
+                        <td>${p.fecha || 'Por definir'}</td>
+                        <td>${p.hora || '-'}</td>
                     </tr>`).join('')}
                 </table>`;
             }
@@ -1641,13 +1657,20 @@ window.descargarPDFJornada = async function(jornada) {
         <title>${tituloJornada} - Gol Center</title>
         <style>
             @page { size: A4; margin: 1cm; }
-            body { font-family: Arial, sans-serif; font-size: 11px; color: #000; }
-            h1 { font-size: 20px; text-align: center; margin-bottom: 5px; }
-            h2 { font-size: 14px; margin-top: 20px; border-bottom: 1px solid #000; padding-bottom: 5px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-            th, td { border: 1px solid #000; padding: 4px 8px; text-align: center; }
-            th { background: #eee; }
+            body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1e293b; background: #fff; }
+            h1 { font-size: 22px; text-align: center; margin-bottom: 8px; color: #0f172a; font-weight: 800; }
+            h2 { font-size: 14px; margin-top: 18px; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; color: #334155; font-weight: 700; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+            th, td { padding: 8px 10px; text-align: center; }
+            th { background: #f8fafc; color: #64748b; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+            td { border-bottom: 1px solid #e2e8f0; }
+            tr:nth-child(even) { background: #f8fafc; }
+            tr:hover { background: #f1f5f9; }
             .text-left { text-align: left; }
+            .text-right { text-align: right; }
+            .bold { font-weight: 700; }
+            .pts { color: #059669; font-weight: 700; font-size: 12px; }
+            .goals { font-weight: 600; color: #334155; }
             .page-break { page-break-after: always; }
             @media print { body > * { display: none !important; } #print-jornada { display: block !important; position: static !important; left: 0 !important; } }
         </style>
@@ -1655,25 +1678,27 @@ window.descargarPDFJornada = async function(jornada) {
     <body>
         <div id="print-jornada">
         <h1>⚽ ${tituloJornada}</h1>
-        <p style="text-align:center; margin-bottom: 20px;">Fecha: ${fecha}</p>
+        <p style="text-align:center; margin-bottom: 20px; color: #64748b; font-size: 10px;">${fecha}</p>
         
         ${esJornadaNumerica ? `
         <h2>📊 TABLA DE POSICIONES</h2>
         <table>
             <tr><th>#</th><th class="text-left">Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>PTS</th><th>GF</th><th>GC</th><th>DG</th></tr>
             ${tablaOrdenada.map((t, i) => `<tr>
-                <td>${i+1}</td>
-                <td class="text-left">${t.nombre}</td>
+                <td class="bold">${i+1}</td>
+                <td class="text-left bold">${t.nombre}</td>
                 <td>${t.pj}</td>
                 <td>${t.g}</td>
                 <td>${t.e}</td>
                 <td>${t.p}</td>
-                <td><b>${t.pts}</b></td>
-                <td>${t.gf}</td>
-                <td>${t.gc}</td>
-                <td>${t.gf - t.gc >= 0 ? '+'+(t.gf - t.gc) : t.gf - t.gc}</td>
+                <td class="pts">${t.pts}</td>
+                <td class="goals">${t.gf}</td>
+                <td class="goals">${t.gc}</td>
+                <td class="goals">${t.gf - t.gc >= 0 ? '+'+(t.gf - t.gc) : t.gf - t.gc}</td>
             </tr>`).join('')}
         </table>
+        
+        ${recordsEquiposHTML}
         
         <div class="page-break"></div>
         ` : ''}
@@ -1682,9 +1707,9 @@ window.descargarPDFJornada = async function(jornada) {
         <table>
             <tr><th class="text-left">Local</th><th>Score</th><th class="text-left">Visitante</th><th>Fecha</th></tr>
             ${partidosJornada.map(p => `<tr>
-                <td class="text-left">${p.equipo_local || '-'}</td>
-                <td><b>${p.goles_local} - ${p.goles_visitante}</b></td>
-                <td class="text-left">${p.equipo_visitante || '-'}</td>
+                <td class="text-left bold">${p.equipo_local || '-'}</td>
+                <td class="pts" style="font-size:13px;">${p.goles_local} - ${p.goles_visitante}</td>
+                <td class="text-left bold">${p.equipo_visitante || '-'}</td>
                 <td>${p.fecha || '-'}</td>
             </tr>`).join('')}
         </table>
