@@ -67,7 +67,9 @@ class PartidoController extends Controller
             foreach ($equipos as $key => $e) {
                 $equiposFiltrados[$key] = [
                     'nombre' => $e['nombre'] ?? '',
-                    'escudo' => $e['escudo'] ?? ''
+                    'escudo' => $e['escudo'] ?? '',
+                    'portero_id' => $e['portero_id'] ?? '',
+                    'portero_nombre' => $e['portero_nombre'] ?? ''
                 ];
             }
             

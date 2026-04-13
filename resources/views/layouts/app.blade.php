@@ -864,6 +864,7 @@
         resetSelectPortero(false);
 
         const btn = equipoElements.btn();
+        console.log('Cargando jugadores para equipo:', equipoNombre, 'portero_id actual:', equipoState.equipoData?.portero_id);
         
         try {
             const res = await fetch('/api/jugadores');
@@ -871,13 +872,17 @@
 
             const fragment = document.createDocumentFragment();
             const porteroIdActual = equipoState.equipoData?.portero_id;
+            console.log('Jugadores encontrados:', Object.keys(jugadores).length, 'Portero actual:', porteroIdActual);
 
             Object.entries(jugadores)
                 .filter(([_, j]) => j.equipo === equipoNombre && j.estatus === 'activo')
                 .sort((a, b) => a[1].nombre.localeCompare(b[1].nombre))
                 .forEach(([telefono, j]) => {
                     const opt = new Option(`${j.nombre} (#${j.numero || '?'})`, telefono);
-                    if (telefono === porteroIdActual) opt.selected = true;
+                    if (telefono === porteroIdActual) {
+                        opt.selected = true;
+                        console.log('Portero seleccionado:', j.nombre);
+                    }
                     fragment.appendChild(opt);
                 });
 
@@ -891,9 +896,11 @@
     }
 
     async function registrarNuevoEquipo() {
+        console.log('>>> INICIANDO registrarNuevoEquipo <<<');
         const btn = document.getElementById('btnGuardarEquipo');
         
         if (equipoState.guardando) {
+            console.log('YA se esta guardando, salir');
             return;
         }
 
@@ -932,14 +939,23 @@
             data.append('escudo_url', escudoFinal);
         }
 
-        const select = document.getElementById('selectPortero');
-        if (select && select.value) {
-            data.append('portero_id', select.value);
-            data.append('portero_nombre', select.options[select.selectedIndex].text);
+const select = document.getElementById('selectPortero');
+        const porteroId = select?.value;
+        const porteroNombre = (select?.selectedOptions?.[0]?.text || '').replace(/\s*\(#[^)]*\)\s*/g, '').trim();
+        
+        console.log('=== GUARDANDO EQUIPO ===');
+        console.log('Portero ID:', porteroId);
+        console.log('Portero Nombre:', porteroNombre);
+        
+        if (porteroId && porteroNombre) {
+            data.append('portero_id', porteroId);
+            data.append('portero_nombre', porteroNombre);
+            console.log('✓ Datos del portero agregados al FormData');
+        } else {
+            console.log('✗ No se guardó portero');
         }
 
         try {
-            const url = equipoId ? `/api/admin/equipos/actualizar/${equipoId}` : '/api/admin/equipos/registrar';
             const response = await fetch(url, {
                 method: 'POST',
                 body: data,

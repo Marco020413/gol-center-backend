@@ -19,11 +19,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     datosGlobales = await res.json(); // Guardar globally
     
     // Renderizar cada sección
-    cargarGoleadores(datosGlobales.jugadores);
+    cargarGoleadores(datosGlobales.jugadores, datosGlobales.equipos, datosGlobales.partidos);
     cargarJugadores(datosGlobales.jugadores);
     cargarEquipos(datosGlobales.equipos);
     cargarPosiciones(datosGlobales.equipos, datosGlobales.partidos);
-    cargarPorteros(datosGlobales.equipos, datosGlobales.partidos);
+    cargarPorteros(datosGlobales.equipos, datosGlobales.partidos, datosGlobales.jugadores);
     cargarPartidos(datosGlobales.partidos);
     cargarLiguilla(datosGlobales.partidos);
     cargarRoles(datosGlobales.campos);
@@ -32,6 +32,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderizarBotonesDescargaJornadas();
     // El historial se carga solo al hacer click en la pestaña (lazy load)
 });
+
+// Función para cambiar pestañas
+function switchTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'text-white');
+        btn.classList.add('bg-slate-900', 'text-slate-400');
+    });
+    
+    const tabContent = document.getElementById('tab-' + tabName);
+    if (tabContent) {
+        tabContent.classList.remove('hidden');
+    }
+    
+    const btn = document.querySelector(`button[onclick="switchTab('${tabName}')"]`);
+    if (btn) {
+        btn.classList.remove('bg-slate-900', 'text-slate-400');
+        btn.classList.add('bg-blue-600', 'text-white');
+    }
+    
+    // Cargar historial si es necesario
+    if (tabName === 'historial') {
+        cargarHistorial();
+    }
+}
 
 async function cargarHistorial() {
     const contenedor = document.getElementById('contenedor-historial');
@@ -565,30 +590,33 @@ function cargarJugadores(jugadores) {
     contenedor.innerHTML = html;
 }
 
-// === FUNCION SWITCH TAB ===
-function switchTab(tab) {
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-    document.querySelectorAll('.tab-btn').forEach(b => {
-        b.classList.replace('bg-blue-600', 'bg-slate-900');
-        b.classList.replace('text-white', 'text-slate-400');
-        b.classList.remove('ring-2', 'ring-blue-500');
-    });
-    document.getElementById(`tab-${tab}`).classList.remove('hidden');
-    const activeBtn = document.querySelector(`button[onclick="switchTab('${tab}')"]`);
-    if (activeBtn) {
-        activeBtn.classList.replace('bg-slate-900', 'bg-blue-600');
-        activeBtn.classList.replace('text-slate-400', 'text-white');
-    }
+// Función para mostrar info de portero
+function abrirInfoPortero(nombreEquipo) {
+    const stats = window.porterosStats?.[nombreEquipo];
+    if (!stats) return;
     
-    // Cargar historial solo cuando se hace click en la pestaña (lazy load)
-    if (tab === 'historial' && activeBtn && activeBtn.dataset.loadHistorial === 'true') {
-        activeBtn.dataset.loadHistorial = 'false';
-        cargarHistorial();
+    const modal = document.getElementById('modalInfoPortero');
+    if (modal) {
+        document.getElementById('modalPorteroNombre').innerText = stats.portero_nombre;
+        document.getElementById('modalPorteroEquipo').innerText = stats.nombre;
+        document.getElementById('modalPorteroPJ').innerText = stats.pj;
+        document.getElementById('modalPorteroGC').innerText = stats.gc;
+        
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
     }
 }
 
-// TABLA DE GOLEADORES - TOP 3 HORIZONTAL
-function cargarGoleadores(jugadores) {
+function cerrarModalPortero() {
+    const modal = document.getElementById('modalInfoPortero');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+}
+
+// TABLA DE GOLEADORES - TOP 3 HORIZONTAL + TOP 3 PORTEROS
+function cargarGoleadores(jugadores, equipos, partidos) {
     const contenedor = document.getElementById('contenedor-goleadores');
     if (!contenedor) return;
 
@@ -597,40 +625,111 @@ function cargarGoleadores(jugadores) {
         .sort((a, b) => b[1].goles - a[1].goles)
         .slice(0, 3);
 
-    if (goleadores.length === 0) {
-        contenedor.innerHTML = '<div class="col-span-full text-center py-8 text-slate-500">Aún no hay goles registrados.</div>';
+    // Calculate top 3 goalkeepers
+    const porteroStats = {};
+    for (const id in equipos) {
+        const eq = equipos[id];
+        porteroStats[eq.nombre] = { nombre: eq.nombre, portero_nombre: eq.nombre + ' (Portero)', pj: 0, gc: 0 };
+    }
+    
+    Object.values(partidos || {}).forEach(partido => {
+        if (partido.resultado_confirmado) {
+            const jornada = String(partido.jornada || '').toUpperCase();
+            if (jornada === 'CUARTOS' || jornada === 'SEMIFINAL' || jornada === 'FINAL') return;
+            
+            const loc = partido.equipo_local;
+            const vis = partido.equipo_visitante;
+            const gl = parseInt(partido.goles_local || 0);
+            const gv = parseInt(partido.goles_visitante || 0);
+            
+            if (porteroStats[loc] && porteroStats[vis]) {
+                porteroStats[loc].pj++; porteroStats[loc].gc += gv;
+                porteroStats[vis].pj++; porteroStats[vis].gc += gl;
+            }
+        }
+    });
+    
+    // Get players map for portero names
+    const playersMap = {};
+    for (const tel in jugadores) {
+        playersMap[tel] = jugadores[tel];
+    }
+    for (const id in equipos) {
+        const eq = equipos[id];
+        if (eq.portero_id && playersMap[eq.portero_id]) {
+            porteroStats[eq.nombre].portero_nombre = playersMap[eq.portero_id].nombre;
+        }
+    }
+    
+    const porterosTop = Object.values(porteroStats)
+        .filter(p => p.pj > 0)
+        .sort((a, b) => {
+            if (a.gc !== b.gc) return a.gc - b.gc;
+            return b.pj - a.pj;
+        })
+        .slice(0, 3);
+
+    if (goleadores.length === 0 && porterosTop.length === 0) {
+        contenedor.innerHTML = '<div class="col-span-full text-center py-8 text-slate-500">Aún no hay estadísticas registradas.</div>';
         return;
     }
 
-    // TOP 3 - HORIZONTAL
+    // TOP 3 GOLEADORES + TOP 3 PORTEROS
     contenedor.innerHTML = `
-        <div class="flex flex-col md:flex-row items-stretch md:items-end gap-4">
-            ${goleadores.map(([telefono, j], i) => {
-                const isFirst = i === 0;
-                const orderClass = isFirst ? 'order-2 md:order-1 md:-mb-4' : i === 1 ? 'order-1 md:order-2' : 'order-3';
-                const sizeClass = isFirst ? 'md:scale-110' : '';
-                const medalEmoji = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
-                const glowClass = isFirst ? 'ring-2 ring-amber-400/50 shadow-lg shadow-amber-500/20' : '';
-                const bgGradient = isFirst ? 'from-amber-500/20 to-yellow-600/10' : 
-                                   i === 1 ? 'from-slate-400/20 to-slate-600/10' : 
-                                   'from-orange-700/20 to-orange-900/10';
-                
-                return `
-                <div class="flex-1 ${orderClass} ${sizeClass}" onclick="abrirInfoJugador('${telefono}')" style="cursor:pointer">
-                    <div class="glass-card rounded-2xl p-4 flex flex-col items-center ${glowClass} bg-gradient-to-b ${bgGradient} relative overflow-hidden h-full hover:scale-105 transition-transform">
-                        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${isFirst ? 'from-amber-400 via-yellow-300 to-amber-400' : i === 1 ? 'from-slate-300 to-slate-400' : 'from-orange-400 to-orange-600'}"></div>
-                        <div class="text-2xl mb-2">${medalEmoji}</div>
-                        <div class="text-sm font-black text-white text-center leading-tight">${j.nombre}</div>
-                        <div class="text-[10px] text-blue-400 uppercase">${j.equipo}</div>
-                        <div class="mt-2 px-3 py-1 rounded-full ${isFirst ? 'bg-amber-500' : i === 1 ? 'bg-slate-400' : 'bg-orange-600'}">
-                            <span class="text-lg font-black text-white">${j.goles}</span>
-                        </div>
-                    </div>
-                </div>`;
-            }).join('')}
+        <div class="grid grid-cols-1 gap-10">
+<!-- Top Goleadores -->
+            <div>
+                <h4 class="text-xs font-bold text-amber-400 uppercase mb-3 text-center">🏆 Top Goleadores</h4>
+                <div class="flex flex-col md:flex-row items-stretch md:items-end gap-2">
+                    ${goleadores.length > 0 ? goleadores.map(([telefono, j], i) => {
+                        const medalEmoji = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+                        return `
+                        <div class="flex-1" onclick="abrirInfoJugador('${telefono}')" style="cursor:pointer">
+                            <div class="glass-card rounded-2xl p-4 flex flex-col items-center ${i === 0 ? 'from-amber-500/20 to-yellow-600/10' : 'from-slate-800/50 to-slate-900/30'} bg-gradient-to-b relative overflow-hidden h-full ${i === 0 ? 'md:scale-105' : ''}">
+                                <div class="absolute top-0 left-0 w-full h-1 ${i === 0 ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400' : i === 1 ? 'bg-slate-400' : 'bg-orange-500'}"></div>
+                                <div class="text-2xl mb-2">${medalEmoji}</div>
+                                <div class="text-sm font-bold text-white text-center leading-tight">${j.nombre}</div>
+                                <div class="text-[10px] text-blue-400 uppercase">${j.equipo}</div>
+                                <div class="mt-2 px-3 py-1 rounded-full ${i === 0 ? 'bg-amber-500' : i === 1 ? 'bg-slate-400' : 'bg-orange-600'}">
+                                    <span class="text-lg font-black text-white">${j.goles}</span>
+                                </div>
+                            </div>
+                        </div>`;
+                    }).join('') : '<div class="text-center text-slate-500 text-xs">Sin goleador</div>'}
+                </div>
+            </div>
+            <!-- Top Porteros -->
+            <div>
+                <h4 class="text-xs font-bold text-emerald-400 uppercase mb-3 text-center">🧤 Guante de Oro</h4>
+                <div class="flex flex-col md:flex-row items-stretch md:items-end gap-2">
+                    ${porterosTop.length > 0 ? porterosTop.map((p, i) => {
+                        const medalEmoji = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+                        return `
+                        <div class="flex-1" onclick="abrirInfoPortero('${p.nombre}')" style="cursor:pointer">
+                            <div class="glass-card rounded-2xl p-4 flex flex-col items-center ${i === 0 ? 'from-emerald-500/20 to-cyan-600/10' : 'from-slate-800/50 to-slate-900/30'} bg-gradient-to-b relative overflow-hidden h-full ${i === 0 ? 'md:scale-105' : ''}">
+                                <div class="absolute top-0 left-0 w-full h-1 ${i === 0 ? 'bg-gradient-to-r from-emerald-400 via-cyan-300 to-emerald-400' : i === 1 ? 'bg-slate-400' : 'bg-orange-500'}"></div>
+                                <div class="text-2xl mb-2">${medalEmoji}</div>
+                                <div class="text-sm font-bold text-white text-center leading-tight">${p.portero_nombre}</div>
+                                <div class="text-[10px] text-cyan-400 uppercase">${p.nombre}</div>
+                                <div class="flex gap-2 mt-2">
+                                    <div class="px-2 py-1 rounded-lg bg-slate-800/50">
+                                        <span class="text-[10px] text-slate-400">PJ</span>
+                                        <div class="text-sm font-bold text-white">${p.pj}</div>
+                                    </div>
+                                    <div class="px-2 py-1 rounded-lg ${p.gc <= 5 ? 'bg-emerald-600' : p.gc <= 10 ? 'bg-yellow-600' : 'bg-rose-600'}">
+                                        <span class="text-[10px] text-white">GC</span>
+                                        <div class="text-sm font-bold text-white">${p.gc}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+                    }).join('') : '<div class="text-center text-slate-500 text-xs">Sin portero</div>'}
+                </div>
+            </div>
         </div>`;
 }
 
+ // Tabla de Posiciones
 function cargarPosiciones(equipos, partidos) {
     const contenedor = document.getElementById('contenedor-posiciones');
     if (!contenedor) return;
@@ -728,18 +827,36 @@ function cargarPosiciones(equipos, partidos) {
 }
 
 // === CARGAR PORTEROS (GUANTE DE ORO) ===
-function cargarPorteros(equipos, partidos) {
+function cargarPorteros(equipos, partidos, jugadores) {
     const contenedor = document.getElementById('contenedor-porteros');
     if (!contenedor) return;
     
+    const playersMap = {};
+    if (jugadores) {
+        for (const telefono in jugadores) {
+            playersMap[telefono] = jugadores[telefono];
+        }
+    }
+    
     // Calculate stats (same logic as cargarPosiciones but for GC ranking)
     const stats = {};
+    
     for (const id in equipos) {
-        const eqNombre = equipos[id].nombre;
+        const eq = equipos[id];
+        const eqNombre = eq.nombre;
+        
+        // Buscar nombre del portero usando portero_id
+        let porteroNombre = eqNombre + ' (Portero)';
+        if (eq.portero_id && playersMap[eq.portero_id]) {
+            porteroNombre = playersMap[eq.portero_id].nombre;
+        } else if (eq.portero_nombre) {
+            porteroNombre = eq.portero_nombre;
+        }
+        
         stats[eqNombre] = {
             nombre: eqNombre,
-            escudo: equipos[id].escudo || '',
-            portero_nombre: equipos[id].portero_nombre || eqNombre + ' (Portero)',
+            escudo: eq.escudo || '',
+            portero_nombre: porteroNombre,
             pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0
         };
     }
@@ -779,7 +896,7 @@ function cargarPorteros(equipos, partidos) {
             return b.pj - a.pj;
         });
 
-    if (porteros.length === 0) {
+if (porteros.length === 0) {
         contenedor.innerHTML = '<div class="p-8 text-center text-slate-500">No hay porteros con partidos jugados.</div>';
         return;
     }
@@ -800,14 +917,14 @@ function cargarPorteros(equipos, partidos) {
                 </thead>
                 <tbody class="divide-y divide-slate-800/50">
                     ${top10.map((t, i) => {
-                        const rowClass = i < 3 ? 'bg-gradient-to-r from-green-500/10 to-transparent' : 'hover:bg-slate-800/30';
+                        const rowClass = i < 3 ? 'bg-gradient-to-r from-green-500/10 to-transparent cursor-pointer hover:bg-slate-800/30' : 'cursor-pointer hover:bg-slate-800/30';
                         const rankClass = i === 0 ? 'text-green-400 font-black' :
-                                        i === 1 ? 'text-slate-300 font-bold' :
-                                        i === 2 ? 'text-yellow-400 font-bold' : 'text-blue-400 font-bold';
+                                         i === 1 ? 'text-slate-300 font-bold' :
+                                         i === 2 ? 'text-yellow-400 font-bold' : 'text-blue-400 font-bold';
                         const gcClass = t.gc <= 5 ? 'text-green-400' : t.gc <= 10 ? 'text-yellow-400' : 'text-rose-400';
                         
                         return `
-                        <tr class="${rowClass} transition-colors">
+                        <tr class="${rowClass} transition-colors" onclick="abrirInfoPortero('${t.nombre}')">
                             <td class="px-3 py-3 ${rankClass}">${i + 1}</td>
                             <td class="px-3 py-3 font-bold text-white">${t.portero_nombre}</td>
                             <td class="px-3 py-3">
@@ -822,8 +939,9 @@ function cargarPorteros(equipos, partidos) {
         </div>
         <div class="p-4 text-center text-slate-500 text-xs border-t border-slate-800/50">
             Guante de Oro 🧤 - Menos GC = Mejor
-        </div>
-    `;
+        </div>`;
+    
+    window.porterosStats = stats;
 }
 
 // Función para abrir modal de equipo
