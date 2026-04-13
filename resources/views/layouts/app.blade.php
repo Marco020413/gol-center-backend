@@ -543,16 +543,22 @@
             if(titulo) titulo.innerText = 'Nuevo Equipo';
             if(preview) preview.classList.add('hidden');
 
-            // Modo creación: habilitar botón sin portero
+            // Modo creación: permitir crear equipo sin jugadores (se agregan después)
             if(selectPortero) {
                 selectPortero.disabled = true;
-                selectPortero.innerHTML = '<option value="">Asigna jugadores al equipo primero para elegir un portero</option>';
+                selectPortero.innerHTML = '<option value="">Agrega jugadores al equipo para elegir portero</option>';
             }
             if(btn) {
                 btn.disabled = false;
                 btn.innerText = 'GUARDAR EQUIPO';
             }
+            
+            // Ocultar indicador de jugadores en creación
+            const infoBox = document.getElementById('equipoJugadoresInfo');
+            if(infoBox) infoBox.classList.add('hidden');
+            
             equipoState.porterosCargados = true;
+            equipoState.jugadoresCount = 0;
 
             // Mostrar modal
             modal.classList.remove('hidden');
@@ -868,18 +874,21 @@
             // Modo edición: cargar porteros
             await cargarJugadoresEquipo(data.nombre);
         } else {
-            // Modo creación: habilitar botón sin esperar porteros
+            // Modo creación: permitir crear sin jugadores
             const select = equipoElements.selectPortero();
             const btn = equipoElements.btn();
             
-            // Deshabilitar select y mostrar mensaje
             select.disabled = true;
-            select.innerHTML = '<option value="">Asigna jugadores al equipo primero para elegir un portero</option>';
+            select.innerHTML = '<option value="">Agrega jugadores al equipo para elegir portero</option>';
             
-            // Habilitar botón inmediatamente para creación
             equipoState.porterosCargados = true;
+            equipoState.jugadoresCount = 0;
             btn.disabled = false;
-            btn.innerText = 'Guardar Equipo';
+            btn.innerText = 'GUARDAR EQUIPO';
+            
+            // Ocultar indicador en creation
+            const infoBox = document.getElementById('equipoJugadoresInfo');
+            if(infoBox) infoBox.classList.add('hidden');
         }
     }
 
@@ -888,6 +897,8 @@
         resetSelectPortero(false);
 
         const btn = equipoElements.btn();
+        const infoBox = document.getElementById('equipoJugadoresInfo');
+        const countSpan = document.getElementById('eqJugadoresCount');
         
         try {
             const res = await fetch('/api/jugadores');
@@ -901,15 +912,39 @@
                 .filter(([_, j]) => j.equipo === equipoNombre && j.estatus === 'activo')
                 .sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
             
+            // Contador de jugadores
+            const totalJugadores = jugadoresEquipo.length;
+            equipoState.jugadoresCount = totalJugadores;
+            
+            // Actualizar indicador visual
+            if (infoBox && countSpan) {
+                countSpan.innerText = totalJugadores;
+                if (totalJugadores < 11) {
+                    infoBox.classList.remove('hidden');
+                } else {
+                    infoBox.classList.add('hidden');
+                }
+            }
+            
             // Si no hay jugadores, mostrar mensaje
-            if (jugadoresEquipo.length === 0) {
+            if (totalJugadores === 0) {
                 select.disabled = true;
                 select.innerHTML = '<option value="">Asigna jugadores al equipo primero para elegir un portero</option>';
                 equipoState.porterosCargados = true;
-                btn.disabled = false;
-                btn.innerText = 'Guardar Equipo';
+                btn.disabled = true; // Bloquear hasta tener 11+
+                btn.innerText = `Requiere 11+ jugadores (${totalJugadores}/11)`;
                 return;
             }
+
+            // Si tiene menos de 11, informar pero permitir selección
+            if (totalJugadores < 11) {
+                btn.disabled = true;
+                btn.innerText = `Faltan ${11 - totalJugadores} jugadores (${totalJugadores}/11)`;
+            }
+
+            // Habilitar y permitir onchange
+            select.disabled = false;
+            select.onchange = validarEstadoBoton;
 
             jugadoresEquipo.forEach(([telefono, j]) => {
                 const opt = new Option(`${j.nombre} (#${j.numero || '?'})`, telefono);
@@ -940,10 +975,18 @@
             return alert('⚠️ Nombre obligatorio');
         }
 
+        // Validar 11+ jugadores solo en edición
+        const selectPortero = document.getElementById('selectPortero');
+        const tienePortero = selectPortero?.value && selectPortero.value !== '';
+        const tiene11Jugadores = (equipoState.jugadoresCount || 0) >= 11;
+        
+        if (esEdicion && !tiene11Jugadores) {
+            return alert(`⚠️ El equipo necesita al menos 11 jugadores (tienes ${equipoState.jugadoresCount || 0})`);
+        }
+
         const tieneNuevaImagen = document.getElementById('inputEscudo')?.files?.length > 0;
         const nuevoEscudo = window.escudoSeleccionado || null;
         const escudoAnterior = equipoState.escudoRespaldo || null;
-        const esEdicion = !!document.getElementById('equipo_id_edit').value;
 
         const escudoFinal = nuevoEscudo || (esEdicion ? escudoAnterior : null);
 
@@ -1016,11 +1059,40 @@ const select = document.getElementById('selectPortero');
 
     function validarEstadoBoton() {
         const btn = equipoElements.btn();
+        const select = document.getElementById('selectPortero');
         const nombreValido = equipoElements.inputNombre().value.trim().length > 0;
+        const tienePortero = select?.value && select.value !== '';
+        const tiene11Jugadores = (equipoState.jugadoresCount || 0) >= 11;
+        const esEdicion = !!document.getElementById('equipo_id_edit').value;
+        const infoBox = document.getElementById('equipoJugadoresInfo');
+        const countSpan = document.getElementById('eqJugadoresCount');
         
-        btn.disabled = !(nombreValido && equipoState.porterosCargados);
+        // Actualizar indicador visual
+        if (infoBox && countSpan) {
+            countSpan.innerText = equipoState.jugadoresCount || 0;
+            if (esEdicion && (equipoState.jugadoresCount || 0) < 11) {
+                infoBox.classList.remove('hidden');
+            } else {
+                infoBox.classList.add('hidden');
+            }
+        }
+        
+        // Validación: creación permite guardar sin jugadores (se agregan después)
+        // Edición requiere 11+ jugadores
+        let puedeGuardar = nombreValido;
+        
+        if (esEdicion) {
+            puedeGuardar = puedeGuardar && tiene11Jugadores;
+        }
+        
+        btn.disabled = !puedeGuardar;
+        
         if (!btn.disabled && !equipoState.guardando) {
-            btn.innerText = 'Guardar Equipo';
+            if (esEdicion && !tiene11Jugadores) {
+                btn.innerText = `Faltan ${11 - (equipoState.jugadoresCount || 0)} jugadores`;
+            } else {
+                btn.innerText = 'GUARDAR EQUIPO';
+            }
         }
     }
 

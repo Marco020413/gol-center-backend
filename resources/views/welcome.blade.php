@@ -354,6 +354,15 @@
                     <option value="">-- Seleccionar jugador --</option>
                 </select>
             </div>
+            <div id="equipoJugadoresInfo" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-lg p-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-amber-400 text-xs font-bold">⚠️ IMPORTANTE</span>
+                </div>
+                <p class="text-[10px] text-amber-300/70 mt-1">
+                    Este equipo tiene <span id="eqJugadoresCount" class="font-bold">0</span>/11 jugadores. 
+                    Asigna al menos 11 jugadores y define un portero antes de guardar.
+                </p>
+            </div>
             <button type="submit" id="btnGuardarEquipo" class="w-full bg-blue-600 font-bold py-3 rounded-lg transition uppercase text-xs shrink-0 mt-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Guardar Equipo</button>
         </form>
     </div>
