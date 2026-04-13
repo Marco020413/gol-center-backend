@@ -758,7 +758,8 @@
         const porterosData = {};
         Object.values(equipos || {}).forEach(eq => {
             if (eq.portero_id) {
-                porterosData[eq.nombre] = { id: eq.portero_id, nombre: eq.portero_nombre || eq.portero_id };
+                // Guardar ID para luego resolver a nombre
+                porterosData[eq.nombre] = { id: eq.portero_id, nombre: eq.portero_nombre || '' };
             }
         });
         
@@ -767,6 +768,16 @@
             const resJ = await fetch('/api/jugadores');
             jugadoresData = await resJ.json();
         } catch(e) {}
+        
+        // Resolver nombres de porteros usando jugadoresData
+        Object.keys(porterosData).forEach(eqNombre => {
+            const portero = porterosData[eqNombre];
+            if (portero.id && jugadoresData[portero.id]) {
+                portero.nombre = jugadoresData[portero.id].nombre || portero.id;
+            } else if (!portero.nombre) {
+                portero.nombre = portero.id; // Fallback al ID si no hay nombre
+            }
+        });
         
         const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
         
