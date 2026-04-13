@@ -3355,11 +3355,16 @@ window.logout = function() {
         titulo.innerText = 'Jugadores del Equipo';
         subtitulo.innerText = nombreEquipo;
         contenedor.innerHTML = '<p class="text-slate-500 text-center p-4">Cargando...</p>';
+        
+        // Hide add panel when reopening
+        const panel = document.getElementById('panelAgregarJugador');
+        if(panel) panel.classList.add('hidden');
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         
         try {
-            const res = await fetch('/api/jugadores');
+            // Add timestamp to prevent caching
+            const res = await fetch('/api/jugadores?_=' + Date.now());
             const jugadores = await res.json();
             
             const jugadoresEquipo = Object.entries(jugadores)
@@ -3389,11 +3394,12 @@ window.logout = function() {
                 const estadoClase = activo ? 'text-emerald-400' : lesionado ? 'text-yellow-400' : 'text-red-400';
                 const estadoBg = activo ? 'bg-emerald-600/20' : lesionado ? 'bg-yellow-600/20' : 'bg-red-600/20';
                 
+                const nombreSafe = (j.nombre || 'Sin nombre').toLowerCase();
                 const dirSafe = (j.direccion || '').replace(/'/g, "\\'");
                 const estadoSafe = (j.estatus || j.estado || 'Activo').toString();
                 
                 html += `
-                    <div class="jugador-card bg-slate-800 border border-slate-700 rounded-lg p-3 flex items-center justify-between hover:border-blue-500/50 cursor-pointer transition" data-nombre="${j.nombre.toLowerCase()}" data-dorsal="${j.numero || ''}" data-estado="${est}" onclick="cerrarModalVerJugadores(); setTimeout(() => editarJugador('${telefono}', '${j.nombre}', '${j.equipo}', ${j.edad || 18}, '${dirSafe}', ${j.numero || 0}, ${j.partidos_jugados || 0}, '${estadoSafe}', ${j.partidos_suspension || 0}), 100)">
+                    <div class="jugador-card bg-slate-800 border border-slate-700 rounded-lg p-3 flex items-center justify-between hover:border-blue-500/50 cursor-pointer transition" data-nombre="${nombreSafe}" data-dorsal="${j.numero || ''}" data-estado="${est}" onclick="cerrarModalVerJugadores(); setTimeout(() => editarJugador('${telefono}', '${j.nombre || ''}', '${j.equipo || ''}', ${j.edad || 18}, '${dirSafe}', ${j.numero || 0}, ${j.partidos_jugados || 0}, '${estadoSafe}', ${j.partidos_suspension || 0}), 100)">
                         <div class="flex items-center gap-3">
                             <div class="w-8 h-8 ${estadoBg} rounded-full flex items-center justify-center font-bold ${estadoClase} text-sm">${j.numero || '-'}</div>
                             <div>
@@ -3423,7 +3429,7 @@ window.logout = function() {
         }
     };
 
-    window.cerrarModalVerJugadores = function() {
+window.cerrarModalVerJugadores = function() {
         const modal = document.getElementById('modalVerJugadores');
         if(modal) {
             modal.classList.remove('flex');
@@ -3431,28 +3437,102 @@ window.logout = function() {
         }
     };
 
-    window.filtrarJugadoresModal = function() {
-        const filtroNombre = document.getElementById('filtroNombreJugador')?.value?.toLowerCase() || '';
-        const filtroDorsal = document.getElementById('filtroDorsalJugador')?.value || '';
-        const filtroEstado = document.getElementById('filtroEstadoJugador')?.value || '';
+    window.togglePanelAgregarJugador = async function() {
+        const panel = document.getElementById('panelAgregarJugador');
+        const contenedor = document.getElementById('contenedorJugadoresDisponibles');
+        const equipoActual = document.getElementById('subtituloVerJugadores')?.innerText;
         
-        const tarjetas = document.querySelectorAll('#contenedorVerJugadores .jugador-card');
+        if (!panel || !contenedor || !equipoActual) return;
         
-        tarjetas.forEach(tarjeta => {
-            const nombre = tarjeta.dataset.nombre || '';
-            const dorsal = tarjeta.dataset.dorsal || '';
-            const estado = tarjeta.dataset.estado || '';
+        if (panel.classList.contains('hidden')) {
+            // Show panel and load available players
+            panel.classList.remove('hidden');
+            contenedor.innerHTML = '<p class="text-slate-500 text-xs text-center py-2">Cargando...</p>';
             
-            const coincideNombre = nombre.includes(filtroNombre);
-            const coincideDorsal = filtroDorsal === '' || dorsal === filtroDorsal;
-            const coincideEstado = filtroEstado === '' || estado === filtroEstado;
-            
-            if (coincideNombre && coincideDorsal && coincideEstado) {
-                tarjeta.classList.remove('hidden');
-            } else {
-                tarjeta.classList.add('hidden');
+            try {
+                const [resJug, resEq] = await Promise.all([
+                    fetch('/api/jugadores?_=' + Date.now()),
+                    fetch('/api/equipos')
+                ]);
+                const jugadores = await resJug.json();
+                const equipos = await resEq.json();
+                
+                // Count players per team
+                const jugadoresPorEquipo = {};
+                Object.values(jugadores).forEach(j => {
+                    const eq = j.equipo || 'Libre';
+                    jugadoresPorEquipo[eq] = (jugadoresPorEquipo[eq] || 0) + 1;
+                });
+                
+                // Find available players (Libre or team has < 11)
+                const disponibles = Object.entries(jugadores).filter(([tel, j]) => {
+                    if (j.equipo === equipoActual) return false; // Already on this team
+                    if (!j.equipo || j.equipo === 'Libre') return true; // Free agents
+                    
+                    // Check if team has room (less than 11)
+                    const count = jugadoresPorEquipo[j.equipo] || 0;
+                    return count < 11;
+                });
+                
+                if (disponibles.length === 0) {
+                    contenedor.innerHTML = '<p class="text-slate-500 text-xs text-center py-2">No hay jugadores disponibles</p>';
+                    return;
+                }
+                
+                let html = '';
+                disponibles.forEach(([tel, j]) => {
+                    const estado = (j.estatus || j.estado || 'activo').toString().toLowerCase();
+                    const estadoLabel = estado === 'activo' ? '🟢' : estado === 'lesionado' ? '🟡' : '🔴';
+                    html += `
+                        <div class="flex items-center justify-between bg-slate-800/50 rounded px-2 py-1.5 hover:bg-slate-700/50">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-emerald-400 w-6">${j.numero || '-'}</span>
+                                <span class="text-white text-xs">${j.nombre}</span>
+                                <span class="text-[10px] text-slate-500">${j.equipo || 'Libre'} ${estadoLabel}</span>
+                            </div>
+                            <button onclick="asignarJugadorAEquipo('${tel}', '${j.nombre}', '${equipoActual}')" class="text-emerald-400 hover:text-emerald-300 text-xs font-bold">
+                                ➕
+                            </button>
+                        </div>
+                    `;
+                });
+                
+                contenedor.innerHTML = html;
+            } catch (e) {
+                console.error(e);
+                contenedor.innerHTML = '<p class="text-red-500 text-xs text-center py-2">Error al cargar</p>';
             }
-        });
+        } else {
+            panel.classList.add('hidden');
+        }
+    };
+
+    window.asignarJugadorAEquipo = async function(telefono, nombre, equipo) {
+        if (!confirm(`¿Asignar a ${nombre} al equipo ${equipo}?`)) return;
+        
+        try {
+            const res = await fetch('/api/admin/jugadores/actualizar/' + telefono, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({ equipo: equipo })
+            });
+            
+            const data = await res.json();
+            console.log('Asignar response:', res.status, data);
+            
+            if (res.ok) {
+                alert(`✅ ${nombre} asignado a ${equipo}`);
+                window.verJugadoresEquipo(null, equipo);
+            } else {
+                alert('❌ ' + (data.error || 'Error al asignar'));
+            }
+        } catch (e) {
+            console.error(e);
+            alert('❌ Error al asignar');
+        }
     };
 
 </script>

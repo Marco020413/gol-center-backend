@@ -80,7 +80,6 @@
                 }
                 
                 if (data.token) {
-                    // El token también se guarda en cookie desde el servidor
                     localStorage.setItem('admin_token', data.token);
                     window.location.href = '/admin';
                 } else {

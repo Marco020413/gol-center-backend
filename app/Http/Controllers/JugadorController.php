@@ -75,36 +75,50 @@ class JugadorController extends Controller
     public function actualizar(Request $request, $telefono)
     {
         try {
+            // Obtener datos actuales del jugador
+            $jugadorActual = $this->database->getReference('jugadores/' . $telefono)->getValue();
+            
+            if (!$jugadorActual) {
+                return response()->json(['error' => 'Jugador no encontrado'], 404);
+            }
+            
+            // Si solo se envía equipo (asignación rápida), usar datos existentes
+            $nombre = $request->nombre ?? ($jugadorActual['nombre'] ?? '');
+            $numero = $request->numero ?? ($jugadorActual['numero'] ?? 0);
+            $equipo = $request->equipo ?? ($jugadorActual['equipo'] ?? '');
+            $edad = $request->edad ?? ($jugadorActual['edad'] ?? 0);
+            $direccion = $request->direccion ?? ($jugadorActual['direccion'] ?? '');
+            $estatus = $request->estatus ?? ($jugadorActual['estatus'] ?? 'activo');
+            $partidos_suspension = $request->partidos_suspension ?? ($jugadorActual['partidos_suspension'] ?? 0);
+            
             // --- 1. VALIDACIÓN DE DORSAL ÚNICO (Para que no se repitan en el equipo) ---
             $jugadores = $this->database->getReference('jugadores')->getValue() ?? [];
-            $equipoRequest = strtolower(trim($request->equipo));
-            $numeroRequest = (int)$request->numero;
-            $telefonoEditando = (string)$telefono; // Normalizar a string
+            $equipoRequest = strtolower(trim($equipo));
+            $numeroRequest = (int)$numero;
+            $telefonoEditando = (string)$telefono;
             
             foreach ($jugadores as $key => $j) {
-                // Saltamos al jugador que estamos editando - comparar como strings
                 if ((string)$key === $telefonoEditando) continue;
 
                 if (isset($j['equipo']) && isset($j['numero'])) {
-                    // Comparamos normalizando: trim + lowercase
                     if (strtolower(trim($j['equipo'])) === $equipoRequest && (int)$j['numero'] === $numeroRequest) {
                         return response()->json([
-                            'error' => "El número {$request->numero} ya está ocupado en el equipo {$request->equipo}."
+                            'error' => "El número {$numero} ya está ocupado en el equipo {$equipo}."
                         ], 422);
                     }
                 }
             }
 
-            // --- 2. ACTUALIZACIÓN SEGURA (No toca goles ni partidos) ---
+            // --- 2. ACTUALIZACIÓN SEGURA ---
             $jugadorRef = $this->database->getReference('jugadores/' . $telefono);
             $updateData = [
-                'nombre'              => $request->nombre,
-                'numero'              => (int)$request->numero,
-                'equipo'              => $request->equipo,
-                'edad'                => (int)$request->edad,
-                'direccion'           => $request->direccion,
-                'estatus'             => $request->estatus ?? 'activo',
-                'partidos_suspension' => (int)($request->partidos_suspension ?? 0),
+                'nombre'              => $nombre,
+                'numero'              => (int)$numero,
+                'equipo'              => $equipo,
+                'edad'                => (int)$edad,
+                'direccion'           => $direccion,
+                'estatus'             => $estatus,
+                'partidos_suspension' => (int)$partidos_suspension,
             ];
 
             $jugadorRef->update($updateData);

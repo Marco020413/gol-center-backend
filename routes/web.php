@@ -1,8 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Cookie;
 use App\Http\Controllers\JugadorController;
-use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PartidoController;
 use App\Http\Controllers\EquipoController;
 
@@ -25,30 +25,37 @@ Route::post('/login', function () {
         $signInResult = $auth->signInWithEmailAndPassword($email, $password);
         $idToken = $signInResult->idToken();
         
-        // Guardar token en cookie (más confiable que localStorage)
+        $cookie = Cookie::make('admin_token', $idToken, 60, '/', '', false, false);
+        
         return response()->json([
             'token' => $idToken,
             'message' => 'Login exitoso'
-        ])->cookie('admin_token', $idToken, 60, '/', null, false, false);
+        ])->withCookie($cookie);
     } catch (\Exception $e) {
         return response()->json([
             'error' => 'Credenciales inválidas: ' . $e->getMessage()
         ], 401);
     }
-});
+})->withoutMiddleware('Illuminate\Foundation\Http\Middleware\VerifyCsrfToken');
 
-// Logout - clear cookie properly and redirect
+// Logout
 Route::get('/logout', function () {
-    // Clear the cookie by setting it to expire in the past
     $response = redirect('/login');
     $response->withCookie(cookie('admin_token', '', -1, '/', '', false, false));
     return $response;
 });
 
-// Admin - verificar autenticación desde cookie o header
+// Admin route
 Route::get('/admin', function () {
-    // Intentar obtener token de cookie o header
     $token = request()->cookie('admin_token') ?: request()->bearerToken();
+    $cookieHeader = request()->header('Cookie');
+    
+    if (!$token && $cookieHeader) {
+        preg_match('/admin_token=([^;]+)/', $cookieHeader, $matches);
+        if (isset($matches[1])) {
+            $token = $matches[1];
+        }
+    }
     
     if (!$token) {
         return redirect('/login');
@@ -58,19 +65,17 @@ Route::get('/admin', function () {
         $auth = app('firebase.auth');
         $verifiedIdToken = $auth->verifyIdToken($token);
         
-        // Cargar todos los datos que necesita la vista
         $jugadores = app(JugadorController::class)->listarTodos()->getData(true);
         $equipos = app(EquipoController::class)->listar()->getData(true);
         
-        // Llamar a listar sin Request
         $database = app('firebase')->createDatabase();
         $partidos = $database->getReference('partidos')->getValue() ?? [];
         
-        // Pre-calcular tabla de posiciones
         $stats = [];
         $equipos = $equipos ?: [];
         
         foreach ($equipos as $id => $eq) {
+            if (!isset($eq['nombre'])) continue;
             $stats[$eq['nombre']] = [
                 'nombre' => $eq['nombre'],
                 'escudo' => $eq['escudo'] ?? '',
@@ -107,7 +112,6 @@ Route::get('/admin', function () {
             }
         }
         
-        // Ordenar por puntos, diferencia de goles, GF
         usort($stats, function($a, $b) {
             if ($b['pts'] != $a['pts']) return $b['pts'] - $a['pts'];
             $difA = $a['gf'] - $a['gc'];
@@ -116,7 +120,6 @@ Route::get('/admin', function () {
             return $b['gf'] - $a['gf'];
         });
         
-        // Prevent browser caching
         return response()->view('welcome', [
             'jugadores' => $jugadores,
             'tablaPosiciones' => $stats
@@ -126,7 +129,6 @@ Route::get('/admin', function () {
             'Expires' => '0'
         ]);
     } catch (\Exception $e) {
-        // Token inválido o expirado - redirigir
         return redirect('/login');
     }
 });
