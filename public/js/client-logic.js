@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Función para cambiar pestañas
 function switchTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.extra-section').forEach(el => el.classList.remove('visible'));
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('bg-blue-600', 'text-white');
         btn.classList.add('bg-slate-900', 'text-slate-400');
@@ -55,6 +56,27 @@ function switchTab(tabName) {
     // Cargar historial si es necesario
     if (tabName === 'historial') {
         cargarHistorial();
+    }
+}
+
+// Función para cambiar secciones extra (próximos, reportes)
+function switchSection(sectionName) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.extra-section').forEach(el => el.classList.remove('visible'));
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'text-white');
+        btn.classList.add('bg-slate-900', 'text-slate-400');
+    });
+    
+    const section = document.getElementById('section-' + sectionName);
+    if (section) {
+        section.classList.add('visible');
+    }
+    
+    const btn = document.querySelector(`button[onclick="switchSection('${sectionName}')"]`);
+    if (btn) {
+        btn.classList.remove('bg-slate-900', 'text-slate-400');
+        btn.classList.add('bg-blue-600', 'text-white');
     }
 }
 
