@@ -719,6 +719,13 @@
         const equipos = window.cacheEquiposData || {};
         const partidos = window.cachePartidosData || {};
         
+        const porterosData = {};
+        Object.values(equipos || {}).forEach(eq => {
+            if (eq.portero_id) {
+                porterosData[eq.nombre] = { id: eq.portero_id, nombre: eq.portero_nombre || eq.portero_id };
+            }
+        });
+        
         let jugadoresData = {};
         try {
             const resJ = await fetch('/api/jugadores');
@@ -811,9 +818,13 @@
         
         Object.values(partidos || {}).forEach(p => {
             if (!p.jornada || !p.resultado_confirmado) return;
+            const jornadaNum = parseInt(p.jornada);
+            if (isNaN(jornadaNum)) return;
+            
             if (!statsJornada[p.jornada]) {
                 statsJornada[p.jornada] = {
                     goleadores: {},
+                    porteros: {},
                     equipos: {}
                 };
             }
@@ -848,6 +859,17 @@
                 statsJornada[p.jornada].equipos[visitante].gf += parseInt(p.goles_visitante || 0);
                 statsJornada[p.jornada].equipos[visitante].gc += parseInt(p.goles_local || 0);
             }
+            
+            // Atribuir GC a porteros
+            Object.entries(statsJornada[p.jornada].equipos).forEach(([eqNama, eqStats]) => {
+                const portero = porterosData[eqNama];
+                if (portero && eqStats.gc > 0) {
+                    if (!statsJornada[p.jornada].porteros[portero.nombre]) {
+                        statsJornada[p.jornada].porteros[portero.nombre] = { gc: 0, equipo: eqNama };
+                    }
+                    statsJornada[p.jornada].porteros[portero.nombre].gc += eqStats.gc;
+                }
+            });
         });
         
         html += `
@@ -885,12 +907,34 @@
             const minGC = Math.min(...equiposArr.map(e => e[1].gc));
             const equiposMenosGoleados = equiposArr.filter(e => e[1].gc === minGC);
             
+            // Top porteros - menos GC (Guante de Oro)
+            const porterosOrdenados = Object.entries(stats.porteros || {})
+                .sort((a, b) => a[1].gc - b[1].gc);
+            
+            let topPorteros = [];
+            if (porterosOrdenados.length > 0) {
+                const minGCPortero = porterosOrdenados[0][1].gc;
+                topPorteros = porterosOrdenados.filter(p => p[1].gc === minGCPortero);
+                
+                if (porterosOrdenados.length > 1) {
+                    const segundoMinGC = porterosOrdenados[1][1].gc;
+                    if (segundoMinGC > minGCPortero) {
+                        porterosOrdenados.slice(1).filter(p => p[1].gc === segundoMinGC).forEach(p => topPorteros.push(p));
+                    }
+                }
+            }
+            
             html += `
             <h3>Jornada ${j}</h3>
             <table>
                 <tr><th colspan="3" style="background:#e0e7ff">🏆 Top Goleadores</th></tr>
                 <tr><th class="text-left">Jugador</th><th class="text-left">Equipo</th><th>Goles</th></tr>
                 ${topGoleadores.length > 0 ? topGoleadores.map(([nombre, data]) => `<tr><td class="text-left">${nombre}</td><td class="text-left">${data.equipo || '-'}</td><td><b>${data.goles}</b></td></tr>`).join('') : '<tr><td colspan="3" class="text-left">Sin datos</td></tr>'}
+            </table>
+            <table>
+                <tr><th colspan="3" style="background:#d1fae5">🧤 Porteros Menos Goleados</th></tr>
+                <tr><th class="text-left">Portero</th><th class="text-left">Equipo</th><th>GC</th></tr>
+                ${topPorteros.length > 0 ? topPorteros.map(([nombre, data]) => `<tr><td class="text-left">${nombre}</td><td class="text-left">${data.equipo || '-'}</td><td><b>${data.gc}</b></td></tr>`).join('') : '<tr><td colspan="3" class="text-left">Sin datos</td></tr>'}
             </table>
             <table>
                 <tr>
