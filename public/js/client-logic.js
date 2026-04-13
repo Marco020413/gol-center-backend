@@ -18,9 +18,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const res = await fetch('/api/publico?_=' + Date.now());
     datosGlobales = await res.json(); // Guardar globally
     
-    // Renderizar cada sección
+// Renderizar cada sección
     cargarGoleadores(datosGlobales.jugadores, datosGlobales.equipos, datosGlobales.partidos);
-    cargarJugadores(datosGlobales.jugadores);
+    cargarJugadores(datosGlobales.jugadores, datosGlobales.partidos);
     cargarEquipos(datosGlobales.equipos);
     cargarPosiciones(datosGlobales.equipos, datosGlobales.partidos);
     cargarPorteros(datosGlobales.equipos, datosGlobales.partidos, datosGlobales.jugadores);
@@ -550,13 +550,49 @@ function cargarEquipos(equipos) {
 }
 
 // === RANKING COMPLETO DE JUGADORES (COMPETITIVO) ===
-function cargarJugadores(jugadores) {
+function cargarJugadores(jugadores, partidos) {
     const contenedor = document.getElementById('contenedor-jugadores');
     if (!contenedor) return;
 
-    // Usar Object.entries para mantener el telefono como key
-    const lista = Object.entries(jugadores || {})
-        .sort((a, b) => (b[1].goles || 0) - (a[1].goles || 0));
+    // Calculate stats from fase regular only
+    const scorerStats = {};
+    const pjStats = {};
+    
+    Object.values(partidos || {}).forEach(p => {
+        if (!p.resultado_confirmado) return;
+        
+        const jornada = String(p.jornada || '').toUpperCase();
+        if (jornada === 'CUARTOS' || jornada === 'SEMIFINAL' || jornada === 'FINAL' || jornada === 'LIGUILLA') return;
+        
+        if (p.detalle_jugadores) {
+            Object.entries(p.detalle_jugadores).forEach(([tel, stats]) => {
+                const jug = jugadores[tel];
+                if (!scorerStats[tel]) {
+                    scorerStats[tel] = { telefono: tel, nombre: jug?.nombre || tel, equipo: jug?.equipo || '', goles: 0 };
+                }
+                if (stats.asistio && stats.goles > 0) {
+                    scorerStats[tel].goles += parseInt(stats.goles || 0);
+                }
+                if (stats.asistio) {
+                    pjStats[tel] = (pjStats[tel] || 0) + 1;
+                }
+            });
+        }
+    });
+    
+    const faseRegular = Object.values(scorerStats)
+        .filter(j => j.goles > 0)
+        .sort((a, b) => b.goles - a.goles || (pjStats[a.telefono] || 999) - (pjStats[b.telefono] || 999));
+    
+    const total = Object.entries(jugadores || {})
+        .filter(([tel, j]) => (j.goles || 0) > 0)
+        .map(([tel, j]) => ({ telefono: tel, nombre: j.nombre, equipo: j.equipo, goles: j.goles, pj: j.partidos_jugados || 0 }))
+        .sort((a, b) => b.goles - a.goles);
+    
+    // Use window to store current mode
+    window.jugadoresMode = window.jugadoresMode || 'regular';
+    
+    const lista = window.jugadoresMode === 'regular' ? faseRegular : total;
 
     if (lista.length === 0) {
         contenedor.innerHTML = '<div class="p-8 text-center text-slate-500">No hay jugadores registrados.</div>';
@@ -567,6 +603,11 @@ function cargarJugadores(jugadores) {
     const top10 = lista.slice(0, 10);
 
     let html = `
+        <div class="flex justify-end mb-2">
+            <button onclick="toggleJugadoresMode()" class="text-xs px-2 py-1 rounded ${window.jugadoresMode === 'regular' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-400'}">
+                ${window.jugadoresMode === 'regular' ? 'Fase Regular' : 'Total'}
+            </button>
+        </div>
         <div class="overflow-x-auto">
             <table class="w-full text-xs">
                 <thead class="bg-slate-800/80 text-slate-400 uppercase tracking-wider text-[10px]">
@@ -584,21 +625,22 @@ function cargarJugadores(jugadores) {
                         const rankClass = i === 0 ? 'text-amber-400 font-black' :
                                         i === 1 ? 'text-slate-300 font-bold' :
                                         i === 2 ? 'text-orange-400 font-bold' : 'text-blue-400 font-bold';
+                        const pj = window.jugadoresMode === 'regular' ? (pjStats[j.telefono] || 0) : (j.pj || 0);
                         
                         return `
-                        <tr class="${rowClass} transition-colors cursor-pointer hover:bg-blue-500/20" onclick="abrirInfoJugador('${j[0]}')">
+                        <tr class="${rowClass} transition-colors cursor-pointer hover:bg-blue-500/20" onclick="abrirInfoJugador('${j.telefono}')">
                             <td class="px-4 py-3 ${rankClass}">${i + 1}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
                                     <span class="text-lg">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '⭐'}</span>
-                                    <span class="font-bold text-white">${j[1].nombre || 'Sin nombre'}</span>
+                                    <span class="font-bold text-white">${j.nombre || 'Sin nombre'}</span>
                                 </div>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="px-2 py-1 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">${j[1].equipo || '-'}</span>
+                                <span class="px-2 py-1 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">${j.equipo || '-'}</span>
                             </td>
-                            <td class="px-4 py-3 text-center text-slate-400">${j[1].partidos_jugados || 0}</td>
-                            <td class="px-4 py-3 text-center text-emerald-400 font-bold">${j[1].goles || 0}</td>
+                            <td class="px-4 py-3 text-center text-slate-400">${pj}</td>
+                            <td class="px-4 py-3 text-center text-emerald-400 font-bold">${j.goles}</td>
                         </tr>`;
                     }).join('')}
                 </tbody>
@@ -610,6 +652,11 @@ function cargarJugadores(jugadores) {
     `;
 
     contenedor.innerHTML = html;
+}
+
+window.toggleJugadoresMode = function() {
+    window.jugadoresMode = window.jugadoresMode === 'regular' ? 'total' : 'regular';
+    cargarJugadores(datosGlobales?.jugadores, datosGlobales?.partidos);
 }
 
 // Función para mostrar info de portero
@@ -642,9 +689,80 @@ function cargarGoleadores(jugadores, equipos, partidos) {
     const contenedor = document.getElementById('contenedor-goleadores');
     if (!contenedor) return;
 
-    const goleadores = Object.entries(jugadores || {})
-        .filter(([tel, j]) => (j.goles || 0) > 0)
-        .sort((a, b) => b[1].goles - a[1].goles)
+    // Calculate team standings for tie-breaker
+    const teamStats = {};
+    for (const id in equipos) {
+        teamStats[equipos[id].nombre] = { pj: 0, pts: 0, gf: 0, gc: 0 };
+    }
+    
+    Object.values(partidos || {}).forEach(p => {
+        if (p.resultado_confirmado) {
+            const jornada = String(p.jornada || '').toUpperCase();
+            if (jornada === 'CUARTOS' || jornada === 'SEMIFINAL' || jornada === 'FINAL' || jornada === 'LIGUILLA') return;
+            
+            const loc = p.equipo_local, vis = p.equipo_visitante;
+            const gl = parseInt(p.goles_local || 0), gv = parseInt(p.goles_visitante || 0);
+            
+            if (teamStats[loc] && teamStats[vis]) {
+                teamStats[loc].pj++; teamStats[vis].pj++;
+                teamStats[loc].gf += gl; teamStats[loc].gc += gv;
+                teamStats[vis].gf += gv; teamStats[vis].gc += gl;
+                if (gl > gv) { teamStats[loc].pts += 3; teamStats[loc].g = (teamStats[loc].g || 0) + 1; }
+                else if (gv > gl) { teamStats[vis].pts += 3; teamStats[vis].g = (teamStats[vis].g || 0) + 1; }
+                else { teamStats[loc].pts++; teamStats[vis].pts++; }
+            }
+        }
+    });
+    
+    const teamRank = Object.values(teamStats)
+        .sort((a, b) => b.pts - a.pts || (b.gf - b.gc) - (a.gf - a.gc))
+        .map((t, i) => ({ ...t, posicion: i + 1 }));
+    
+    // Calculate goals ONLY from regular phase matches
+    const scorerStats = {};
+    const pjStats = {};
+    
+    Object.values(partidos || {}).forEach(p => {
+        if (!p.resultado_confirmado) return;
+        
+        const jornada = String(p.jornada || '').toUpperCase();
+        if (jornada === 'CUARTOS' || jornada === 'SEMIFINAL' || jornada === 'FINAL' || jornada === 'LIGUILLA') return;
+        
+        const eqLocal = p.equipo_local;
+        const eqVis = p.equipo_visitante;
+        
+        if (p.detalle_jugadores) {
+            Object.entries(p.detalle_jugadores).forEach(([tel, stats]) => {
+                if (stats.asistio && stats.goles > 0) {
+                    const jug = jugadores[tel];
+                    if (!scorerStats[tel]) {
+                        scorerStats[tel] = { 
+                            telefono: tel, 
+                            nombre: jug?.nombre || tel, 
+                            equipo: jug?.equipo || '',
+                            goles: 0 
+                        };
+                    }
+                    scorerStats[tel].goles += parseInt(stats.goles || 0);
+                }
+                if (stats.asistio) {
+                    if (!pjStats[tel]) pjStats[tel] = 0;
+                    pjStats[tel]++;
+                }
+            });
+        }
+    });
+    
+    // Sort by regular phase goals, then by better team position (tie-breaker)
+    const goleadores = Object.values(scorerStats)
+        .filter(j => j.goles > 0)
+        .sort((a, b) => {
+            if (b.goles !== a.goles) return b.goles - a.goles;
+            // Tie-breaker: fewer matches played = better
+            const pjA = pjStats[a.telefono] || 999;
+            const pjB = pjStats[b.telefono] || 999;
+            return pjA - pjB;
+        })
         .slice(0, 3);
 
     // Calculate top 3 goalkeepers
@@ -657,7 +775,7 @@ function cargarGoleadores(jugadores, equipos, partidos) {
     Object.values(partidos || {}).forEach(partido => {
         if (partido.resultado_confirmado) {
             const jornada = String(partido.jornada || '').toUpperCase();
-            if (jornada === 'CUARTOS' || jornada === 'SEMIFINAL' || jornada === 'FINAL') return;
+            if (jornada === 'CUARTOS' || jornada === 'SEMIFINAL' || jornada === 'FINAL' || jornada === 'LIGUILLA') return;
             
             const loc = partido.equipo_local;
             const vis = partido.equipo_visitante;
@@ -701,12 +819,12 @@ function cargarGoleadores(jugadores, equipos, partidos) {
         <div class="grid grid-cols-1 gap-4">
 <!-- Top Goleadores -->
             <div>
-                <h4 class="text-[10px] font-bold text-amber-400 uppercase mb-1 text-center">🏆 Top Goleadores</h4>
+                <h4 class="text-[10px] font-bold text-amber-400 uppercase mb-1 text-center">🏆 Top Goleadores (Fase Regular)</h4>
                 <div class="flex gap-1 overflow-x-auto pb-1">
-                    ${goleadores.length > 0 ? goleadores.map(([telefono, j], i) => {
+                    ${goleadores.length > 0 ? goleadores.map((j, i) => {
                         const medalEmoji = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
                         return `
-                        <div class="flex-shrink-0" onclick="abrirInfoJugador('${telefono}')" style="cursor:pointer">
+                        <div class="flex-shrink-0" onclick="abrirInfoJugador('${j.telefono}')" style="cursor:pointer">
                             <div class="flex items-center gap-1.5 bg-slate-800/60 rounded-lg px-2 py-1 ${i === 0 ? 'border border-amber-500/30' : ''}">
                                 <span class="text-sm">${medalEmoji}</span>
                                 <div class="flex flex-col leading-tight">
@@ -761,12 +879,12 @@ function cargarPosiciones(equipos, partidos) {
 
     Object.values(partidos || {}).forEach(partido => {
         if (partido.resultado_confirmado) {
-            // Solo incluir jornadas numéricas, excluir liguilla (CUARTOS, SEMIFINAL, FINAL)
             const jornada = partido.jornada;
             const esLiguilla = jornada && (
                 String(jornada).toUpperCase() === 'CUARTOS' ||
                 String(jornada).toUpperCase() === 'SEMIFINAL' ||
-                String(jornada).toUpperCase() === 'FINAL'
+                String(jornada).toUpperCase() === 'FINAL' ||
+                String(jornada).toUpperCase() === 'LIGUILLA'
             );
             
             if (esLiguilla) return;
@@ -854,14 +972,14 @@ function cargarPorteros(equipos, partidos, jugadores) {
         }
     }
     
-    // Calculate stats (same logic as cargarPosiciones but for GC ranking)
-    const stats = {};
+    // Calculate fase regular stats
+    const statsRegular = {};
+    const statsTotal = {};
     
     for (const id in equipos) {
         const eq = equipos[id];
         const eqNombre = eq.nombre;
         
-        // Buscar nombre del portero usando portero_id
         let porteroNombre = eqNombre + ' (Portero)';
         if (eq.portero_id && playersMap[eq.portero_id]) {
             porteroNombre = playersMap[eq.portero_id].nombre;
@@ -869,50 +987,69 @@ function cargarPorteros(equipos, partidos, jugadores) {
             porteroNombre = eq.portero_nombre;
         }
         
-        stats[eqNombre] = {
+        statsRegular[eqNombre] = {
             nombre: eqNombre,
             escudo: eq.escudo || '',
             portero_nombre: porteroNombre,
-            pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0
+            pj: 0, gc: 0
+        };
+        statsTotal[eqNombre] = {
+            nombre: eqNombre,
+            escudo: eq.escudo || '',
+            portero_nombre: porteroNombre,
+            pj: 0, gc: 0
         };
     }
-
+    
     Object.values(partidos || {}).forEach(partido => {
-        if (partido.resultado_confirmado) {
-            const jornada = partido.jornada;
-            const esLiguilla = jornada && (
-                String(jornada).toUpperCase() === 'CUARTOS' ||
-                String(jornada).toUpperCase() === 'SEMIFINAL' ||
-                String(jornada).toUpperCase() === 'FINAL'
-            );
-            
-            if (esLiguilla) return;
-            
-            const loc = partido.equipo_local;
-            const vis = partido.equipo_visitante;
-            const gl = parseInt(partido.goles_local || 0);
-            const gv = parseInt(partido.goles_visitante || 0);
-
-            if (stats[loc] && stats[vis]) {
-                stats[loc].pj++; stats[vis].pj++;
-                stats[loc].gf += gl; stats[loc].gc += gv;
-                stats[vis].gf += gv; stats[vis].gc += gl;
-                if (gl > gv) { stats[loc].pts += 3; stats[loc].g++; stats[vis].p++; }
-                else if (gv > gl) { stats[vis].pts += 3; stats[vis].g++; stats[loc].p++; }
-                else { stats[loc].pts++; stats[vis].pts++; stats[loc].e++; stats[vis].e++; }
+        if (!partido.resultado_confirmado) return;
+        
+        const jornada = partido.jornada;
+        const esLiguilla = jornada && (
+            String(jornada).toUpperCase() === 'CUARTOS' ||
+            String(jornada).toUpperCase() === 'SEMIFINAL' ||
+            String(jornada).toUpperCase() === 'FINAL' ||
+            String(jornada).toUpperCase() === 'LIGUILLA'
+        );
+        
+        const loc = partido.equipo_local;
+        const vis = partido.equipo_visitante;
+        const gl = parseInt(partido.goles_local || 0);
+        const gv = parseInt(partido.goles_visitante || 0);
+        
+        // Always add to total
+        if (statsTotal[loc] && statsTotal[vis]) {
+            statsTotal[loc].pj++; statsTotal[loc].gc += gv;
+            statsTotal[vis].pj++; statsTotal[vis].gc += gl;
+        }
+        
+        // Add to regular ONLY if not liguilla
+        if (!esLiguilla) {
+            if (statsRegular[loc] && statsRegular[vis]) {
+                statsRegular[loc].pj++; statsRegular[loc].gc += gv;
+                statsRegular[vis].pj++; statsRegular[vis].gc += gl;
             }
         }
     });
 
-    // Filter and sort: menor GC = mejor, luego mayor PJ para desempate
-    const porteros = Object.values(stats)
+    const faseRegular = Object.values(statsRegular)
+        .filter(t => t.pj > 0)
+        .sort((a, b) => {
+            if (a.gc !== b.gc) return a.gc - b.gc;
+            return b.pj - a.pj;
+        });
+    
+    const total = Object.values(statsTotal)
         .filter(t => t.pj > 0)
         .sort((a, b) => {
             if (a.gc !== b.gc) return a.gc - b.gc;
             return b.pj - a.pj;
         });
 
-if (porteros.length === 0) {
+    window.porterosMode = window.porterosMode || 'regular';
+    const porteros = window.porterosMode === 'regular' ? faseRegular : total;
+
+    if (porteros.length === 0) {
         contenedor.innerHTML = '<div class="p-8 text-center text-slate-500">No hay porteros con partidos jugados.</div>';
         return;
     }
@@ -920,6 +1057,11 @@ if (porteros.length === 0) {
     const top10 = porteros.slice(0, 10);
 
     contenedor.innerHTML = `
+        <div class="flex justify-end mb-2">
+            <button onclick="togglePorterosMode()" class="text-xs px-2 py-1 rounded ${window.porterosMode === 'regular' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-400'}">
+                ${window.porterosMode === 'regular' ? 'Fase Regular' : 'Total'}
+            </button>
+        </div>
         <div class="overflow-x-auto">
             <table class="w-full text-xs">
                 <thead class="bg-slate-800/80 text-slate-400 uppercase tracking-wider text-[10px]">
@@ -957,7 +1099,12 @@ if (porteros.length === 0) {
             Guante de Oro 🧤 - Menos GC = Mejor
         </div>`;
     
-    window.porterosStats = stats;
+    window.porterosStats = window.porterosMode === 'regular' ? statsRegular : statsTotal;
+}
+
+window.togglePorterosMode = function() {
+    window.porterosMode = window.porterosMode === 'regular' ? 'total' : 'regular';
+    cargarPorteros(datosGlobales?.equipos, datosGlobales?.partidos, datosGlobales?.jugadores);
 }
 
 // Función para abrir modal de equipo
@@ -2177,8 +2324,8 @@ window.getJornadasConResultados = function() {
     Object.values(datosGlobales.partidos).forEach(p => {
         if (p.jornada && p.resultado_confirmado) {
             const j = String(p.jornada).trim().toUpperCase();
-            // Solo incluir si es un número (1, 2, 3...) - exclude CUARTOS, SEMIFINAL, FINAL
-            if (j !== 'CUARTOS' && j !== 'SEMIFINAL' && j !== 'FINAL' && !isNaN(parseInt(j))) {
+            // Solo incluir si es un número (1, 2, 3...) - exclude CUARTOS, SEMIFINAL, FINAL, LIGUILLA
+            if (j !== 'CUARTOS' && j !== 'SEMIFINAL' && j !== 'FINAL' && j !== 'LIGUILLA' && !isNaN(parseInt(j))) {
                 jornadas.add(parseInt(j));
             }
         }
