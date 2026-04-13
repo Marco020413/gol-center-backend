@@ -532,6 +532,8 @@
         const titulo = document.getElementById('tituloModalEquipo');
         const preview = document.getElementById('previewContenedor');
         const inputId = document.getElementById('equipo_id_edit');
+        const selectPortero = document.getElementById('selectPortero');
+        const btn = document.getElementById('btnGuardarEquipo');
 
         if(modal) {
             // RESET TOTAL: Forzamos modo creación
@@ -540,6 +542,17 @@
             if(inputId) inputId.value = '';
             if(titulo) titulo.innerText = 'Nuevo Equipo';
             if(preview) preview.classList.add('hidden');
+
+            // Modo creación: habilitar botón sin portero
+            if(selectPortero) {
+                selectPortero.disabled = true;
+                selectPortero.innerHTML = '<option value="">Asigna jugadores al equipo primero para elegir un portero</option>';
+            }
+            if(btn) {
+                btn.disabled = false;
+                btn.innerText = 'GUARDAR EQUIPO';
+            }
+            equipoState.porterosCargados = true;
 
             // Mostrar modal
             modal.classList.remove('hidden');
@@ -852,10 +865,21 @@
 
         // Carga de porteros
         if (id && data.nombre) {
+            // Modo edición: cargar porteros
             await cargarJugadoresEquipo(data.nombre);
         } else {
-            resetSelectPortero();
-            validarEstadoBoton();
+            // Modo creación: habilitar botón sin esperar porteros
+            const select = equipoElements.selectPortero();
+            const btn = equipoElements.btn();
+            
+            // Deshabilitar select y mostrar mensaje
+            select.disabled = true;
+            select.innerHTML = '<option value="">Asigna jugadores al equipo primero para elegir un portero</option>';
+            
+            // Habilitar botón inmediatamente para creación
+            equipoState.porterosCargados = true;
+            btn.disabled = false;
+            btn.innerText = 'Guardar Equipo';
         }
     }
 
@@ -864,7 +888,6 @@
         resetSelectPortero(false);
 
         const btn = equipoElements.btn();
-        console.log('Cargando jugadores para equipo:', equipoNombre, 'portero_id actual:', equipoState.equipoData?.portero_id);
         
         try {
             const res = await fetch('/api/jugadores');
@@ -874,17 +897,27 @@
             const porteroIdActual = equipoState.equipoData?.portero_id;
             console.log('Jugadores encontrados:', Object.keys(jugadores).length, 'Portero actual:', porteroIdActual);
 
-            Object.entries(jugadores)
+            const jugadoresEquipo = Object.entries(jugadores)
                 .filter(([_, j]) => j.equipo === equipoNombre && j.estatus === 'activo')
-                .sort((a, b) => a[1].nombre.localeCompare(b[1].nombre))
-                .forEach(([telefono, j]) => {
-                    const opt = new Option(`${j.nombre} (#${j.numero || '?'})`, telefono);
-                    if (telefono === porteroIdActual) {
-                        opt.selected = true;
-                        console.log('Portero seleccionado:', j.nombre);
-                    }
-                    fragment.appendChild(opt);
-                });
+                .sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
+            
+            // Si no hay jugadores, mostrar mensaje
+            if (jugadoresEquipo.length === 0) {
+                select.disabled = true;
+                select.innerHTML = '<option value="">Asigna jugadores al equipo primero para elegir un portero</option>';
+                equipoState.porterosCargados = true;
+                btn.disabled = false;
+                btn.innerText = 'Guardar Equipo';
+                return;
+            }
+
+            jugadoresEquipo.forEach(([telefono, j]) => {
+                const opt = new Option(`${j.nombre} (#${j.numero || '?'})`, telefono);
+                if (telefono === porteroIdActual) {
+                    opt.selected = true;
+                }
+                fragment.appendChild(opt);
+            });
 
             select.appendChild(fragment);
         } catch (e) {
@@ -896,11 +929,9 @@
     }
 
     async function registrarNuevoEquipo() {
-        console.log('>>> INICIANDO registrarNuevoEquipo <<<');
         const btn = document.getElementById('btnGuardarEquipo');
         
         if (equipoState.guardando) {
-            console.log('YA se esta guardando, salir');
             return;
         }
 
@@ -943,14 +974,10 @@ const select = document.getElementById('selectPortero');
         const porteroId = select?.value;
         const porteroNombre = (select?.selectedOptions?.[0]?.text || '').replace(/\s*\(#[^)]*\)\s*/g, '').trim();
         
-        console.log('=== GUARDANDO EQUIPO ===');
-        console.log('Portero ID:', porteroId);
-        console.log('Portero Nombre:', porteroNombre);
         
         if (porteroId && porteroNombre) {
             data.append('portero_id', porteroId);
             data.append('portero_nombre', porteroNombre);
-            console.log('✓ Datos del portero agregados al FormData');
         } else {
             console.log('✗ No se guardó portero');
         }
