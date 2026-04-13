@@ -1981,9 +1981,160 @@ window.descargarPDFJornada = async function(jornada) {
                 </tr>`;
             }).join('') : '<tr><td colspan="5" style="border:1px solid #334155; padding:12px; text-align:center;">Sin datos</td></tr>'}
         </table>
-        <p style="font-size:8px; color:#64748b; text-align:center;">
-            ${esJornadaNumerica ? '▲ Subió &nbsp;▼ Bajó &nbsp;● Sin cambios &nbsp;🆕 Nuevo en top &nbsp;(+X) Goles esta jornada' : 'Goles anotados exclusivamente en esta fase de eliminatoria'}
+<p style="font-size:8px; color:#64748b; text-align:center;">
+            ${esJornadaNumerica ? '▲ Subió ▼ Bajó ● Sin cambios 🆕 Nuevo en top (+X) Goles esta jornada' : 'Goles anotados exclusivamente en esta fase de eliminatoria'}
         </p>
+        
+        <!-- TABLA DE PORTEROS (GUANTE DE ORO) -->
+        <h2 style="font-size:16px; margin-bottom:10px; margin-top:25px;">🧤 ${esJornadaNumerica ? 'Top Porteros - Acumulado (Guante de Oro)' : 'Guante de Oro: ' + jornadaStr}</h2>
+        
+        ${(() => {
+            // Calcular porteros usando equipos y porteros asociados
+            const porterosStats = [];
+            const playersMap = {};
+            for (const tel in jugadores) {
+                playersMap[tel] = jugadores[tel];
+            }
+            
+            // Calcular GC de jornadas anteriores para tendencia
+            let gcAnteriores = {};
+            let gcJornadaActual = {};
+            
+            if (esJornadaNumerica && numJornada > 1) {
+                const jornadaAnterior = numJornada - 1;
+                const partidosAnteriores = Object.values(partidos).filter(p => {
+                    const pj = parseInt(p.jornada);
+                    return !isNaN(pj) && pj <= jornadaAnterior && p.resultado_confirmado;
+                });
+                
+                // Calcular GC anterior por equipo
+                const equiposAnteriorGC = {};
+                if (partidosAnteriores.length > 0) {
+                    partidosAnteriores.forEach(p => {
+                        const loc = (p.equipo_local || '').trim();
+                        const vis = (p.equipo_visitante || '').trim();
+                        if (loc && vis) {
+                            equiposAnteriorGC[loc] = (equiposAnteriorGC[loc] || 0) + parseInt(p.goles_visitante || 0);
+                            equiposAnteriorGC[vis] = (equiposAnteriorGC[vis] || 0) + parseInt(p.goles_local || 0);
+                        }
+                    });
+                }
+                
+                // Calcular GC actual
+                const equiposActualGC = {};
+                if (partidosParaEstadisticas.length > 0) {
+                    partidosParaEstadisticas.forEach(p => {
+                        const loc = (p.equipo_local || '').trim();
+                        const vis = (p.equipo_visitante || '').trim();
+                        if (loc && vis) {
+                            equiposActualGC[loc] = (equiposActualGC[loc] || 0) + parseInt(p.goles_visitante || 0);
+                            equiposActualGC[vis] = (equiposActualGC[vis] || 0) + parseInt(p.goles_local || 0);
+                        }
+                    });
+                }
+                
+                // Guardar para tendencia
+                Object.keys(equiposActualGC).forEach(eq => {
+                    gcAnteriores[eq] = equiposAnteriorGC[eq] || 0;
+                    gcJornadaActual[eq] = equiposActualGC[eq] - (equiposAnteriorGC[eq] || 0);
+                });
+            }
+            
+            Object.values(equipos).forEach(eq => {
+                const eqStats = stats.equipos[eq.nombre];
+                if (eqStats && eqStats.pj > 0) {
+                    let nombrePortero = eq.nombre + ' (Portero)';
+                    if (eq.portero_id && playersMap[eq.portero_id]) {
+                        nombrePortero = playersMap[eq.portero_id].nombre;
+                    }
+                    porterosStats.push({
+                        nombre: nombrePortero,
+                        equipo: eq.nombre,
+                        gc: eqStats.gc,
+                        pj: eqStats.pj,
+                        gcAnterior: gcAnteriores[eq.nombre] || 0,
+                        gcEstaJornada: gcJornadaActual[eq.nombre] || 0
+                    });
+                }
+            });
+            
+            // Ordenar por menos GC
+            porterosStats.sort((a, b) => {
+                if (a.gc !== b.gc) return a.gc - b.gc;
+                return b.pj - a.pj;
+            });
+            
+            // Calcular posición anterior
+            let posicionAnteriorMap = {};
+            if (esJornadaNumerica && numJornada > 1) {
+                const porterosAnteriores = Object.values(equipos).map(eq => {
+                    return { nombre: eq.nombre, gc: gcAnteriores[eq.nombre] || 0 };
+                }).filter(p => p.gc > 0).sort((a, b) => a.gc - b.gc);
+                
+                porterosAnteriores.forEach((p, idx) => {
+                    posicionAnteriorMap[p.nombre] = idx + 1;
+                });
+            }
+            
+            const topPorteros = porterosStats.slice(0, 10);
+            
+            return `
+            <table style="width:100%; border-collapse: collapse; margin-bottom:8px; font-size:11px;">
+                <tr style="background: linear-gradient(135deg, #065f46 0%, #0f172a 100%); color: #fff;">
+                    <th style="border:1px solid #334155; padding:8px; text-align:center; width:35px;">#</th>
+                    <th style="border:1px solid #334155; padding:8px; text-align:left;">PORTERO</th>
+                    <th style="border:1px solid #334155; padding:8px; text-align:left; width:120px;">EQUIPO</th>
+                    <th style="border:1px solid #334155; padding:8px; text-align:center; width:60px;">PJ</th>
+                    <th style="border:1px solid #334155; padding:8px; text-align:center; width:60px;">GC</th>
+                    <th style="border:1px solid #334155; padding:8px; text-align:center; width:40px;">TEND.</th>
+                </tr>
+                ${topPorteros.length > 0 ? topPorteros.map((p, i) => {
+                    const pos = i + 1;
+                    const posAnterior = posicionAnteriorMap[p.equipo];
+                    let tendencia = '';
+                    let tendenciaStyle = '';
+                    
+                    if (esJornadaNumerica && numJornada > 1 && posAnterior) {
+                        const diff = pos - posAnterior;
+                        if (diff < 0) {
+                            tendencia = '▲';
+                            tendenciaStyle = 'color:#16a34a; font-size:18px; font-weight:bold;';
+                        } else if (diff > 0) {
+                            tendencia = '▼';
+                            tendenciaStyle = 'color:#dc2626; font-size:18px; font-weight:bold;';
+                        } else {
+                            tendencia = '●';
+                            tendenciaStyle = 'color:#94a3b8; font-size:14px;';
+                        }
+                    } else if (esJornadaNumerica && numJornada === 1) {
+                        tendencia = '🆕';
+                        tendenciaStyle = 'font-size:14px;';
+                    } else {
+                        tendencia = '—';
+                        tendenciaStyle = 'color:#94a3b8;';
+                    }
+                    
+                    const gcThisJornada = p.gcEstaJornada > 0 ? ` <span style="color:#9333ea; font-size:9px;">(+${p.gcEstaJornada})</span>` : '';
+                    
+                    const isTop3 = pos <= 3;
+                    const bgColor = isTop3 ? (pos === 1 ? '#ecfdf5' : pos === 2 ? '#f1f5f9' : '#ffedd5') : '#fff';
+                    const borderLeft = pos === 1 ? '4px solid #10b981' : pos === 2 ? '4px solid #94a3b8' : pos === 3 ? '4px solid #fb923c' : '1px solid #334155';
+                    const medal = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : '';
+                    
+                    return `<tr style="background: ${bgColor}; border-left: ${borderLeft};">
+                        <td style="border:1px solid #334155; padding:8px; text-align:center; font-weight:bold; ${isTop3 ? 'color:#047857;' : 'color:#64748b;'}">${medal || pos}</td>
+                        <td style="border:1px solid #334155; padding:8px; text-align:left; font-weight:bold; color:#1e293b;">${p.nombre}</td>
+                        <td style="border:1px solid #334155; padding:8px; text-align:left; color:#475569;">${p.equipo}</td>
+                        <td style="border:1px solid #334155; padding:8px; text-align:center;">${p.pj}</td>
+                        <td style="border:1px solid #334155; padding:8px; text-align:center; font-weight:bold; ${p.gc <= 5 ? 'color:#10b981;' : p.gc <= 10 ? 'color:#eab308;' : 'color:#dc2626;'}">${p.gc}${gcThisJornada}</td>
+                        <td style="border:1px solid #334155; padding:8px; text-align:center;">${esJornadaNumerica ? `<span style="${tendenciaStyle}">${tendencia}</span>` : '—'}</td>
+                    </tr>`;
+                }).join('') : '<tr><td colspan="6" style="border:1px solid #334155; padding:12px; text-align:center;">Sin datos</td></tr>'}
+            </table>
+            <p style="font-size:8px; color:#64748b; text-align:center; margin-bottom:20px;">
+                🧤 ▲ Subió ▼ Bajó ● Sin cambios 🆕 Nuevo en top (+X) GC esta jornada - Menor GC = Mejor
+            </p>`;
+        })()}
         
         ${proximosEncuentrosHTML}
         
