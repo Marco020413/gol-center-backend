@@ -674,56 +674,50 @@ function cargarGoleadores(jugadores, equipos, partidos) {
         return;
     }
 
-    // TOP 3 GOLEADORES + TOP 3 PORTEROS
+    // TOP 3 GOLEADORES + TOP 3 PORTEROS - Diseño ultra-compacto para móvil
     contenedor.innerHTML = `
-        <div class="grid grid-cols-1 gap-10">
+        <div class="grid grid-cols-1 gap-4">
 <!-- Top Goleadores -->
             <div>
-                <h4 class="text-xs font-bold text-amber-400 uppercase mb-3 text-center">🏆 Top Goleadores</h4>
-                <div class="flex flex-col md:flex-row items-stretch md:items-end gap-2">
+                <h4 class="text-[10px] font-bold text-amber-400 uppercase mb-1 text-center">🏆 Top Goleadores</h4>
+                <div class="flex gap-1 overflow-x-auto pb-1">
                     ${goleadores.length > 0 ? goleadores.map(([telefono, j], i) => {
                         const medalEmoji = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
                         return `
-                        <div class="flex-1" onclick="abrirInfoJugador('${telefono}')" style="cursor:pointer">
-                            <div class="glass-card rounded-2xl p-4 flex flex-col items-center ${i === 0 ? 'from-amber-500/20 to-yellow-600/10' : 'from-slate-800/50 to-slate-900/30'} bg-gradient-to-b relative overflow-hidden h-full ${i === 0 ? 'md:scale-105' : ''}">
-                                <div class="absolute top-0 left-0 w-full h-1 ${i === 0 ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400' : i === 1 ? 'bg-slate-400' : 'bg-orange-500'}"></div>
-                                <div class="text-2xl mb-2">${medalEmoji}</div>
-                                <div class="text-sm font-bold text-white text-center leading-tight">${j.nombre}</div>
-                                <div class="text-[10px] text-blue-400 uppercase">${j.equipo}</div>
-                                <div class="mt-2 px-3 py-1 rounded-full ${i === 0 ? 'bg-amber-500' : i === 1 ? 'bg-slate-400' : 'bg-orange-600'}">
-                                    <span class="text-lg font-black text-white">${j.goles}</span>
+                        <div class="flex-shrink-0" onclick="abrirInfoJugador('${telefono}')" style="cursor:pointer">
+                            <div class="flex items-center gap-1.5 bg-slate-800/60 rounded-lg px-2 py-1 ${i === 0 ? 'border border-amber-500/30' : ''}">
+                                <span class="text-sm">${medalEmoji}</span>
+                                <div class="flex flex-col leading-tight">
+                                    <span class="text-[10px] font-bold text-white truncate max-w-[60px]">${j.nombre}</span>
+                                    <span class="text-[8px] text-blue-400">${j.equipo}</span>
                                 </div>
+                                <span class="text-xs font-black text-amber-400">${j.goles}</span>
                             </div>
                         </div>`;
-                    }).join('') : '<div class="text-center text-slate-500 text-xs">Sin goleador</div>'}
+                    }).join('') : '<span class="text-xs text-slate-500">-</span>'}
                 </div>
             </div>
-            <!-- Top Porteros -->
+            <!-- Top Porteros - Guante de Oro -->
             <div>
-                <h4 class="text-xs font-bold text-emerald-400 uppercase mb-3 text-center">🧤 Guante de Oro</h4>
-                <div class="flex flex-col md:flex-row items-stretch md:items-end gap-2">
+                <h4 class="text-[10px] font-bold text-emerald-400 uppercase mb-1 text-center">🧤 Guante de Oro</h4>
+                <div class="flex gap-1 overflow-x-auto pb-1">
                     ${porterosTop.length > 0 ? porterosTop.map((p, i) => {
                         const medalEmoji = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
                         return `
-                        <div class="flex-1" onclick="abrirInfoPortero('${p.nombre}')" style="cursor:pointer">
-                            <div class="glass-card rounded-2xl p-4 flex flex-col items-center ${i === 0 ? 'from-emerald-500/20 to-cyan-600/10' : 'from-slate-800/50 to-slate-900/30'} bg-gradient-to-b relative overflow-hidden h-full ${i === 0 ? 'md:scale-105' : ''}">
-                                <div class="absolute top-0 left-0 w-full h-1 ${i === 0 ? 'bg-gradient-to-r from-emerald-400 via-cyan-300 to-emerald-400' : i === 1 ? 'bg-slate-400' : 'bg-orange-500'}"></div>
-                                <div class="text-2xl mb-2">${medalEmoji}</div>
-                                <div class="text-sm font-bold text-white text-center leading-tight">${p.portero_nombre}</div>
-                                <div class="text-[10px] text-cyan-400 uppercase">${p.nombre}</div>
-                                <div class="flex gap-2 mt-2">
-                                    <div class="px-2 py-1 rounded-lg bg-slate-800/50">
-                                        <span class="text-[10px] text-slate-400">PJ</span>
-                                        <div class="text-sm font-bold text-white">${p.pj}</div>
-                                    </div>
-                                    <div class="px-2 py-1 rounded-lg ${p.gc <= 5 ? 'bg-emerald-600' : p.gc <= 10 ? 'bg-yellow-600' : 'bg-rose-600'}">
-                                        <span class="text-[10px] text-white">GC</span>
-                                        <div class="text-sm font-bold text-white">${p.gc}</div>
-                                    </div>
+                        <div class="flex-shrink-0" onclick="abrirInfoPortero('${p.nombre}')" style="cursor:pointer">
+                            <div class="flex items-center gap-1.5 bg-slate-800/60 rounded-lg px-2 py-1 ${i === 0 ? 'border border-emerald-500/30' : ''}">
+                                <span class="text-sm">${medalEmoji}</span>
+                                <div class="flex flex-col leading-tight">
+                                    <span class="text-[10px] font-bold text-white truncate max-w-[60px]">${p.portero_nombre}</span>
+                                    <span class="text-[8px] text-cyan-400">${p.nombre}</span>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-[8px] text-slate-500">${p.pj}</span>
+                                    <span class="text-[9px] font-bold ${p.gc <= 5 ? 'text-emerald-400' : p.gc <= 10 ? 'text-yellow-400' : 'text-rose-400'}">${p.gc}</span>
                                 </div>
                             </div>
                         </div>`;
-                    }).join('') : '<div class="text-center text-slate-500 text-xs">Sin portero</div>'}
+                    }).join('') : '<span class="text-xs text-slate-500">-</span>'}
                 </div>
             </div>
         </div>`;
