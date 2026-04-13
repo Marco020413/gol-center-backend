@@ -618,8 +618,18 @@
 
         // 4. ESTATUS Y SUSPENSIÓN
         const selectEstatus = document.getElementById('edit_estatus');
+        const estatusNormalizado = (estatus || 'activo').toLowerCase();
+        console.log('Estatus recibido:', estatus, '-> normalizado:', estatusNormalizado);
         if(selectEstatus) {
-            selectEstatus.value = estatus || 'activo';
+            // Verificar que el valor exista en las opciones
+            const opciones = Array.from(selectEstatus.options).map(o => o.value);
+            console.log('Opciones disponibles:', opciones);
+            
+            if (opciones.includes(estatusNormalizado)) {
+                selectEstatus.value = estatusNormalizado;
+            } else {
+                selectEstatus.value = 'activo';
+            }
             document.getElementById('partidos_suspension').value = partidosSuspension || 0;
             if(typeof window.toggleCamposSuspension === 'function') window.toggleCamposSuspension(); 
         }
@@ -1128,12 +1138,15 @@ const select = document.getElementById('selectPortero');
                 window.equiposData = window.equiposData || {};
                 window.equiposData[id] = eq;
                 contenedor.innerHTML += `
-                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between shadow-lg">
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between shadow-lg hover:border-emerald-500/50 cursor-pointer transition" onclick="verJugadoresEquipo('${id}', '${eq.nombre}')">
                         <div class="flex items-center gap-4">
                             <img src="${eq.escudo}" class="size-12 object-contain bg-white/5 rounded-lg border border-slate-700">
-                            <p class="font-bold text-white text-sm uppercase">${eq.nombre}</p>
+                            <div>
+                                <p class="font-bold text-white text-sm uppercase">${eq.nombre}</p>
+                                <p class="text-[10px] text-slate-500">Toca para ver jugadores</p>
+                            </div>
                         </div>
-                        <div class="flex gap-2">
+                        <div class="flex gap-2" onclick="event.stopPropagation()">
                             <button onclick="editarEquipo('${id}', '${eq.nombre}', '${eq.escudo}')" class="text-blue-500 hover:bg-blue-500/10 p-2 rounded-lg transition">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                             </button>
@@ -1213,6 +1226,11 @@ const select = document.getElementById('selectPortero');
             const equipoCelda = fila.querySelector('[data-field="equipo"]');
             const valorEquipo = equipoCelda ? equipoCelda.getAttribute('data-valor') : "";
             const nombreEquipoTexto = equipoCelda?.innerText.toLowerCase() || "";
+            
+            // Buscar badges de estado en toda la fila
+            const filaHtml = fila.innerHTML.toUpperCase();
+            const tieneLesionado = filaHtml.includes('LESIONADO');
+            const tieneSuspendido = filaHtml.includes('SUSPENDIDO');
 
             const coincideBusqueda = nombreSolo.includes(busqueda) || 
                                     telefono.includes(busqueda) || 
@@ -1222,9 +1240,9 @@ const select = document.getElementById('selectPortero');
             if (equipoFiltro === "Libre") {
                 coincideFiltro = (valorEquipo === "Libre");
             } else if (equipoFiltro === "SUSPENDIDO") {
-                coincideFiltro = nombreCompletoTexto.includes("SUSPENDIDO");
+                coincideFiltro = tieneSuspendido;
             } else if (equipoFiltro === "LESIONADO") {
-                coincideFiltro = nombreCompletoTexto.includes("LESIONADO");
+                coincideFiltro = tieneLesionado;
             } else if (equipoFiltro !== "") {
                 coincideFiltro = (valorEquipo === equipoFiltro);
             }
@@ -3325,6 +3343,117 @@ window.logout = function() {
         window.location.href = '/logout';
     }, 300);
 };
+
+    window.verJugadoresEquipo = async function(equipoId, nombreEquipo) {
+        const modal = document.getElementById('modalVerJugadores');
+        const contenedor = document.getElementById('contenedorVerJugadores');
+        const titulo = document.getElementById('tituloVerJugadores');
+        const subtitulo = document.getElementById('subtituloVerJugadores');
+        
+        if(!modal || !contenedor) return;
+        
+        titulo.innerText = 'Jugadores del Equipo';
+        subtitulo.innerText = nombreEquipo;
+        contenedor.innerHTML = '<p class="text-slate-500 text-center p-4">Cargando...</p>';
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        
+        try {
+            const res = await fetch('/api/jugadores');
+            const jugadores = await res.json();
+            
+            const jugadoresEquipo = Object.entries(jugadores)
+                .filter(([_, j]) => j.equipo === nombreEquipo)
+                .sort((a, b) => (a[1].numero || 99) - (b[1].numero || 99));
+            
+            if (jugadoresEquipo.length === 0) {
+                contenedor.innerHTML = `
+                    <div class="text-center p-6">
+                        <p class="text-slate-500 mb-4">No hay jugadores en este equipo.</p>
+                        <button onclick="cerrarModalVerJugadores(); abrirModalNuevoJugador()" class="text-emerald-500 hover:underline text-sm mr-3">+ Agregar Jugador</button>
+                        <button onclick="cerrarModalVerJugadores()" class="text-blue-500 hover:underline text-sm">Cerrar</button>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '<div class="grid grid-cols-1 gap-2">';
+            
+            jugadoresEquipo.forEach(([telefono, j]) => {
+                // Usar 'estatus' (con 's') que es lo que guarda Laravel
+                const est = (j.estatus || j.estado || 'activo').toString().toLowerCase();
+                const activo = est === 'activo';
+                const lesionado = est === 'lesionado';
+                const suspendido = est === 'suspendido';
+                const estadoLabel = activo ? '🟢 Activo' : lesionado ? '🟡 Lesionado' : suspendido ? '🔴 Suspendido' : '🔴 Inactivo';
+                const estadoClase = activo ? 'text-emerald-400' : lesionado ? 'text-yellow-400' : 'text-red-400';
+                const estadoBg = activo ? 'bg-emerald-600/20' : lesionado ? 'bg-yellow-600/20' : 'bg-red-600/20';
+                
+                const dirSafe = (j.direccion || '').replace(/'/g, "\\'");
+                const estadoSafe = (j.estatus || j.estado || 'Activo').toString();
+                
+                html += `
+                    <div class="jugador-card bg-slate-800 border border-slate-700 rounded-lg p-3 flex items-center justify-between hover:border-blue-500/50 cursor-pointer transition" data-nombre="${j.nombre.toLowerCase()}" data-dorsal="${j.numero || ''}" data-estado="${est}" onclick="cerrarModalVerJugadores(); setTimeout(() => editarJugador('${telefono}', '${j.nombre}', '${j.equipo}', ${j.edad || 18}, '${dirSafe}', ${j.numero || 0}, ${j.partidos_jugados || 0}, '${estadoSafe}', ${j.partidos_suspension || 0}), 100)">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 ${estadoBg} rounded-full flex items-center justify-center font-bold ${estadoClase} text-sm">${j.numero || '-'}</div>
+                            <div>
+                                <p class="font-bold text-white text-sm">${j.nombre}</p>
+                                <p class="text-[10px] ${estadoClase}">${estadoLabel}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-emerald-400">${j.goles || 0} goles</p>
+                            <p class="text-[10px] text-slate-500">${j.partidos_jugados || 0} PJ</p>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            html += `
+                <div class="mt-4 pt-4 border-t border-slate-700 text-center">
+                    <p class="text-[10px] text-slate-500">Toca un jugador para editarlo</p>
+                </div>
+            `;
+            
+            contenedor.innerHTML = html;
+        } catch (e) {
+            console.error(e);
+            contenedor.innerHTML = '<p class="text-red-500 text-center p-4">Error al cargar jugadores</p>';
+        }
+    };
+
+    window.cerrarModalVerJugadores = function() {
+        const modal = document.getElementById('modalVerJugadores');
+        if(modal) {
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+        }
+    };
+
+    window.filtrarJugadoresModal = function() {
+        const filtroNombre = document.getElementById('filtroNombreJugador')?.value?.toLowerCase() || '';
+        const filtroDorsal = document.getElementById('filtroDorsalJugador')?.value || '';
+        const filtroEstado = document.getElementById('filtroEstadoJugador')?.value || '';
+        
+        const tarjetas = document.querySelectorAll('#contenedorVerJugadores .jugador-card');
+        
+        tarjetas.forEach(tarjeta => {
+            const nombre = tarjeta.dataset.nombre || '';
+            const dorsal = tarjeta.dataset.dorsal || '';
+            const estado = tarjeta.dataset.estado || '';
+            
+            const coincideNombre = nombre.includes(filtroNombre);
+            const coincideDorsal = filtroDorsal === '' || dorsal === filtroDorsal;
+            const coincideEstado = filtroEstado === '' || estado === filtroEstado;
+            
+            if (coincideNombre && coincideDorsal && coincideEstado) {
+                tarjeta.classList.remove('hidden');
+            } else {
+                tarjeta.classList.add('hidden');
+            }
+        });
+    };
 
 </script>
 </body>

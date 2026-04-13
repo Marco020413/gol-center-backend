@@ -428,6 +428,33 @@
     </div>
 </div>
 
+<div id="modalVerJugadores" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center z-[130] p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
+        <div class="p-4 border-b border-slate-800 bg-emerald-600/10 flex justify-between items-center">
+            <div>
+                <h3 id="tituloVerJugadores" class="text-lg font-bold text-white uppercase tracking-tighter">Jugadores del Equipo</h3>
+                <p id="subtituloVerJugadores" class="text-xs text-slate-400">Equipo</p>
+            </div>
+            <button onclick="cerrarModalVerJugadores()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
+        </div>
+        <div class="p-3 border-b border-slate-800 bg-slate-900/50">
+            <div class="flex gap-2">
+                <input type="text" id="filtroNombreJugador" placeholder="Buscar por nombre..." class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-white text-xs outline-none focus:border-emerald-500" onkeyup="filtrarJugadoresModal()">
+                <input type="number" id="filtroDorsalJugador" placeholder="Dorsal" class="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs outline-none focus:border-emerald-500" onkeyup="filtrarJugadoresModal()">
+                <select id="filtroEstadoJugador" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs outline-none focus:border-emerald-500" onchange="filtrarJugadoresModal()">
+                    <option value="">Todos</option>
+                    <option value="activo">🟢 Activo</option>
+                    <option value="suspendido">🔴 Suspendido</option>
+                    <option value="lesionado">🟡 Lesionado</option>
+                </select>
+            </div>
+        </div>
+        <div id="contenedorVerJugadores" class="p-4 overflow-y-auto flex-1">
+            <p class="text-slate-500 text-center p-4">Cargando jugadores...</p>
+        </div>
+    </div>
+</div>
+
 <div id="modalActualizarMarcador" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center z-[130] p-4">
     <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
         <div class="p-6 border-b border-slate-800 bg-blue-600/10 flex justify-between items-center">
