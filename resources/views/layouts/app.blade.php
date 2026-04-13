@@ -911,15 +911,14 @@
         const countSpan = document.getElementById('eqJugadoresCount');
         
         try {
-            const res = await fetch('/api/jugadores');
+            const res = await fetch('/api/jugadores?_=' + Date.now());
             const jugadores = await res.json();
 
             const fragment = document.createDocumentFragment();
             const porteroIdActual = equipoState.equipoData?.portero_id;
-            console.log('Jugadores encontrados:', Object.keys(jugadores).length, 'Portero actual:', porteroIdActual);
 
             const jugadoresEquipo = Object.entries(jugadores)
-                .filter(([_, j]) => j.equipo === equipoNombre && j.estatus === 'activo')
+                .filter(([_, j]) => j.equipo === equipoNombre)
                 .sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
             
             // Contador de jugadores
@@ -3353,7 +3352,7 @@ window.logout = function() {
         if(!modal || !contenedor) return;
         
         titulo.innerText = 'Jugadores del Equipo';
-        subtitulo.innerText = nombreEquipo;
+        subtitulo.innerHTML = `${nombreEquipo} <span class="text-slate-400 text-sm ml-1">Cargando...</span>`;
         contenedor.innerHTML = '<p class="text-slate-500 text-center p-4">Cargando...</p>';
         
         // Hide add panel when reopening
@@ -3370,6 +3369,17 @@ window.logout = function() {
             const jugadoresEquipo = Object.entries(jugadores)
                 .filter(([_, j]) => j.equipo === nombreEquipo)
                 .sort((a, b) => (a[1].numero || 99) - (b[1].numero || 99));
+            
+            const totalJugadores = jugadoresEquipo.length;
+            const minJugadores = 11;
+            const countLabel = totalJugadores >= minJugadores 
+                ? `<span class="text-emerald-400">(${totalJugadores}/${minJugadores}+)</span>`
+                : `<span class="text-amber-400">(${totalJugadores}/${minJugadores})</span>`;
+            
+            // Update subtitle with count
+            if (subtitulo) {
+                subtitulo.innerHTML = `${nombreEquipo} <span class="text-slate-400 text-sm ml-1">${countLabel}</span>`;
+            }
             
             if (jugadoresEquipo.length === 0) {
                 contenedor.innerHTML = `
@@ -3521,11 +3531,12 @@ window.cerrarModalVerJugadores = function() {
             });
             
             const data = await res.json();
-            console.log('Asignar response:', res.status, data);
             
             if (res.ok) {
                 alert(`✅ ${nombre} asignado a ${equipo}`);
                 window.verJugadoresEquipo(null, equipo);
+                // Also refresh available players panel
+                window.togglePanelAgregarJugador();
             } else {
                 alert('❌ ' + (data.error || 'Error al asignar'));
             }

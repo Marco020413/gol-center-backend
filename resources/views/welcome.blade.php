@@ -778,7 +778,7 @@
         
         let jugadoresData = {};
         try {
-            const resJ = await fetch('/api/jugadores');
+            const resJ = await fetch('/api/jugadores?_=' + Date.now());
             jugadoresData = await resJ.json();
         } catch(e) {}
         
