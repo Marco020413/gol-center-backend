@@ -27,7 +27,7 @@ class PartidoController extends Controller
     // Cache en memoria estático
     private static $cacheData = null;
     private static $cacheTime = 0;
-    private const CACHE_DURATION = 0;
+    private const CACHE_DURATION = 0; // 0 = sin caché para desarrollo
 
     // ENDPOINT PÚBLICO OPTIMIZADO
     public function datosPublicos()
@@ -35,38 +35,39 @@ class PartidoController extends Controller
         try {
             $now = time();
             
-            // Verificar cache
-            if (self::$cacheData && ($now - self::$cacheTime) < self::CACHE_DURATION) {
+            // Cache de 5 minutos en memoria del servidor
+            if (self::$cacheData && ($now - self::$cacheTime) < 300) {
                 return response()->json(self::$cacheData);
             }
             
             $database = app('firebase')->createDatabase();
             
-            // Obtener datos
+            // Obtener datos - simplificar loops
             $jugadores = $database->getReference('jugadores')->getValue() ?? [];
             $equipos = $database->getReference('equipos')->getValue() ?? [];
             $partidos = $database->getReference('partidos')->getValue() ?? [];
             $campos = $database->getReference('campos')->getValue() ?? [];
             
-            // Filtrar solo datos esenciales
+            // Filtrar solo datos esenciales - simplificar
             $jugadoresFiltrados = [];
             foreach ($jugadores as $key => $j) {
+                if (!isset($j['nombre'])) continue;
                 $jugadoresFiltrados[$key] = [
-                    'nombre' => $j['nombre'] ?? '',
+                    'nombre' => $j['nombre'],
                     'equipo' => $j['equipo'] ?? '',
                     'goles' => (int)($j['goles'] ?? 0),
                     'asistencias' => (int)($j['asistencias'] ?? 0),
                     'partidos_jugados' => (int)($j['partidos_jugados'] ?? 0),
                     'numero' => (int)($j['numero'] ?? 0),
-                    'edad' => (int)($j['edad'] ?? 0),
                     'estatus' => $j['estatus'] ?? 'activo'
                 ];
             }
             
             $equiposFiltrados = [];
             foreach ($equipos as $key => $e) {
+                if (!isset($e['nombre'])) continue;
                 $equiposFiltrados[$key] = [
-                    'nombre' => $e['nombre'] ?? '',
+                    'nombre' => $e['nombre'],
                     'escudo' => $e['escudo'] ?? '',
                     'portero_id' => $e['portero_id'] ?? '',
                     'portero_nombre' => $e['portero_nombre'] ?? ''
@@ -75,7 +76,7 @@ class PartidoController extends Controller
             
             $partidosFiltrados = [];
             foreach ($partidos as $key => $p) {
-                $partidoData = [
+                $partidosFiltrados[$key] = [
                     'id' => $key,
                     'equipo_local' => $p['equipo_local'] ?? '',
                     'equipo_visitante' => $p['equipo_visitante'] ?? '',
@@ -91,11 +92,11 @@ class PartidoController extends Controller
                     'campo_id' => $p['campo_id'] ?? '',
                     'detalle_jugadores' => $p['detalle_jugadores'] ?? null
                 ];
-                $partidosFiltrados[$key] = $partidoData;
             }
             
             $camposFiltrados = [];
             foreach ($campos as $key => $c) {
+                if (!isset($c['nombre']) && !isset($c['lugar'])) continue;
                 $camposFiltrados[$key] = [
                     'id' => $key,
                     'nombre' => $c['nombre'] ?? $c['lugar'] ?? '',

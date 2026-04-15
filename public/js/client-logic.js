@@ -14,9 +14,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         contenedorCarga.innerHTML = '<div class="col-span-full text-center py-8 text-slate-500">Cargando datos...</div>';
     }
     
-    // UNA SOLA LLAMADA API para TODO
-    const res = await fetch('/api/publico?_=' + Date.now());
-    datosGlobales = await res.json(); // Guardar globally
+    // UNA SOLA LLAMADA API para TODO (sin cache-busting para usar cache del servidor)
+    const res = await fetch('/api/publico');
+    if (!res.ok) throw new Error('Error al cargar datos: ' + res.status);
+    datosGlobales = await res.json();
+    
+    // Debug: verificar datos recibidos
+    console.log('Datos recibidos:', {
+        jugadores: datosGlobales.jugadores ? Object.keys(datosGlobales.jugadores).length : 0,
+        equipos: datosGlobales.equipos ? Object.keys(datosGlobales.equipos).length : 0,
+        partidos: datosGlobales.partidos ? Object.keys(datosGlobales.partidos).length : 0
+    });
     
 // Renderizar cada sección
     cargarGoleadores(datosGlobales.jugadores, datosGlobales.equipos, datosGlobales.partidos);
@@ -553,11 +561,18 @@ function cargarEquipos(equipos) {
 function cargarJugadores(jugadores, partidos) {
     const contenedor = document.getElementById('contenedor-jugadores');
     if (!contenedor) return;
+    
+    if (!jugadores || !partidos) {
+        contenedor.innerHTML = '<div class="p-8 text-center text-slate-500">No hay datos disponibles.</div>';
+        return;
+    }
 
     // Calculate stats from fase regular only
     const scorerStats = {};
     const pjStats = {};
     
+    // Primero intentar obtener stats de partidos confirmados (detalle_jugadores)
+    let tieneStatsPartidos = false;
     Object.values(partidos || {}).forEach(p => {
         if (!p.resultado_confirmado) return;
         
@@ -565,6 +580,7 @@ function cargarJugadores(jugadores, partidos) {
         if (jornada === 'CUARTOS' || jornada === 'SEMIFINAL' || jornada === 'FINAL' || jornada === 'LIGUILLA') return;
         
         if (p.detalle_jugadores) {
+            tieneStatsPartidos = true;
             Object.entries(p.detalle_jugadores).forEach(([tel, stats]) => {
                 const jug = jugadores[tel];
                 if (!scorerStats[tel]) {
@@ -579,6 +595,21 @@ function cargarJugadores(jugadores, partidos) {
             });
         }
     });
+    
+    // Si no hay stats de partidos, usar los datos directos de jugadores
+    if (!tieneStatsPartidos || Object.keys(scorerStats).length === 0) {
+        Object.entries(jugadores || {}).forEach(([tel, j]) => {
+            if ((j.goles || 0) > 0) {
+                scorerStats[tel] = { 
+                    telefono: tel, 
+                    nombre: j.nombre || tel, 
+                    equipo: j.equipo || '', 
+                    goles: j.goles || 0,
+                    pj: j.partidos_jugados || 0
+                };
+            }
+        });
+    }
     
     const faseRegular = Object.values(scorerStats)
         .filter(j => j.goles > 0)
@@ -595,7 +626,7 @@ function cargarJugadores(jugadores, partidos) {
     const lista = window.jugadoresMode === 'regular' ? faseRegular : total;
 
     if (lista.length === 0) {
-        contenedor.innerHTML = '<div class="p-8 text-center text-slate-500">No hay jugadores registrados.</div>';
+        contenedor.innerHTML = '<div class="p-8 text-center text-slate-500">No hay jugadores registrados con goles.</div>';
         return;
     }
 

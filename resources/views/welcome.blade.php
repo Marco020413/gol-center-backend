@@ -50,61 +50,8 @@
                                 <th class="px-6 py-4 text-center">Acciones</th> 
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-800 text-sm">
-                            @forelse($jugadores as $telefono => $j)
-                            @if(!isset($j['nombre'])) @continue @endif
-                            <tr class="hover:bg-blue-900/5 transition">
-                                <td class="px-6 py-4">
-                                    <div class="flex items-center gap-3">
-                                        <div class="size-8 flex-shrink-0 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[15px] font-black text-blue-400">
-                                            {{ $j['numero'] ?? '0' }}
-                                        </div>
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-white font-bold" data-field="nombre">{{ $j['nombre'] }}</span>
-                                            @if(($j['estatus'] ?? 'activo') === 'lesionado')
-                                                <span class="bg-blue-500 text-[7px] px-1.5 py-0.5 rounded text-white font-black">LESIONADO 🚑</span>
-                                            @endif
-                                        </div>
-                                        
-                                        @if(($j['estatus'] ?? '') === 'suspendido')
-                                            @php $resto = (int)($j['partidos_suspension'] ?? 0); @endphp
-                                            <div class="flex items-center gap-2 mt-1">
-                                                <span class="bg-red-600 text-[7px] px-2 py-0.5 rounded text-white font-black animate-pulse">SUSPENDIDO 🚫</span>
-                                                <span class="text-[9px] font-black uppercase text-amber-500 tracking-tighter">
-                                                    {{ $resto > 0 ? "Restan: $resto partidos" : "Sanción Manual" }}
-                                                </span>
-                                            </div>
-                                        @endif
-                                        <div class="text-[10px] text-slate-500" data-field="telefono">{{ $telefono }}</div>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 text-center" data-field="equipo" data-valor="{{ $j['equipo'] ?? 'Libre' }}">
-                                    @if(($j['equipo'] ?? 'Libre') === 'Libre')
-                                        <span class="bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-black uppercase animate-pulse">
-                                            ⚠️ Sin Equipo
-                                        </span>
-                                    @else
-                                        <span class="text-blue-400 font-semibold uppercase tracking-wider text-xs">
-                                            {{ $j['equipo'] }}
-                                        </span>
-                                    @endif
-                                </td>
-                                <td class="px-6 py-4 text-center {{ ($j['partidos_jugados'] ?? 0) >= 5 ? 'text-red-500 font-bold' : 'text-slate-400' }}">
-                                    {{ $j['partidos_jugados'] ?? 0 }}
-                                </td>
-                                <td class="px-6 py-4 text-center font-bold text-white">{{ $j['goles'] ?? 0 }}</td>
-                                <td class="px-6 py-4 text-center flex justify-center gap-2">
-                                    <button onclick="editarJugador('{{ $telefono }}', '{{ $j['nombre'] ?? '' }}', '{{ $j['equipo'] ?? '' }}', '{{ $j['edad'] ?? 0 }}', '{{ $j['direccion'] ?? '' }}', '{{ $j['numero'] ?? 0 }}', '{{ $j['partidos_jugados'] ?? 0 }}', '{{ $j['estatus'] ?? 'activo' }}', '{{ $j['partidos_suspension'] ?? 0 }}')" class="text-blue-500 hover:text-blue-400 p-1 transition">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                    </button>
-                                    <button onclick="eliminarJugador('{{ $telefono }}')" class="text-red-500 hover:text-red-400 p-1 transition">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                    </button>
-                                </td>
-                            </tr>
-                            @empty
-                            <tr><td colspan="5" class="p-12 text-center text-slate-500 italic">No hay jugadores registrados.</td></tr>
-                            @endforelse
+                        <tbody class="divide-y divide-slate-800 text-sm" id="tbody-jugadores">
+                            <tr><td colspan="5" class="p-12 text-center text-slate-500 italic">Cargando jugadores...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -165,30 +112,8 @@
                                 </tr>
                             </thead>
                             <tbody id="tablaCuerpoPosiciones" class="divide-y divide-slate-800/50">
-                                @if(isset($tablaPosiciones) && count($tablaPosiciones) > 0)
-                                    @foreach($tablaPosiciones as $index => $team)
-                                    <tr class="hover:bg-blue-500/5 transition-colors border-b border-slate-800/50">
-                                        <td class="px-4 py-4 text-center text-slate-500 font-bold text-xs">{{ $index + 1 }}</td>
-                                        <td class="px-4 py-4">
-                                            <div class="flex items-center gap-3">
-                                                <img src="{{ $team['escudo'] ?? 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png' }}" class="size-6 object-contain">
-                                                <span class="text-white font-bold text-xs uppercase tracking-tight">{{ $team['nombre'] }}</span>
-                                            </div>
-                                        </td>
-                                        <td class="px-2 py-4 text-center text-slate-300 text-xs">{{ $team['pj'] }}</td>
-                                        <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">{{ $team['g'] }}</td>
-                                        <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">{{ $team['e'] }}</td>
-                                        <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">{{ $team['p'] }}</td>
-                                        <td class="px-3 py-4 text-center font-black text-emerald-400 text-sm">{{ $team['pts'] }}</td>
-                                        <td class="px-2 py-4 text-center text-slate-300 text-xs">{{ $team['gf'] }}</td>
-                                        <td class="px-2 py-4 text-center text-slate-300 text-xs">{{ $team['gc'] }}</td>
-                                        <td class="px-2 py-4 text-center font-bold text-xs {{ ($team['gf'] - $team['gc']) >= 0 ? 'text-emerald-400' : 'text-red-400' }}">
-                                            {{ ($team['gf'] - $team['gc']) > 0 ? '+' . ($team['gf'] - $team['gc']) : ($team['gf'] - $team['gc']) }}
-                                        </td>
-                                    </tr>
-                                    @endforeach
-                                @endif
-                                </tbody>
+                                <tr><td colspan="9" class="p-8 text-center text-slate-500 animate-pulse">Cargando posiciones...</td></tr>
+                            </tbody>
                         </table>
                     </div>
                 </div>

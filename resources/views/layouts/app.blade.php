@@ -213,13 +213,18 @@
         const datosBase = await Promise.all([
             fetch('/api/equipos').then(r => r.json()).catch(() => ({})),
             fetch('/api/campos').then(r => r.json()).catch(() => ({})),
-            fetch('/api/partidos').then(r => r.json()).catch(() => ({}))
+            fetch('/api/partidos').then(r => r.json()).catch(() => ({})),
+            fetch('/api/jugadores').then(r => r.json()).catch(() => ({}))
         ]);
         
         // Guardar en caché global para reuse
         window.cacheEquiposData = datosBase[0];
         window.cacheCamposData = datosBase[1];
         window.cachePartidosData = datosBase[2];
+        window.cacheJugadoresData = datosBase[3];
+        
+        // Renderizar tabla de jugadores desde datos cargados dinámicamente
+        window.renderizarTablaJugadores(window.cacheJugadoresData);
         
         // Procesar datos base
         window.llenarSelectsEquipos(); 
@@ -242,14 +247,13 @@
         // 4. SANEADOR DE JUGADORES Y FILTRADO INICIAL
         const sanearYFiltrarTabla = async () => {
             // Solo ejecutar si existe la tabla de jugadores
-            if (!document.getElementById('tablaPrincipalJugadores')) return;
+            if (!document.getElementById('tbody-jugadores')) return;
             
             try {
-                const res = await fetch('/api/equipos');
-                const equiposActivos = await res.json();
+                const equiposActivos = window.cacheEquiposData || {};
                 const nombresEquipos = Object.values(equiposActivos).map(e => e.nombre);
 
-                document.querySelectorAll('#tablaPrincipalJugadores tbody tr').forEach(fila => {
+                document.querySelectorAll('#tbody-jugadores tr').forEach(fila => {
                     const celdaEquipo = fila.querySelector('[data-field="equipo"]');
                     if (!celdaEquipo) return;
                     const valorEquipo = celdaEquipo.getAttribute('data-valor');
@@ -285,7 +289,13 @@
             inputBusqueda.addEventListener('input', debounce(ejecutarFiltro, 300));
         }
         if (selectFiltroEquipo) {
-            selectFiltroEquipo.addEventListener('change', ejecutarFiltro);
+            selectFiltroEquipo.addEventListener('change', () => window.filtrarTabla());
+        }
+        
+        // Listener para ordenamiento - también aplica filtro
+        const selectOrdenar = document.getElementById('ordenarPor');
+        if (selectOrdenar) {
+            selectOrdenar.addEventListener('change', () => window.filtrarTabla());
         }
 
         // 6. FUNCIÓN PARA ABRIR MODAL CREAR PARTIDO
@@ -1124,40 +1134,45 @@ const select = document.getElementById('selectPortero');
     // ═══════════════════════════════════════════════════════════════════════════════
     // SECCIÓN 7: EQUIPOS (CRUD, gestión, escudos)
     // ═══════════════════════════════════════════════════════════════════════════════
-    async function cargarGestionEquipos() {
+    window.cargarGestionEquipos = function() {
         const contenedor = document.getElementById('listaEquiposCards');
         if(!contenedor) return;
-        try {
-            const response = await fetch('/api/equipos');
-            const equipos = await response.json();
-            contenedor.innerHTML = '';
-            
-            for (const id in equipos) {
-                const eq = equipos[id];
-                window.equiposData = window.equiposData || {};
-                window.equiposData[id] = eq;
-                contenedor.innerHTML += `
-                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between shadow-lg hover:border-emerald-500/50 cursor-pointer transition" onclick="verJugadoresEquipo('${id}', '${eq.nombre}')">
-                        <div class="flex items-center gap-4">
-                            <img src="${eq.escudo}" class="size-12 object-contain bg-white/5 rounded-lg border border-slate-700">
-                            <div>
-                                <p class="font-bold text-white text-sm uppercase">${eq.nombre}</p>
-                                <p class="text-[10px] text-slate-500">Toca para ver jugadores</p>
-                            </div>
-                        </div>
-                        <div class="flex gap-2" onclick="event.stopPropagation()">
-                            <button onclick="editarEquipo('${id}', '${eq.nombre}', '${eq.escudo}')" class="text-blue-500 hover:bg-blue-500/10 p-2 rounded-lg transition">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                            </button>
-                            <button onclick="eliminarEquipoExhaustivo('${id}', '${eq.nombre}')" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
+        
+        // Usar cache si está disponible, si no hacer fetch
+        const equipos = window.cacheEquiposData || {};
+        
+        if (Object.keys(equipos).length === 0) {
+            contenedor.innerHTML = '<p class="text-slate-500 text-center col-span-2 p-4">Cargando equipos...</p>';
+            return;
+        }
+        
+        contenedor.innerHTML = '';
+        
+        for (const id in equipos) {
+            const eq = equipos[id];
+            window.equiposData = window.equiposData || {};
+            window.equiposData[id] = eq;
+            contenedor.innerHTML += `
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between shadow-lg hover:border-emerald-500/50 cursor-pointer transition" onclick="verJugadoresEquipo('${id}', '${eq.nombre}')">
+                    <div class="flex items-center gap-4">
+                        <img src="${eq.escudo}" class="size-12 object-contain bg-white/5 rounded-lg border border-slate-700">
+                        <div>
+                            <p class="font-bold text-white text-sm uppercase">${eq.nombre}</p>
+                            <p class="text-[10px] text-slate-500">Toca para ver jugadores</p>
                         </div>
                     </div>
-                `;
-            }
-        } catch (e) { console.error("Error al cargar lista de equipos:", e); }
-    }
+                    <div class="flex gap-2" onclick="event.stopPropagation()">
+                        <button onclick="editarEquipo('${id}', '${eq.nombre}', '${eq.escudo}')" class="text-blue-500 hover:bg-blue-500/10 p-2 rounded-lg transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </button>
+                        <button onclick="eliminarEquipoExhaustivo('${id}', '${eq.nombre}')" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+    };
 
     window.eliminarArchivoEscudo = async function(nombreArchivo) {
         if(!confirm(`¿Borrar permanentemente el archivo "${nombreArchivo}" del servidor?`)) return;
@@ -1200,77 +1215,215 @@ const select = document.getElementById('selectPortero');
     }
     
     // Lazy loading removido - solo botones manuales
-    function filtrarTabla() {
+    // Función de filtrado optimizada que opera sobre datos en memoria
+    window.filtrarTabla = function() {
         const inputBusqueda = document.getElementById('busquedaJugador');
         const selectEquipo = document.getElementById('filtroEquipo');
         const selectOrden = document.getElementById('ordenarPor');
         
-        // Verificar que existan los elementos
-        if (!inputBusqueda || !selectEquipo || !selectOrden) return;
+        if (!selectOrden) return;
         
-        const busqueda = inputBusqueda.value.toLowerCase().trim();
-        const equipoFiltro = selectEquipo.value; 
+        const busqueda = inputBusqueda?.value.toLowerCase().trim() || '';
+        const equipoFiltro = selectEquipo?.value || ''; 
         const orden = selectOrden.value;
         
-        const tablaBody = document.querySelector('#tablaPrincipalJugadores tbody');
-        if (!tablaBody) return;
-
-        const filas = Array.from(tablaBody.querySelectorAll('tr'));
+        // Si no hay datos, usar el array vacío
+        const todosDatos = window.jugadoresOrdenados || [];
         
-        const filasQueCumplen = filas.filter(fila => {
-            const nombreContenedor = fila.querySelector('[data-field="nombre"]');
-            const nombreCompletoTexto = nombreContenedor?.innerText.toUpperCase() || "";
-            const nombreSolo = nombreContenedor?.innerText.toLowerCase() || "";
-            const telefono = fila.querySelector('[data-field="telefono"]')?.innerText.toLowerCase() || "";
-            const equipoCelda = fila.querySelector('[data-field="equipo"]');
-            const valorEquipo = equipoCelda ? equipoCelda.getAttribute('data-valor') : "";
-            const nombreEquipoTexto = equipoCelda?.innerText.toLowerCase() || "";
+        // Filtrar según criterios
+        let filtrados = todosDatos.filter(([telefono, j]) => {
+            const nombre = (j.nombre || '').toLowerCase();
+            const telefonoStr = telefono.toLowerCase();
+            const equipo = (j.equipo || '').toLowerCase();
+            const estatus = (j.estatus || 'activo').toLowerCase();
             
-            // Buscar badges de estado en toda la fila
-            const filaHtml = fila.innerHTML.toUpperCase();
-            const tieneLesionado = filaHtml.includes('LESIONADO');
-            const tieneSuspendido = filaHtml.includes('SUSPENDIDO');
-
-            const coincideBusqueda = nombreSolo.includes(busqueda) || 
-                                    telefono.includes(busqueda) || 
-                                    nombreEquipoTexto.includes(busqueda);
+            // Coincide búsqueda
+            const coincideBusqueda = nombre.includes(busqueda) || telefonoStr.includes(busqueda) || equipo.includes(busqueda);
             
+            // Coincide filtro de equipo
             let coincideFiltro = true;
-            if (equipoFiltro === "Libre") {
-                coincideFiltro = (valorEquipo === "Libre");
-            } else if (equipoFiltro === "SUSPENDIDO") {
-                coincideFiltro = tieneSuspendido;
-            } else if (equipoFiltro === "LESIONADO") {
-                coincideFiltro = tieneLesionado;
-            } else if (equipoFiltro !== "") {
-                coincideFiltro = (valorEquipo === equipoFiltro);
+            if (equipoFiltro === 'Libre') {
+                coincideFiltro = (j.equipo || '') === 'Libre' || !j.equipo;
+            } else if (equipoFiltro === 'SUSPENDIDO') {
+                coincideFiltro = estatus === 'suspendido';
+            } else if (equipoFiltro === 'LESIONADO') {
+                coincideFiltro = estatus === 'lesionado';
+            } else if (equipoFiltro !== '') {
+                coincideFiltro = (j.equipo || '') === equipoFiltro;
             }
-
+            
             return coincideBusqueda && coincideFiltro;
         });
-
-        filasQueCumplen.sort((a, b) => {
-            if (orden === 'goles') return (parseInt(b.cells[3].innerText) || 0) - (parseInt(a.cells[3].innerText) || 0);
-            if (orden === 'pj') return (parseInt(b.cells[2].innerText) || 0) - (parseInt(a.cells[2].innerText) || 0);
-            if (orden === 'dorsal') {
-                const numA = parseInt(a.querySelector('.size-8')?.innerText) || 0;
-                const numB = parseInt(b.querySelector('.size-8')?.innerText) || 0;
-                return numA - numB;
-            }
-            return a.querySelector('[data-field="nombre"]').innerText.localeCompare(b.querySelector('[data-field="nombre"]').innerText);
+        
+        // Ordenar según criterio
+        filtrados.sort((a, b) => {
+            const jA = a[1];
+            const jB = b[1];
+            if (orden === 'goles') return (jB.goles || 0) - (jA.goles || 0);
+            if (orden === 'pj') return (jB.partidos_jugados || 0) - (jA.partidos_jugados || 0);
+            if (orden === 'dorsal') return (jA.numero || 0) - (jB.numero || 0);
+            return (jA.nombre || '').localeCompare(jB.nombre || '');
         });
-
-        const fragment = document.createDocumentFragment();
-        filas.forEach(f => f.style.display = 'none');
-        filasQueCumplen.slice(0, limiteJugadores).forEach(f => {
-            f.style.display = '';
-            fragment.appendChild(f);
-        });
-        tablaBody.appendChild(fragment);
-
-        gestionarBotonVerMasJugadores(filasQueCumplen.length);
-    }
+        
+        // Guardar ordenados y renderizar con límite inicial
+        window.jugadoresOrdenados = filtrados;
+        window.limiteJugadores = 15;
+        window.renderizarJugadoresPaginados();
+    };
     
+    // Función para renderizar tabla de jugadores desde datos AJAX (solo 15 iniciales)
+    window.renderizarTablaJugadores = function(jugadores) {
+        const tablaBody = document.getElementById('tbody-jugadores');
+        if (!tablaBody) return;
+        
+        window.jugadoresDataCompleto = jugadores; // Guardar todos para paginación
+        
+        // Determinar orden inicial (por defecto: más goles)
+        const ordenarPor = document.getElementById('ordenarPor')?.value || 'goles';
+        
+        const todosJugadores = Object.entries(jugadores || {})
+            .filter(([telefono, j]) => j && j.nombre)
+            .sort((a, b) => {
+                const jA = a[1];
+                const jB = b[1];
+                if (ordenarPor === 'goles') return (jB.goles || 0) - (jA.goles || 0);
+                if (ordenarPor === 'pj') return (jB.partidos_jugados || 0) - (jA.partidos_jugados || 0);
+                if (ordenarPor === 'dorsal') return (jA.numero || 0) - (jB.numero || 0);
+                return (jA.nombre || '').localeCompare(jB.nombre || '');
+            });
+        
+        window.jugadoresOrdenados = todosJugadores;
+        
+        // Solo mostrar los primeros 15
+        window.limiteJugadores = 15;
+        window.renderizarJugadoresPaginados();
+    };
+    
+    // Renderizar jugadores según el límite actual
+    window.renderizarJugadoresPaginados = function() {
+        const tablaBody = document.getElementById('tbody-jugadores');
+        if (!tablaBody || !window.jugadoresOrdenados) return;
+        
+        const limite = window.limiteJugadores || 15;
+        const jugadoresAMostrar = window.jugadoresOrdenados.slice(0, limite);
+        const equipos = window.cacheEquiposData || {};
+        
+        const filasHTML = jugadoresAMostrar
+            .map(([telefono, j]) => {
+                const equipo = j.equipo || 'Libre';
+                const equipoHtml = equipo === 'Libre'
+                    ? `<span class="bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-black uppercase animate-pulse">⚠️ Sin Equipo</span>`
+                    : `<span class="text-blue-400 font-semibold uppercase tracking-wider text-xs">${equipo}</span>`;
+                
+                const estatus = (j.estatus || 'activo').toLowerCase();
+                const pj = j.partidos_jugados || 0;
+                const pjClase = pj >= 5 ? 'text-red-500 font-bold' : 'text-slate-400';
+                
+                let badgeHtml = '';
+                if (estatus === 'lesionado') {
+                    badgeHtml = `<span class="bg-blue-500 text-[7px] px-1.5 py-0.5 rounded text-white font-black">LESIONADO 🚑</span>`;
+                } else if (estatus === 'suspendido') {
+                    const resto = parseInt(j.partidos_suspension || 0);
+                    const restoText = resto > 0 ? `Restan: ${resto} partidos` : 'Sanción Manual';
+                    badgeHtml = `<div class="flex items-center gap-2 mt-1"><span class="bg-red-600 text-[7px] px-2 py-0.5 rounded text-white font-black animate-pulse">SUSPENDIDO 🚫</span><span class="text-[9px] font-black uppercase text-amber-500 tracking-tighter">${restoText}</span></div>`;
+                }
+                
+                return `
+                <tr class="hover:bg-blue-900/5 transition">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="size-8 flex-shrink-0 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[15px] font-black text-blue-400">${j.numero || 0}</div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-white font-bold" data-field="nombre">${j.nombre}</span>
+                                ${badgeHtml}
+                            </div>
+                            <div class="text-[10px] text-slate-500" data-field="telefono">${telefono}</div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-center" data-field="equipo" data-valor="${equipo}">${equipoHtml}</td>
+                    <td class="px-6 py-4 text-center ${pjClase}">${pj}</td>
+                    <td class="px-6 py-4 text-center font-bold text-white">${j.goles || 0}</td>
+                    <td class="px-6 py-4 text-center flex justify-center gap-2">
+                        <button onclick="editarJugador('${telefono}', '${j.nombre || ''}', '${equipo}', '${j.edad || 0}', '${j.direccion || ''}', '${j.numero || 0}', '${pj}', '${estatus}', '${j.partidos_suspension || 0}')" class="text-blue-500 hover:text-blue-400 p-1 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        </button>
+                        <button onclick="eliminarJugador('${telefono}')" class="text-red-500 hover:text-red-400 p-1 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+        
+        if (filasHTML) {
+            tablaBody.innerHTML = filasHTML;
+        }
+        
+        // Actualizar botón de ver más
+        window.actualizarBotonVerMasJugadores();
+    };
+    
+    // Actualizar botón de paginación
+    window.actualizarBotonVerMasJugadores = function() {
+        const contenido = document.getElementById('content-jugadores');
+        if (!contenido) return;
+        
+        let btnContenedor = document.getElementById('btnContenedorJugadores');
+        const total = window.jugadoresOrdenados?.length || 0;
+        const limite = window.limiteJugadores || 15;
+        
+        if (!btnContenedor) {
+            btnContenedor = document.createElement('div');
+            btnContenedor.id = 'btnContenedorJugadores';
+            btnContenedor.className = 'flex flex-col items-center gap-2 py-6';
+            contenido.appendChild(btnContenedor);
+        }
+        
+        if (total > limite) {
+            btnContenedor.innerHTML = `
+                <p class="text-[9px] text-slate-500 uppercase font-black">Mostrando ${limite} de ${total} jugadores</p>
+                <button onclick="window.verMasJugadores()" 
+                    class="bg-slate-800 hover:bg-blue-600 text-white px-8 py-2 rounded-xl text-[10px] font-black uppercase transition-all active:scale-95 border border-slate-700">
+                    ➕ Ver más jugadores
+                </button>`;
+            btnContenedor.style.display = '';
+        } else if (limite > 15) {
+            btnContenedor.innerHTML = `
+                <button onclick="window.verMenosJugadores()" 
+                    class="text-slate-500 hover:text-white text-[9px] font-bold uppercase tracking-widest transition-all">
+                    ⬆️ Volver al principio
+                </button>`;
+            btnContenedor.style.display = '';
+        } else {
+            btnContenedor.style.display = 'none';
+        }
+    };
+    
+window.verMasJugadores = function() {
+        window.limiteJugadores += 15;
+        window.renderizarJugadoresPaginados();
+    };
+    
+    window.verMenosJugadores = function() {
+        window.limiteJugadores = 15;
+        window.renderizarJugadoresPaginados();
+        document.getElementById('content-jugadores')?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    window.cargarMasJugadores = function() {
+        window.verMasJugadores();
+    };
+
+    window.verMenosJugadores = function() {
+        window.limiteJugadores = 15;
+        window.renderizarJugadoresPaginados();
+        document.getElementById('content-jugadores')?.scrollIntoView({ behavior: 'smooth' });
+    };
+    
+    window.verMenosJugadores = function() {
+        window.limiteJugadores = 15;
+        window.renderizarJugadoresPaginados();
+    };
+
 
     function gestionarBotonVerMasJugadores(totalFiltrados) {
         // Crear o actualizar el contenedor del botón
