@@ -339,7 +339,7 @@
             <button onclick="(typeof window.cerrarModalCrearPartido === 'function') ? window.cerrarModalCrearPartido() : ''" class="text-slate-500 hover:text-white text-2xl">&times;</button>
         </div>
         <form id="formCrearPartido" class="p-6 space-y-4 text-sm">
-            <div class="grid grid-cols-2 gap-4">
+<div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Local</label>
                     <select name="local" id="selectLocal" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500"></select>
@@ -349,13 +349,19 @@
                     <select name="visitante" id="selectVisitante" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500"></select>
                 </div>
             </div>
-            <div>
-                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Sede / Cancha</label>
-                <select name="campo_id" id="selectCampos" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
-                    <option value="">Cargando canchas...</option>
-                </select>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Sede / Cancha</label>
+                    <select name="campo_id" id="selectCampos" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                        <option value="">Cargando canchas...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Jornada</label>
+                    <input type="number" name="jornada" min="1" placeholder="1" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                </div>
             </div>
-    
+     
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Fecha</label>

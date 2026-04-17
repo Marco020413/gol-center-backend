@@ -1268,7 +1268,7 @@ function cargarPartidos(partidos) {
         const jVal = p.jornada ? String(p.jornada).trim() : '';
         let jornadaAsignada = jVal;
         
-        if (jornadaAsignada === '' && p.fecha) {
+        if (jornadaAsignada === '' && p.fecha && p.fecha !== 'PENDIENTE') {
             const fechaPartido = String(p.fecha).trim();
             for (const [j, partidos] of Object.entries(jornadaMap)) {
                 const tieneMismaFecha = partidos.some(f => f.fecha === fechaPartido);
@@ -1279,28 +1279,11 @@ function cargarPartidos(partidos) {
             }
         }
         
-        if (jornadaAsignada === '') {
-            const eqLocal = p.equipo_local?.trim() || '';
-            const eqVis = p.equipo_visitante?.trim() || '';
-            for (const [j, partidos] of Object.entries(jornadaMap)) {
-                const tieneMismoEquipo = partidos.some(f => 
-                    f.equipo_local === eqLocal || 
-                    f.equipo_visitante === eqVis ||
-                    f.equipo_local === eqVis ||
-                    f.equipo_visitante === eqLocal
-                );
-                if (tieneMismoEquipo) {
-                    jornadaAsignada = j;
-                    break;
-                }
-            }
-        }
-        
         if (jornadaAsignada !== '') {
             if (!jornadas[jornadaAsignada]) jornadas[jornadaAsignada] = [];
             jornadas[jornadaAsignada].push(p);
         } else {
-            const fechaKey = p.fecha ? String(p.fecha).trim() : 'sin_fecha';
+            const fechaKey = p.fecha && p.fecha !== 'PENDIENTE' ? String(p.fecha).trim() : 'sin_fecha';
             if (!jornadas[fechaKey]) jornadas[fechaKey] = [];
             jornadas[fechaKey].push(p);
         }

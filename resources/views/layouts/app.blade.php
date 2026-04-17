@@ -454,7 +454,8 @@ fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d)
                     equipo_visitante: visitante,
                     campo_id: document.getElementById('selectCampos').value,
                     fecha: window.formPartidos.fecha.value,
-                    hora: window.formPartidos.hora.value
+                    hora: window.formPartidos.hora.value,
+                    jornada: partidoData?.jornada || window.formPartidos.jornada?.value || ''
                 };
                 try {
                     const res = await fetch(url, {
@@ -3040,6 +3041,12 @@ async function llenarSelectsEquipos() {
             }
             if (selCancha) {
                 selCancha.value = p.campo_id || '';
+            }
+            
+            // Cargar jornada
+            const inputJornada = document.querySelector('#formCrearPartido input[name="jornada"]');
+            if (inputJornada) {
+                inputJornada.value = p.jornada || '';
             }
 
             window.idPartidoSorteo = partidoId;

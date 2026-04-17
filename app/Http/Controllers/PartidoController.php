@@ -277,13 +277,22 @@ class PartidoController extends Controller
     public function actualizarDatosSorteo(Request $request, $id)
     {
         try {
+            // Obtener datos actuales del partido
+            $partidoActual = $this->database->getReference('partidos/'.$id)->getValue();
+
+            // Preservar jornada existente si no se envía
+            $jornada = $request->jornada;
+            if (($jornada === null || $jornada === '') && isset($partidoActual['jornada'])) {
+                $jornada = $partidoActual['jornada'];
+            }
+
             $updateData = [
-                'equipo_local' => $request->equipo_local,
-                'equipo_visitante' => $request->equipo_visitante,
-                'fecha' => $request->fecha,
-                'hora' => $request->hora,
-                'jornada' => $request->jornada,
-                'campo_id' => $request->campo_id,
+                'equipo_local' => $request->equipo_local ?? $partidoActual['equipo_local'] ?? '',
+                'equipo_visitante' => $request->equipo_visitante ?? $partidoActual['equipo_visitante'] ?? '',
+                'fecha' => $request->fecha ?? $partidoActual['fecha'] ?? '',
+                'hora' => $request->hora ?? $partidoActual['hora'] ?? '',
+                'jornada' => $jornada ?? $partidoActual['jornada'] ?? '',
+                'campo_id' => $request->campo_id ?? $partidoActual['campo_id'] ?? '',
             ];
 
             $this->database->getReference('partidos/'.$id)->update($updateData);
