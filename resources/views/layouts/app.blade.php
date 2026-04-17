@@ -146,7 +146,6 @@ case 'posiciones':
                     if(typeof window.cargarTablaPosiciones === 'function') {
                         window.cargarTablaPosiciones(); 
                     } else {
-                        console.log('>>> cargarTablaPosiciones NO EXISTE');
                         alert('Función no disponible. Recarga la página.');
                     }
                     break;
@@ -161,18 +160,6 @@ case 'posiciones':
                     break;
                 case 'equipos_gest': 
                     if(typeof cargarGestionEquipos === 'function') cargarGestionEquipos(); 
-                    break;
-                case 'roles': 
-                    console.log('>>> Click en pestaña roles');
-                    if(typeof window.recuperarFixtureGuardado === 'function') window.recuperarFixtureGuardado(); 
-                    break;
-                case 'campos':
-                    console.log('>>> Click en pestaña campos');
-                    if(typeof cargarCamposCards === 'function') cargarCamposCards();
-                    break;
-                case 'historial':
-                    console.log('>>> Click en pestaña historial');
-                    if(typeof cargarHistorialSaloDeLaFama === 'function') cargarHistorialSaloDeLaFama();
                     break;
             }
             ultimaCarga[tabName] = ahora;
@@ -214,11 +201,7 @@ case 'posiciones':
     // ═══════════════════════════════════════════════════════════════════════════════
     // SECCIÓN 3: INICIALIZACIÓN (DOMContentLoaded)
     // ═══════════════════════════════════════════════════════════════════════════════
-    document.addEventListener('DOMContentLoaded', async () => { 
-        console.log('>>> DOMContentLoaded INICIADO');
-
-
-        window.modalJugador = document.getElementById('modalJugador');
+document.addEventListener('DOMContentLoaded', async () => { 
         window.modalEquipo = document.getElementById('modalEquipo');
         window.modalCrearPartido = document.getElementById('modalCrearPartido');
         window.modalActualizarMarcador = document.getElementById('modalActualizarMarcador');
@@ -243,8 +226,6 @@ case 'posiciones':
         window.cachePartidosData = datosBase[2];
         window.cacheJugadoresData = datosBase[3];
         
-        console.log('>>> Datos base cargados. Equipos:', Object.keys(datosBase[0]).length, 'Partidos:', Object.keys(datosBase[2]).length);
-        
         // Renderizar tabla de jugadores desde datos cargados dinámicamente
         window.renderizarTablaJugadores(window.cacheJugadoresData);
         
@@ -256,13 +237,16 @@ case 'posiciones':
         setTimeout(() => {
             // Cargar datos base si no están
             if (!window.cacheEquiposData || Object.keys(window.cacheEquiposData).length === 0) {
-                fetch('/api/equipos').then(r => r.json()).then(d => { window.cacheEquiposData = d; console.log('>>> Equipos precargados'); });
+fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d);
             }
-            if (!window.cachePartidosData || Object.keys(window.cachePartidosData).length === 0) {
-                fetch('/api/partidos').then(r => r.json()).then(d => { window.cachePartidosData = d; console.log('>>> Partidos precargados'); });
+            if (!window.cachePartidosData) {
+                fetch('/api/partidos').then(r => r.json()).then(d => window.cachePartidosData = d);
+            }
+            if (!window.cacheCamposData) {
+                fetch('/api/campos').then(r => r.json()).then(d => window.cacheCamposData = d);
             }
             if (!window.cacheCamposData || Object.keys(window.cacheCamposData).length === 0) {
-                fetch('/api/campos').then(r => r.json()).then(d => { window.cacheCamposData = d; console.log('>>> Campos precargados'); });
+                fetch('/api/campos').then(r => r.json()).then(d => window.cacheCamposData = d);
             }
             // Las vistas se cargan cuando el usuario hace click en cada pestaña
         }, 500);
@@ -533,7 +517,7 @@ case 'posiciones':
             
             // Pre-cargar cada pestaña (si no es la actual)
             if (lastTab !== 'posiciones' && typeof window.cargarTablaPosiciones === 'function') {
-                window.cargarTablaPosiciones();
+                window.cargarTablaPosiciones(true); // forzar = true para precargar
             }
             if (lastTab !== 'equipos_gest' && typeof cargarGestionEquipos === 'function') {
                 cargarGestionEquipos();
@@ -1205,19 +1189,48 @@ const select = document.getElementById('selectPortero');
             return;
         }
         
+        // Cargar jugadores para contar
+        const jugadores = window.cacheJugadoresData || null;
+        
+        // Función para contar jugadores de un equipo
+        const contarJugadores = (nombreEq) => {
+            if (!jugadores) return 0;
+            let total = 0;
+            Object.values(jugadores).forEach(j => {
+                if (j.equipo === nombreEq) total++;
+            });
+            return total;
+        };
+        
         contenedor.innerHTML = '';
         
         for (const id in equipos) {
             const eq = equipos[id];
             window.equiposData = window.equiposData || {};
             window.equiposData[id] = eq;
+            
+            const totalJugadores = contarJugadores(eq.nombre);
+            const tiene11 = totalJugadores >= 11;
+            const tienePortero = eq.portero_id && eq.portero_id !== '';
+            
+            // Indicador minimalista
+            let indicador = '';
+            if (!tiene11 && !tienePortero) {
+                indicador = '<span class="text-amber-500 text-[10px] font-bold">⚠️ Falta portero + 11</span>';
+            } else if (!tiene11) {
+                indicador = '<span class="text-amber-500 text-[10px] font-bold">⚠️ Faltan ' + (11 - stats.total) + ' jugadores</span>';
+            } else if (!tienePortero) {
+                indicador = '<span class="text-blue-400 text-[10px] font-bold">⚠️ Sin portero</span>';
+            }
+            
             contenedor.innerHTML += `
                 <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between shadow-lg hover:border-emerald-500/50 cursor-pointer transition" onclick="verJugadoresEquipo('${id}', '${eq.nombre}')">
                     <div class="flex items-center gap-4">
                         <img src="${eq.escudo}" class="size-12 object-contain bg-white/5 rounded-lg border border-slate-700">
                         <div>
                             <p class="font-bold text-white text-sm uppercase">${eq.nombre}</p>
-                            <p class="text-[10px] text-slate-500">Toca para ver jugadores</p>
+                            <p class="text-[10px] text-slate-500">${totalJugadores}/11 jugadores</p>
+                            ${indicador}
                         </div>
                     </div>
                     <div class="flex gap-2" onclick="event.stopPropagation()">
@@ -2239,13 +2252,18 @@ async function llenarSelectsEquipos() {
         window.recalcularMarcadorGlobal();
     };
 
-    console.log('>>> DEFINIENDO cargarTablaPosiciones');
-    // Tabla de Posiciones - Fase Regular
-    window.cargarTablaPosiciones = async function() {
-        console.log('>>> cargarTablaPosiciones INICIADO');
+    // Tabla de Posiciones
+    window.cargarTablaPosiciones = async function(forzar = false) {
+        // Si ya tenemos datos cacheados y no se fuerza, usar cache
+        if (!forzar && window.tablaPosicionesCache && window.tablaPosicionesCache.html) {
+            const cuerpo = document.getElementById('tablaCuerpoPosiciones');
+            if (cuerpo && cuerpo.innerHTML.trim() === window.tablaPosicionesCache.html.trim()) {
+                return;
+            }
+        }
+        
         const cuerpo = document.getElementById('tablaCuerpoPosiciones');
         if(!cuerpo) {
-            console.log('>>> NO se encontró tablaCuerpoPosiciones');
             return;
         }
 
@@ -2255,26 +2273,18 @@ async function llenarSelectsEquipos() {
         let equipos = window.cacheEquiposData;
         let partidos = window.cachePartidosData;
         
-        console.log('>>> Equipos en cache:', equipos ? Object.keys(equipos).length : 0);
-        console.log('>>> Partidos en cache:', partidos ? Object.keys(partidos).length : 0);
-
         if (!equipos || Object.keys(equipos).length === 0) {
-            console.log('>>> Cargando equipos desde API...');
             const res = await fetch('/api/equipos');
             equipos = await res.json();
             window.cacheEquiposData = equipos;
-            console.log('>>> Equipos cargados:', Object.keys(equipos).length);
         }
         if (!partidos || Object.keys(partidos).length === 0) {
-            console.log('>>> Cargando partidos desde API...');
             const res = await fetch('/api/partidos');
             partidos = await res.json();
             window.cachePartidosData = partidos;
-            console.log('>>> Partidos cargados:', Object.keys(partidos).length);
         }
 
         if (!equipos || Object.keys(equipos).length === 0) {
-            console.log('>>> No hay equipos');
             cuerpo.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-slate-500 text-xs">No hay equipos</td></tr>';
             return;
         }
@@ -2329,6 +2339,9 @@ async function llenarSelectsEquipos() {
         });
 
         cuerpo.innerHTML = html;
+        
+        // Guardar en cache
+        window.tablaPosicionesCache = { html: html, timestamp: Date.now() };
     };
 
     window.ejecutarGuardadoCancha = async function(id, data, nuevaSedeId = null) {
@@ -3620,6 +3633,20 @@ window.logout = function() {
         // Hide add panel when reopening
         const panel = document.getElementById('panelAgregarJugador');
         if(panel) panel.classList.add('hidden');
+        
+        // Limpiar filtros al abrir y mostrar todos los jugadores
+        const nombreInput = document.getElementById('filtroNombreJugador');
+        const dorsalInput = document.getElementById('filtroDorsalJugador');
+        const estadoSelect = document.getElementById('filtroEstadoJugador');
+        if(nombreInput) nombreInput.value = '';
+        if(dorsalInput) dorsalInput.value = '';
+        if(estadoSelect) estadoSelect.value = '';
+        
+        // Mostrar todos los jugadores al abrir
+        document.querySelectorAll('#contenedorVerJugadores .jugador-card').forEach(tarjeta => {
+            tarjeta.style.display = '';
+        });
+        
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         
@@ -3671,7 +3698,7 @@ window.logout = function() {
                 const estadoSafe = (j.estatus || j.estado || 'Activo').toString();
                 
                 html += `
-                    <div class="jugador-card bg-slate-800 border border-slate-700 rounded-lg p-3 flex items-center justify-between hover:border-blue-500/50 cursor-pointer transition" data-nombre="${nombreSafe}" data-dorsal="${j.numero || ''}" data-estado="${est}" onclick="cerrarModalVerJugadores(); setTimeout(() => editarJugador('${telefono}', '${j.nombre || ''}', '${j.equipo || ''}', ${j.edad || 18}, '${dirSafe}', ${j.numero || 0}, ${j.partidos_jugados || 0}, '${estadoSafe}', ${j.partidos_suspension || 0}), 100)">
+                    <div class="jugador-card bg-slate-800 border border-slate-700 rounded-lg p-3 flex items-center justify-between hover:border-blue-500/50 cursor-pointer transition" data-nombre="${nombreSafe}" data-dorsal="${j.numero || ''}" data-estado="${est}" onclick="window.cerrarModalVerJugadores(); setTimeout(() => editarJugador('${telefono}', '${j.nombre || ''}', '${j.equipo || ''}', ${j.edad || 18}, '${dirSafe}', ${j.numero || 0}, ${j.partidos_jugados || 0}, '${estadoSafe}', ${j.partidos_suspension || 0}), 100)">
                         <div class="flex items-center gap-3">
                             <div class="w-8 h-8 ${estadoBg} rounded-full flex items-center justify-center font-bold ${estadoClase} text-sm">${j.numero || '-'}</div>
                             <div>
@@ -3694,19 +3721,50 @@ window.logout = function() {
                 </div>
             `;
             
-            contenedor.innerHTML = html;
+contenedor.innerHTML = html;
         } catch (e) {
             console.error(e);
             contenedor.innerHTML = '<p class="text-red-500 text-center p-4">Error al cargar jugadores</p>';
         }
     };
 
-window.cerrarModalVerJugadores = function() {
+    window.filtrarJugadoresModal = function() {
+        const nombreFiltro = document.getElementById('filtroNombreJugador')?.value?.toLowerCase() || '';
+        const dorsalFiltro = document.getElementById('filtroDorsalJugador')?.value || '';
+        const estadoFiltro = document.getElementById('filtroEstadoJugador')?.value || '';
+        
+        const tarjetas = document.querySelectorAll('#contenedorVerJugadores .jugador-card');
+        
+        tarjetas.forEach(tarjeta => {
+            const nombre = tarjeta.dataset.nombre || '';
+            const dorsal = tarjeta.dataset.dorsal || '';
+            const estado = tarjeta.dataset.estado || '';
+            
+            const coincideNombre = !nombreFiltro || nombre.includes(nombreFiltro);
+            const coincideDorsal = !dorsalFiltro || dorsal === dorsalFiltro;
+            const coincideEstado = !estadoFiltro || estado === estadoFiltro;
+            
+            if (coincideNombre && coincideDorsal && coincideEstado) {
+                tarjeta.style.display = '';
+            } else {
+                tarjeta.style.display = 'none';
+            }
+        });
+    };
+
+    window.cerrarModalVerJugadores = function() {
         const modal = document.getElementById('modalVerJugadores');
         if(modal) {
             modal.classList.remove('flex');
             modal.classList.add('hidden');
         }
+        // Limpiar filtros al cerrar
+        const nombreInput = document.getElementById('filtroNombreJugador');
+        const dorsalInput = document.getElementById('filtroDorsalJugador');
+        const estadoSelect = document.getElementById('filtroEstadoJugador');
+        if(nombreInput) nombreInput.value = '';
+        if(dorsalInput) dorsalInput.value = '';
+        if(estadoSelect) estadoSelect.value = '';
     };
 
     window.togglePanelAgregarJugador = async function() {

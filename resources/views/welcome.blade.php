@@ -383,8 +383,8 @@
             <button onclick="(typeof window.cerrarModalVerJugadores === 'function') ? window.cerrarModalVerJugadores() : ''" class="text-slate-500 hover:text-white text-2xl">&times;</button>
         </div>
         <div class="p-3 border-b border-slate-800 bg-slate-900/50">
-            <div class="flex gap-2 items-center">
-                <input type="text" id="filtroNombreJugador" placeholder="Buscar por nombre..." class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-white text-xs outline-none focus:border-emerald-500" onkeyup="filtrarJugadoresModal()">
+            <div class="flex flex-wrap gap-2 items-center">
+                <input type="text" id="filtroNombreJugador" placeholder="Buscar por nombre..." class="flex-1 min-w-[120px] bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-white text-xs outline-none focus:border-emerald-500" onkeyup="filtrarJugadoresModal()">
                 <input type="number" id="filtroDorsalJugador" placeholder="Dorsal" class="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs outline-none focus:border-emerald-500" onkeyup="filtrarJugadoresModal()">
                 <select id="filtroEstadoJugador" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs outline-none focus:border-emerald-500" onchange="filtrarJugadoresModal()">
                     <option value="">Todos</option>
@@ -392,15 +392,15 @@
                     <option value="suspendido">🔴 Suspendido</option>
                     <option value="lesionado">🟡 Lesionado</option>
                 </select>
-<button onclick="(typeof window.togglePanelAgregarJugador === 'function') ? window.togglePanelAgregarJugador() : ''" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">
-                            Agregar Jugador
-                        </button>
+                <button onclick="(typeof window.togglePanelAgregarJugador === 'function') ? window.togglePanelAgregarJugador() : ''" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">
+                    Agregar Jugador
+                </button>
             </div>
         </div>
         <div id="panelAgregarJugador" class="hidden p-3 bg-amber-500/10 border-b border-amber-500/20">
             <div class="flex items-center justify-between mb-2">
                 <span class="text-xs font-bold text-amber-400">➕ JUGADORES DISPONIBLES</span>
-                <button onclick="togglePanelAgregarJugador()" class="text-slate-500 hover:text-white text-xs">✕ Cerrar</button>
+                <button onclick="(typeof window.togglePanelAgregarJugador === 'function') ? window.togglePanelAgregarJugador() : ''" class="text-slate-500 hover:text-white text-xs">✕ Cerrar</button>
             </div>
             <div id="contenedorJugadoresDisponibles" class="max-h-32 overflow-y-auto space-y-1">
                 <p class="text-slate-500 text-xs text-center py-2">Cargando...</p>
