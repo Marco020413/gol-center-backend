@@ -142,11 +142,13 @@
                     window.limitePartidos = 5;
                     if(typeof cargarPartidosCards === 'function') cargarPartidosCards(); 
                     break;
-                case 'posiciones': 
-                    if(typeof window.cargarTablaPosiciones === 'function') window.cargarTablaPosiciones(); 
-                    break;
-                case 'equipos_gest': 
-                    if(typeof cargarGestionEquipos === 'function') cargarGestionEquipos(); 
+case 'posiciones': 
+                    if(typeof window.cargarTablaPosiciones === 'function') {
+                        window.cargarTablaPosiciones(); 
+                    } else {
+                        console.log('>>> cargarTablaPosiciones NO EXISTE');
+                        alert('Función no disponible. Recarga la página.');
+                    }
                     break;
                 case 'roles': 
                     if(typeof window.recuperarFixtureGuardado === 'function') window.recuperarFixtureGuardado(); 
@@ -155,6 +157,21 @@
                     if(typeof cargarCamposCards === 'function') cargarCamposCards();
                     break;
                 case 'historial':
+                    if(typeof cargarHistorialSaloDeLaFama === 'function') cargarHistorialSaloDeLaFama();
+                    break;
+                case 'equipos_gest': 
+                    if(typeof cargarGestionEquipos === 'function') cargarGestionEquipos(); 
+                    break;
+                case 'roles': 
+                    console.log('>>> Click en pestaña roles');
+                    if(typeof window.recuperarFixtureGuardado === 'function') window.recuperarFixtureGuardado(); 
+                    break;
+                case 'campos':
+                    console.log('>>> Click en pestaña campos');
+                    if(typeof cargarCamposCards === 'function') cargarCamposCards();
+                    break;
+                case 'historial':
+                    console.log('>>> Click en pestaña historial');
                     if(typeof cargarHistorialSaloDeLaFama === 'function') cargarHistorialSaloDeLaFama();
                     break;
             }
@@ -198,6 +215,7 @@
     // SECCIÓN 3: INICIALIZACIÓN (DOMContentLoaded)
     // ═══════════════════════════════════════════════════════════════════════════════
     document.addEventListener('DOMContentLoaded', async () => { 
+        console.log('>>> DOMContentLoaded INICIADO');
 
 
         window.modalJugador = document.getElementById('modalJugador');
@@ -225,12 +243,29 @@
         window.cachePartidosData = datosBase[2];
         window.cacheJugadoresData = datosBase[3];
         
+        console.log('>>> Datos base cargados. Equipos:', Object.keys(datosBase[0]).length, 'Partidos:', Object.keys(datosBase[2]).length);
+        
         // Renderizar tabla de jugadores desde datos cargados dinámicamente
         window.renderizarTablaJugadores(window.cacheJugadoresData);
         
         // Procesar datos base
         window.llenarSelectsEquipos(); 
         if(typeof window.llenarSelectsCampos === 'function') window.llenarSelectsCampos();
+        
+        // Precargar TODAS las pestañas INMEDIATAMENTE - solo datos, no vistas
+        setTimeout(() => {
+            // Cargar datos base si no están
+            if (!window.cacheEquiposData || Object.keys(window.cacheEquiposData).length === 0) {
+                fetch('/api/equipos').then(r => r.json()).then(d => { window.cacheEquiposData = d; console.log('>>> Equipos precargados'); });
+            }
+            if (!window.cachePartidosData || Object.keys(window.cachePartidosData).length === 0) {
+                fetch('/api/partidos').then(r => r.json()).then(d => { window.cachePartidosData = d; console.log('>>> Partidos precargados'); });
+            }
+            if (!window.cacheCamposData || Object.keys(window.cacheCamposData).length === 0) {
+                fetch('/api/campos').then(r => r.json()).then(d => { window.cacheCamposData = d; console.log('>>> Campos precargados'); });
+            }
+            // Las vistas se cargan cuando el usuario hace click en cada pestaña
+        }, 500);
         
         // Solo verificar liguilla una vez al inicio, no en cada cambio de pestaña
         if (!sessionStorage.getItem('liguillaVerificada')) {
@@ -239,14 +274,9 @@
             sessionStorage.setItem('liguillaVerificada', 'true');
         }
 
-// 3. PERSISTENCIA DE PESTAÑA (DESPUÉS DE CARGAR DATOS)
-        // Ahora los datos ya están disponibles para cualquier pestaña
+        // Cambiar a la última pestaña usada
         lastTab = localStorage.getItem('pestanaActiva') || 'jugadores';
-        setTimeout(() => {
-            if (typeof window.changeTab === 'function') {
-                window.changeTab(lastTab);
-            }
-        }, 100);
+        window.changeTab(lastTab);
 
         // 4. SANEADOR DE JUGADORES Y FILTRADO INICIAL
         const sanearYFiltrarTabla = async () => {
@@ -488,10 +518,35 @@
         }
 
         // 12. CARGAS ADICIONALES (Opcionales, en segundo plano)
-        // Cargamos lo que el usuario NO está viendo para que ya esté listo cuando cambie
+        // Precargar TODAS las pestañas para que estén disponibles sin importar el orden
         setTimeout(() => {
-            if (lastTab !== 'posiciones' && window.cargarTablaPosiciones) window.cargarTablaPosiciones();
-            if (lastTab !== 'equipos_gest' && typeof cargarGestionEquipos === 'function') cargarGestionEquipos();
+            // Cargar datos base si no están
+            if (!window.cacheEquiposData) {
+                fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d);
+            }
+            if (!window.cachePartidosData) {
+                fetch('/api/partidos').then(r => r.json()).then(d => window.cachePartidosData = d);
+            }
+            if (!window.cacheCamposData) {
+                fetch('/api/campos').then(r => r.json()).then(d => window.cacheCamposData = d);
+            }
+            
+            // Pre-cargar cada pestaña (si no es la actual)
+            if (lastTab !== 'posiciones' && typeof window.cargarTablaPosiciones === 'function') {
+                window.cargarTablaPosiciones();
+            }
+            if (lastTab !== 'equipos_gest' && typeof cargarGestionEquipos === 'function') {
+                cargarGestionEquipos();
+            }
+            if (lastTab !== 'roles' && typeof window.recuperarFixtureGuardado === 'function') {
+                window.recuperarFixtureGuardado();
+            }
+            if (lastTab !== 'campos' && typeof cargarCamposCards === 'function') {
+                cargarCamposCards();
+            }
+            if (lastTab !== 'historial' && typeof cargarHistorialSaloDeLaFama === 'function') {
+                cargarHistorialSaloDeLaFama();
+            }
         }, 2000);
         
     });
@@ -1760,11 +1815,7 @@ window.verMasJugadores = function() {
         inicializarObserverPartidos();
     };
 
-    function inicializarObserverPartidos() {
-        // Solo observar si hay más partidos para cargar
-        function inicializarObserverPartidos() {
-        // Funcionalidad deshabilitada - solo botones manuales
-    }
+    // Intersection Observer deshabilitado - solo botones manuales
 
     // Funciones de control global
     window.cargarMasPartidos = function() {
@@ -2146,8 +2197,11 @@ async function llenarSelectsEquipos() {
         let nuevoValor = (parseInt(input.value) || 0) + cambio;
         if (nuevoValor < 0) nuevoValor = 0;
         input.value = nuevoValor;
-        recalcularMarcador();
-    }
+        // window.recalcularMarcador(); // función no existe
+    };
+
+    // Stub function para evitar errores
+    window.recalcularMarcador = function() { console.log('recalcularMarcador called'); };
 
     // Sumar todos los goles de la lista y actualizar los cuadros grandes de arriba
     window.recalcularMarcadorGlobal = function() {
@@ -2185,29 +2239,42 @@ async function llenarSelectsEquipos() {
         window.recalcularMarcadorGlobal();
     };
 
+    console.log('>>> DEFINIENDO cargarTablaPosiciones');
     // Tabla de Posiciones - Fase Regular
     window.cargarTablaPosiciones = async function() {
+        console.log('>>> cargarTablaPosiciones INICIADO');
         const cuerpo = document.getElementById('tablaCuerpoPosiciones');
-        if(!cuerpo) return;
+        if(!cuerpo) {
+            console.log('>>> NO se encontró tablaCuerpoPosiciones');
+            return;
+        }
 
         cuerpo.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-slate-500 animate-pulse text-xs">Cargando...</td></tr>';
 
         // Usar datos cacheados o cargar
         let equipos = window.cacheEquiposData;
         let partidos = window.cachePartidosData;
+        
+        console.log('>>> Equipos en cache:', equipos ? Object.keys(equipos).length : 0);
+        console.log('>>> Partidos en cache:', partidos ? Object.keys(partidos).length : 0);
 
         if (!equipos || Object.keys(equipos).length === 0) {
+            console.log('>>> Cargando equipos desde API...');
             const res = await fetch('/api/equipos');
             equipos = await res.json();
             window.cacheEquiposData = equipos;
+            console.log('>>> Equipos cargados:', Object.keys(equipos).length);
         }
         if (!partidos || Object.keys(partidos).length === 0) {
+            console.log('>>> Cargando partidos desde API...');
             const res = await fetch('/api/partidos');
             partidos = await res.json();
             window.cachePartidosData = partidos;
+            console.log('>>> Partidos cargados:', Object.keys(partidos).length);
         }
 
         if (!equipos || Object.keys(equipos).length === 0) {
+            console.log('>>> No hay equipos');
             cuerpo.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-slate-500 text-xs">No hay equipos</td></tr>';
             return;
         }
@@ -2586,43 +2653,96 @@ async function llenarSelectsEquipos() {
         }
     };
 
-    window.generarTorneoAleatorio = async function() {
-        if(!confirm("🎲 ¿Generar nuevo sorteo? Esto creará el rol de juegos para toda la temporada.")) return;
+    window.abrirModalGenerarTorneo = function() {
+        const modal = document.getElementById('modalGenerarTorneo');
+        const fechaInput = document.getElementById('fechaInicioTorneo');
+        const selectDia = document.getElementById('diaTorneo');
+        
+        // Establecer fecha mínima como hoy
+        const hoy = new Date().toISOString().split('T')[0];
+        fechaInput.min = hoy;
+        
+        // Añadir listener para validar día
+        fechaInput.onchange = function() {
+            const fecha = new Date(this.value + 'T00:00:00');
+            const diaSemana = fecha.getDay();
+            const diaSeleccionado = parseInt(selectDia.value);
+            
+            const mensaje = document.getElementById('mensajeValidacionFecha');
+            if (diaSemana !== diaSeleccionado) {
+                mensaje.classList.remove('hidden');
+                mensaje.textContent = `⚠️ La fecha debe ser un ${selectDia.options[selectDia.selectedIndex].text}`;
+            } else {
+                mensaje.classList.add('hidden');
+            }
+        };
+        
+        selectDia.onchange = function() {
+            if (fechaInput.value) {
+                fechaInput.dispatchEvent(new Event('change'));
+            }
+        };
+        
+        if(modal) modal.classList.remove('hidden');
+        if(modal) modal.classList.add('flex');
+    };
 
+    window.cerrarModalGenerarTorneo = function() {
+        const modal = document.getElementById('modalGenerarTorneo');
+        if(modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        document.getElementById('mensajeValidacionFecha').classList.add('hidden');
+    };
+
+    window.ejecutarGenerarTorneo = async function() {
+        const diaSemana = parseInt(document.getElementById('diaTorneo').value);
+        const fechaInicio = document.getElementById('fechaInicioTorneo').value;
+        
+        if(!fechaInicio) return alert("⚠️ Selecciona una fecha de inicio");
+        
+        // Validar día de la semana
+        const fecha = new Date(fechaInicio + 'T00:00:00');
+        if(fecha.getDay() !== diaSemana) {
+            return alert(`⚠️ La fecha debe ser ${document.getElementById('diaTorneo').options[document.getElementById('diaTorneo').selectedIndex].text}`);
+        }
+
+        window.cerrarModalGenerarTorneo();
+        
         try {
-            // 1. Obtener equipos
             const resE = await fetch('/api/equipos');
             const equiposData = await resE.json();
             let equipos = Object.values(equiposData).map(e => e.nombre);
 
             if (equipos.length < 2) return alert("❌ Mínimo 2 equipos para sortear.");
             
-            // Mezcla aleatoria
             equipos.sort(() => Math.random() - 0.5);
-
-            // Manejo de impares
             if (equipos.length % 2 !== 0) equipos.push("DESCANSO");
 
             let partidosPaquete = [];
             const n = equipos.length;
+            const fechaInicioDate = new Date(fechaInicio + 'T00:00:00');
             
-            // 2. Algoritmo Round Robin
+            // Round Robin con fechas automáticas
             for (let j = 0; j < n - 1; j++) {
                 for (let i = 0; i < n / 2; i++) {
                     const loc = equipos[i];
                     const vis = equipos[n - 1 - i];
                     if (loc !== "DESCANSO" && vis !== "DESCANSO") {
+                        const fechaJornada = new Date(fechaInicioDate);
+                        fechaJornada.setDate(fechaJornada.getDate() + (j * 7));
                         partidosPaquete.push({ 
                             equipo_local: loc, 
                             equipo_visitante: vis, 
-                            jornada: j + 1 
+                            jornada: j + 1,
+                            fecha: fechaJornada.toISOString().split('T')[0]
                         });
                     }
                 }
                 equipos.splice(1, 0, equipos.pop());
             }
 
-            // 3. ENVIAR TODO EL PAQUETE (Ruta rápida)
             const res = await fetch('/api/admin/partidos/generar-torneo', {
                 method: 'POST',
                 headers: { 
@@ -2634,11 +2754,7 @@ async function llenarSelectsEquipos() {
 
             if(res.ok) {
                 alert("🏆 ¡Torneo generado con éxito!");
-                
-                // 4. Dibujar el diagrama inmediatamente sin recargar
                 window.pintarFixtureVisual(partidosPaquete);
-                
-                // 5. Actualizar la lista de la otra pestaña
                 if(window.cargarPartidosCards) window.cargarPartidosCards();
             } else {
                 const err = await res.json();
@@ -2648,6 +2764,11 @@ async function llenarSelectsEquipos() {
             console.error(e); 
             alert("❌ Error de comunicación con el servidor");
         }
+    };
+
+    window.generarTorneoAleatorio = async function() {
+        console.log('generarTorneoAleatorio called');
+        window.abrirModalGenerarTorneo();
     };
 
     
@@ -3139,13 +3260,13 @@ async function llenarSelectsEquipos() {
                 if (lista.some(p => String(p.jornada).toUpperCase() === f)) faseActual = f;
             }
 
-            if (!faseActual) {
+if (!faseActual) {
                 verificandoLiguilla = false;
                 return window.verificarFinFaseRegular();
             }
         
-        // --- LÓGICA DE CIERRE DE TORNEO (FINAL) ---
-        if (faseActual === 'FINAL') {
+            // --- LÓGICA DE CIERRE DE TORNEO (FINAL) ---
+            if (faseActual === 'FINAL') {
             const pFinal = lista.find(p => String(p.jornada).toUpperCase() === 'FINAL');
             if (pFinal && pFinal.resultado_confirmado) {
                 const gl = parseInt(pFinal.goles_local || 0);
@@ -3202,7 +3323,7 @@ async function llenarSelectsEquipos() {
 // Llamamos a la función de envío que ya tiene el candado 'isGenerandoLiguilla'
                 await window.enviarLiguilla(nuevasLlaves);
             }
-        }
+        }  // closes if todosTerminados
         } finally {
             verificandoLiguilla = false;
         }
@@ -3299,10 +3420,9 @@ async function llenarSelectsEquipos() {
                             <button onclick="verDetallesTorneo('${idTorneo}')" class="text-amber-500 text-[8px] font-black uppercase tracking-widest hover:text-white transition">Ver Detalles →</button>
                         </div>
                     </div>
-                `;
-});
+`;
+            });
         }
-    };
 
     window.verDetallesTorneo = async function(id) {
         const modal = document.getElementById('modalDetallesHistorial');

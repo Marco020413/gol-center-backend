@@ -4,13 +4,13 @@
 <main class="max-w-7xl mx-auto px-4 sm:px-6 py-4 lg:py-10 grid grid-cols-1 lg:grid-cols-3 gap-6">    
     <div class="lg:col-span-2">
         <div class="flex border-b border-slate-800 mb-6 gap-4 overflow-x-auto pb-1 scrollbar-hide whitespace-nowrap">
-            <button onclick="changeTab('jugadores')" id="btn-tab-jugadores" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Jugadores</button>
-            <button onclick="changeTab('posiciones')" id="btn-tab-posiciones" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Posiciones</button>
-            <button onclick="changeTab('equipos_gest')" id="btn-tab-equipos_gest" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Gestionar Equipos</button>
-            <button onclick="changeTab('partidos')" id="btn-tab-partidos" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Partidos</button>
-            <button onclick="changeTab('campos')" id="btn-tab-campos" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Canchas</button>
-            <button onclick="changeTab('roles')" id="btn-tab-roles" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Roles</button>
-            <button onclick="changeTab('historial')" id="btn-tab-historial" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Salón de la Fama</button>
+            <button onclick="window.changeTab('jugadores')" id="btn-tab-jugadores" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Jugadores</button>
+            <button onclick="window.changeTab('posiciones')" id="btn-tab-posiciones" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Posiciones</button>
+            <button onclick="window.changeTab('equipos_gest')" id="btn-tab-equipos_gest" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Gestionar Equipos</button>
+            <button onclick="window.changeTab('partidos')" id="btn-tab-partidos" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Partidos</button>
+            <button onclick="window.changeTab('campos')" id="btn-tab-campos" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Canchas</button>
+            <button onclick="window.changeTab('roles')" id="btn-tab-roles" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Roles</button>
+            <button onclick="window.changeTab('historial')" id="btn-tab-historial" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Salón de la Fama</button>
         </div>
     <div id="podio-final" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"></div>
 
@@ -84,7 +84,17 @@
                     </select>
                 </div>
 
-                <div id="contenedorListaPartidos"></div>
+                <div id="contenedorListaPartidos">
+                    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-12 text-center">
+                        <div class="size-16 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="size-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-slate-500 font-bold text-sm uppercase">Sin Partidos Programados</h3>
+                        <p class="text-slate-600 text-xs mt-2">Genera un torneo para ver los partidos aquí</p>
+                    </div>
+                </div>
             </div>
 
 <div id="content-posiciones" class="tab-pane hidden">
@@ -132,11 +142,11 @@
                     </p>
                     
                     <div class="pt-4">
-                        <button onclick="window.generarTorneoAleatorio()" class="bg-blue-600 hover:bg-blue-500 text-white font-black py-4 px-8 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20 active:scale-95">
+                        <button onclick="(typeof window.generarTorneoAleatorio === 'function') ? window.generarTorneoAleatorio() : alert('Cargando...')" class="bg-blue-600 hover:bg-blue-500 text-white font-black py-4 px-8 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20 active:scale-95">
                             🎲 Sortear y Generar Jornadas
                         </button>
 
-                        <button onclick="window.limpiarTodo()" 
+                        <button onclick="(typeof window.limpiarTodo === 'function') ? window.limpiarTodo() : alert('Cargando...')" 
                                 class="bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white font-black py-4 px-8 rounded-2xl text-xs uppercase tracking-widest transition-all active:scale-95">
                             🗑️ Limpiar Torneo
                         </button>
@@ -144,13 +154,22 @@
                 </div>
 
                 <div id="contenedorFixture" class="space-y-8 pb-10">
+                    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-12 text-center">
+                        <div class="size-16 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="size-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                            </svg>
+                        </div>
+                        <h3 class="text-slate-500 font-bold text-sm uppercase">Sin Fixture Generado</h3>
+                        <p class="text-slate-600 text-xs mt-2">Genera un torneo para crear los roles de partidos</p>
                     </div>
+                </div>
             </div>
 
             <div id="content-campos" class="tab-pane hidden space-y-4">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-xl font-bold text-white uppercase tracking-tighter">Gestión de Canchas</h2>
-                    <button onclick="abrirModalCampo()" class="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-blue-500 shadow-lg">
+                    <button onclick="(typeof window.abrirModalCampo === 'function') ? window.abrirModalCampo() : alert('Cargando...')" class="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-blue-500 shadow-lg">
                         + NUEVA CANCHA
                     </button>
                 </div>
@@ -175,8 +194,8 @@
         <div class="bg-blue-600 p-6 rounded-xl shadow-lg text-white">
             <h4 class="font-bold text-lg mb-4 text-center uppercase tracking-tighter text-white">Panel de Gestión</h4>
             <div class="space-y-3">
-                <button onclick="abrirModal()" class="w-full bg-white text-blue-600 font-bold py-3 rounded-lg text-sm hover:shadow-xl transition">Registrar Jugador</button>
-                <button onclick="abrirModalEquipo()" class="w-full bg-blue-700 text-white font-bold py-3 rounded-lg text-sm border border-blue-400/30 hover:bg-blue-800 transition">Crear Equipo</button>
+                <button onclick="(typeof window.abrirModal === 'function') ? window.abrirModal() : alert('Cargando...')" class="w-full bg-white text-blue-600 font-bold py-3 rounded-lg text-sm hover:shadow-xl transition">Registrar Jugador</button>
+                <button onclick="(typeof window.abrirModalEquipo === 'function') ? window.abrirModalEquipo() : alert('Cargando...')" class="w-full bg-blue-700 text-white font-bold py-3 rounded-lg text-sm border border-blue-400/30 hover:bg-blue-800 transition">Crear Equipo</button>
             </div>
         </div>
     </div>
@@ -186,7 +205,7 @@
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
         <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-blue-600/10">
             <h3 id="tituloModalJugador" class="text-xl font-bold text-white uppercase tracking-tighter">Nuevo Jugador</h3>
-            <button onclick="cerrarModal()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
+            <button onclick="(typeof window.cerrarModal === 'function') ? window.cerrarModal() : ''" class="text-slate-500 hover:text-white text-2xl">&times;</button>
         </div>
         <form id="formRegistroJugador" class="p-6 space-y-4 text-sm">
             <div class="grid grid-cols-2 gap-4">
@@ -251,7 +270,7 @@
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden max-h-[90vh]">
         <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-blue-600/10 shrink-0">
             <h3 id="tituloModalEquipo" class="text-lg font-bold text-white uppercase tracking-tighter">Gestión de Equipo</h3>
-            <button onclick="cerrarModalEquipo()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
+            <button onclick="(typeof window.cerrarModalEquipo === 'function') ? window.cerrarModalEquipo() : ''" class="text-slate-500 hover:text-white text-2xl">&times;</button>
         </div>
         <form id="formRegistroEquipo" method="POST" enctype="multipart/form-data" class="p-4 space-y-3 text-sm overflow-y-auto max-h-[calc(90vh-60px)]" onsubmit="event.preventDefault(); registrarNuevoEquipo();">
             @csrf
@@ -298,7 +317,7 @@
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
         <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-blue-600/10">
             <h3 class="text-xl font-bold text-white uppercase tracking-tighter">Programar Partido</h3>
-            <button onclick="cerrarModalCrearPartido()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
+            <button onclick="(typeof window.cerrarModalCrearPartido === 'function') ? window.cerrarModalCrearPartido() : ''" class="text-slate-500 hover:text-white text-2xl">&times;</button>
         </div>
         <form id="formCrearPartido" class="p-6 space-y-4 text-sm">
             <div class="grid grid-cols-2 gap-4">
@@ -361,7 +380,7 @@
                 <h3 id="tituloVerJugadores" class="text-lg font-bold text-white uppercase tracking-tighter">Jugadores del Equipo</h3>
                 <p id="subtituloVerJugadores" class="text-xs text-slate-400">Equipo</p>
             </div>
-            <button onclick="cerrarModalVerJugadores()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
+            <button onclick="(typeof window.cerrarModalVerJugadores === 'function') ? window.cerrarModalVerJugadores() : ''" class="text-slate-500 hover:text-white text-2xl">&times;</button>
         </div>
         <div class="p-3 border-b border-slate-800 bg-slate-900/50">
             <div class="flex gap-2 items-center">
@@ -373,9 +392,9 @@
                     <option value="suspendido">🔴 Suspendido</option>
                     <option value="lesionado">🟡 Lesionado</option>
                 </select>
-                <button onclick="togglePanelAgregarJugador()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">
-                    + Agregar
-                </button>
+<button onclick="(typeof window.togglePanelAgregarJugador === 'function') ? window.togglePanelAgregarJugador() : ''" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">
+                            Agregar Jugador
+                        </button>
             </div>
         </div>
         <div id="panelAgregarJugador" class="hidden p-3 bg-amber-500/10 border-b border-amber-500/20">
@@ -397,7 +416,7 @@
     <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
         <div class="p-6 border-b border-slate-800 bg-blue-600/10 flex justify-between items-center">
             <h3 class="text-lg font-bold text-white uppercase tracking-tighter">Gestionar Partido</h3>
-            <button onclick="cerrarModalMarcador()" class="text-slate-500 hover:text-white">&times;</button>
+            <button onclick="(typeof window.cerrarModalMarcador === 'function') ? window.cerrarModalMarcador() : ''" class="text-slate-500 hover:text-white">&times;</button>
         </div>
         <form id="formActualizarMarcador" class="p-6 space-y-6">
             <input type="hidden" id="edit_partido_id">
@@ -440,14 +459,14 @@
             </div>
 
             <div class="grid grid-cols-2 gap-3">
-                <button type="button" onclick="cerrarModalMarcador()" class="bg-slate-800 text-slate-400 font-bold py-3 rounded-xl text-xs uppercase">Cancelar</button>
+                <button type="button" onclick="(typeof window.cerrarModalMarcador === 'function') ? window.cerrarModalMarcador() : ''" class="bg-slate-800 text-slate-400 font-bold py-3 rounded-xl text-xs uppercase">Cancelar</button>
                 <button type="submit" class="bg-blue-600 text-white font-bold py-3 rounded-xl text-xs uppercase shadow-lg shadow-blue-900/20">Guardar Cambios</button>
             </div>
 
             <div class="pt-4 border-t border-slate-800">
-                <button type="button" onclick="eliminarPartido()" class="w-full text-[10px] text-red-500 font-bold py-2 hover:bg-red-500/10 rounded-lg transition uppercase tracking-widest">
-                    🗑️ Eliminar Partido
-                </button>
+<button type="button" onclick="(typeof window.eliminarPartido === 'function') ? window.eliminarPartido() : ''" class="w-full text-[10px] text-red-500 font-bold py-2 hover:bg-red-500/10 rounded-lg transition uppercase tracking-widest">
+                            Eliminar Partido
+                        </button>
             </div>
         </form>
     </div>
@@ -460,7 +479,7 @@
                 <span id="det_fecha" class="text-[10px] text-slate-300 font-black uppercase tracking-widest"></span>
                 <span id="det_rango_hora" class="text-[9px] text-slate-500 font-bold"></span>
             </div>
-            <button onclick="cerrarDetalle()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
+            <button onclick="(typeof window.cerrarDetalle === 'function') ? window.cerrarDetalle() : ''" class="text-slate-500 hover:text-white text-2xl">&times;</button>
         </div>
 
         <div class="overflow-y-auto custom-scrollbar p-6 space-y-6">
@@ -535,7 +554,7 @@
             </div>
 
             <div class="flex gap-3">
-                <button type="button" onclick="cerrarModalCampo()" class="flex-1 bg-slate-800 text-slate-400 font-bold py-3 rounded-xl text-xs">CANCELAR</button>
+                <button type="button" onclick="(typeof window.cerrarModalCampo === 'function') ? window.cerrarModalCampo() : ''" class="flex-1 bg-slate-800 text-slate-400 font-bold py-3 rounded-xl text-xs">CANCELAR</button>
                 <button type="submit" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl text-xs uppercase">REGISTRAR</button>
             </div>
         </form>
@@ -570,6 +589,39 @@
     </div>
 </div>
 
+<!-- Modal Generar Torneo -->
+<div id="modalGenerarTorneo" class="fixed inset-0 bg-slate-950/90 backdrop-blur-sm hidden items-center justify-center z-[250] p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
+        <div class="p-6 border-b border-slate-800">
+            <h2 class="text-xl font-black text-white uppercase">🎲 Generar Copa</h2>
+            <p class="text-slate-500 text-xs mt-1">Configura los parámetros del torneo</p>
+        </div>
+        <div class="p-6 space-y-4">
+            <div>
+                <label class="text-slate-400 text-xs font-bold uppercase block mb-2">Día de la semana</label>
+                <select id="diaTorneo" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-sm">
+                    <option value="0">Domingo</option>
+                    <option value="1">Lunes</option>
+                    <option value="2">Martes</option>
+                    <option value="3">Miércoles</option>
+                    <option value="4">Jueves</option>
+                    <option value="5">Viernes</option>
+                    <option value="6">Sábado</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-slate-400 text-xs font-bold uppercase block mb-2">Fecha de inicio</label>
+                <input type="date" id="fechaInicioTorneo" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-sm">
+            </div>
+            <p id="mensajeValidacionFecha" class="text-amber-500 text-xs hidden">⚠️ La fecha debe ser un miércoles</p>
+        </div>
+        <div class="p-6 border-t border-slate-800 flex gap-3">
+            <button onclick="window.cerrarModalGenerarTorneo()" class="flex-1 bg-slate-800 text-white py-3 rounded-lg font-bold text-sm">Cancelar</button>
+            <button onclick="window.ejecutarGenerarTorneo()" class="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold text-sm">Generar</button>
+        </div>
+    </div>
+</div>
+
 <div id="modalDetallesHistorial" class="hidden fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
     <div class="bg-slate-900 border border-slate-800 w-full max-w-4xl max-h-[90vh] rounded-[40px] shadow-2xl overflow-hidden flex flex-col">
         
@@ -578,7 +630,7 @@
                 <h2 id="historial-titulo" class="text-3xl font-black text-white uppercase italic tracking-tighter">Detalles del Torneo</h2>
                 <p id="historial-subtitulo" class="text-amber-500 text-[10px] font-black uppercase tracking-[0.2em] mt-1"></p>
             </div>
-            <button onclick="cerrarModalHistorial()" class="size-10 flex items-center justify-center rounded-full bg-slate-800 text-white hover:bg-red-600 transition">✕</button>
+            <button onclick="(typeof window.cerrarModalHistorial === 'function') ? window.cerrarModalHistorial() : ''" class="size-10 flex items-center justify-center rounded-full bg-slate-800 text-white hover:bg-red-600 transition">✕</button>
         </div>
 
         <div class="p-8 overflow-y-auto custom-scrollbar space-y-10">
