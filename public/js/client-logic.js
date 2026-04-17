@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     cargarGoleadores(datosGlobales.jugadores, datosGlobales.equipos, datosGlobales.partidos);
     cargarJugadores(datosGlobales.jugadores, datosGlobales.partidos);
     cargarEquipos(datosGlobales.equipos);
-    cargarPosiciones(datosGlobales.equipos, datosGlobales.partidos);
+    await cargarPosiciones(datosGlobales.equipos, datosGlobales.partidos);
     cargarPorteros(datosGlobales.equipos, datosGlobales.partidos, datosGlobales.jugadores);
     cargarPartidos(datosGlobales.partidos);
     cargarLiguilla(datosGlobales.partidos);
@@ -894,101 +894,88 @@ function cargarGoleadores(jugadores, equipos, partidos) {
         </div>`;
 }
 
- // Tabla de Posiciones
-function cargarPosiciones(equipos, partidos) {
+ // Tabla de Posiciones - OPTIMIZADA
+async function cargarPosiciones(equipos, partidos) {
     const contenedor = document.getElementById('contenedor-posiciones');
     if (!contenedor) return;
 
-    const stats = {};
-    for (const id in equipos) {
-        stats[equipos[id].nombre] = {
-            nombre: equipos[id].nombre,
-            escudo: equipos[id].escudo,
-            pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0
-        };
+    // Si no hay datos, cargar directamente
+    if (!equipos || Object.keys(equipos).length === 0) {
+        try {
+            const [resE, resP] = await Promise.all([
+                fetch('/api/equipos').then(r => r.json()),
+                fetch('/api/partidos').then(r => r.json())
+            ]);
+            equipos = resE;
+            partidos = resP;
+        } catch(e) {
+            contenedor.innerHTML = '<div class="p-10 text-center text-slate-500 italic">Error al cargar datos</div>';
+            return;
+        }
     }
 
-    Object.values(partidos || {}).forEach(partido => {
-        if (partido.resultado_confirmado) {
-            const jornada = partido.jornada;
-            const esLiguilla = jornada && (
-                String(jornada).toUpperCase() === 'CUARTOS' ||
-                String(jornada).toUpperCase() === 'SEMIFINAL' ||
-                String(jornada).toUpperCase() === 'FINAL' ||
-                String(jornada).toUpperCase() === 'LIGUILLA'
-            );
-            
-            if (esLiguilla) return;
-            
-            const loc = partido.equipo_local;
-            const vis = partido.equipo_visitante;
-            const gl = parseInt(partido.goles_local || 0);
-            const gv = parseInt(partido.goles_visitante || 0);
-
-            if (stats[loc] && stats[vis]) {
-                stats[loc].pj++; stats[vis].pj++;
-                stats[loc].gf += gl; stats[loc].gc += gv;
-                stats[vis].gf += gv; stats[vis].gc += gl;
-                if (gl > gv) { stats[loc].pts += 3; stats[loc].g++; stats[vis].p++; }
-                else if (gv > gl) { stats[vis].pts += 3; stats[vis].g++; stats[loc].p++; }
-                else { stats[loc].pts++; stats[vis].pts++; stats[loc].e++; stats[vis].e++; }
-            }
-        }
-    });
-
-    const tabla = Object.values(stats).sort((a, b) => b.pts - a.pts);
-
-    if (tabla.length === 0) {
-        contenedor.innerHTML = '<div class="p-10 text-center text-slate-500 italic">No hay datos disponibles aún</div>';
+    if (Object.keys(equipos).length === 0) {
+        contenedor.innerHTML = '<div class="p-10 text-center text-slate-500 italic">No hay equipos registrados</div>';
         return;
     }
 
-    // Tabla de posiciones
-    contenedor.innerHTML = `
-        <div class="overflow-x-auto">
-            <table class="w-full text-xs">
-                <thead class="bg-slate-800/80 text-slate-400 uppercase tracking-wider text-[10px]">
-                    <tr>
-                        <th class="px-3 py-3 text-center">#</th>
-                        <th class="px-3 py-3 text-left">Equipo</th>
-                        <th class="px-3 py-3 text-center">PJ</th>
-                        <th class="px-3 py-3 text-center">G</th>
-                        <th class="px-3 py-3 text-center">E</th>
-                        <th class="px-3 py-3 text-center">P</th>
-                        <th class="px-3 py-3 text-center text-emerald-400 font-bold">PTS</th>
-                        <th class="px-3 py-3 text-center">GF</th>
-                        <th class="px-3 py-3 text-center">GC</th>
-                        <th class="px-3 py-3 text-center">DG</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-800/50">
-                    ${tabla.map((t, i) => {
-                        const dg = t.gf - t.gc;
-                        return `
-                        <tr class="hover:bg-blue-500/10 cursor-pointer transition-colors" onclick="abrirInfoEquipo('${t.nombre.replace(/'/g, "\\'")}')">
-                            <td class="px-3 py-3 text-center font-bold ${i < 3 ? 'text-amber-400' : 'text-slate-500'}">${i + 1}</td>
-                            <td class="px-3 py-3">
-                                <div class="flex items-center gap-2">
-                                    <img src="${t.escudo || escudoDefault}" onerror="this.src='${escudoDefault}'" class="size-5 rounded object-contain">
-                                    <span class="font-bold text-slate-200">${t.nombre}</span>
-                                </div>
-                            </td>
-                            <td class="px-3 py-3 text-center text-slate-400">${t.pj}</td>
-                            <td class="px-3 py-3 text-center text-slate-400">${t.g}</td>
-                            <td class="px-3 py-3 text-center text-slate-400">${t.e}</td>
-                            <td class="px-3 py-3 text-center text-slate-400">${t.p}</td>
-                            <td class="px-3 py-3 text-center font-bold text-emerald-400">${t.pts}</td>
-                            <td class="px-3 py-3 text-center text-slate-400">${t.gf}</td>
-                            <td class="px-3 py-3 text-center text-slate-400">${t.gc}</td>
-                            <td class="px-3 py-3 text-center font-bold ${dg >= 0 ? 'text-emerald-400' : 'text-red-400'}">${dg > 0 ? '+' + dg : dg}</td>
-                        </tr>`;
-                    }).join('')}
-                </tbody>
-            </table>
-        </div>
-        <div class="p-3 text-center text-slate-500 text-[10px] border-t border-slate-800/30">
-            Toca un equipo para ver detalles
-        </div>`;
+    // Calcular stats
+    const stats = {};
+    for (const id in equipos) {
+        if (equipos[id]?.nombre) {
+            stats[equipos[id].nombre] = {
+                nombre: equipos[id].nombre,
+                escudo: equipos[id].escudo || '',
+                pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0
+            };
+        }
+    }
+
+    Object.values(partidos || {}).forEach(partido => {
+        if (!partido?.resultado_confirmado || !partido?.jornada) return;
+        const j = String(partido.jornada).toUpperCase();
+        if (j === 'CUARTOS' || j === 'SEMIFINAL' || j === 'FINAL' || j === 'LIGUILLA') return;
+        
+        const loc = partido.equipo_local;
+        const vis = partido.equipo_visitante;
+        if (!stats[loc] || !stats[vis]) return;
+        
+        const gl = parseInt(partido.goles_local || 0) || 0;
+        const gv = parseInt(partido.goles_visitante || 0) || 0;
+
+        stats[loc].pj++; stats[vis].pj++;
+        stats[loc].gf += gl; stats[loc].gc += gv;
+        stats[vis].gf += gv; stats[vis].gc += gl;
+        if (gl > gv) { stats[loc].pts += 3; stats[loc].g++; stats[vis].p++; }
+        else if (gv > gl) { stats[vis].pts += 3; stats[vis].g++; stats[loc].p++; }
+        else { stats[loc].pts++; stats[vis].pts++; stats[loc].e++; stats[vis].e++; }
+    });
+
+    const tabla = Object.values(stats).sort((a, b) => b.pts - a.pts || (b.gf - b.gc) - (a.gf - a.gc));
+
+    // Renderizar tabla
+    let html = '<div class="overflow-x-auto -mx-4 px-4"><table class="w-full text-xs min-w-[700px]"><thead class="bg-slate-800/80 text-slate-400 uppercase text-[10px]"><tr>';
+    html += '<th class="px-3 py-3 text-center">#</th><th class="px-3 py-3 text-left sticky left-0 bg-slate-800/80 z-10">Equipo</th>';
+    html += '<th class="px-3 py-3 text-center">PJ</th><th class="px-3 py-3 text-center">G</th>';
+    html += '<th class="px-3 py-3 text-center">E</th><th class="px-3 py-3 text-center">P</th>';
+    html += '<th class="px-3 py-3 text-center text-emerald-400 font-bold">PTS</th>';
+    html += '<th class="px-3 py-3 text-center">GF</th><th class="px-3 py-3 text-center">GC</th>';
+    html += '<th class="px-3 py-3 text-center">DG</th></tr></thead><tbody class="divide-y divide-slate-800/50">';
+    
+    tabla.forEach((t, i) => {
+        const dg = t.gf - t.gc;
+        html += `<tr class="hover:bg-blue-500/10 cursor-pointer" onclick="abrirInfoEquipo('${t.nombre.replace(/'/g, "\\'")}')">`;
+        html += `<td class="px-3 py-3 text-center font-bold ${i < 3 ? 'text-amber-400' : 'text-slate-500'}">${i + 1}</td>`;
+        html += `<td class="px-3 py-3 sticky left-0 bg-slate-900 z-10"><div class="flex items-center gap-2"><img src="${t.escudo || escudoDefault}" class="size-5 rounded"><span class="font-bold text-slate-200">${t.nombre}</span></div></td>`;
+        html += `<td class="px-3 py-3 text-center text-slate-400">${t.pj}</td><td class="px-3 py-3 text-center text-slate-400">${t.g}</td>`;
+        html += `<td class="px-3 py-3 text-center text-slate-400">${t.e}</td><td class="px-3 py-3 text-center text-slate-400">${t.p}</td>`;
+        html += `<td class="px-3 py-3 text-center font-bold text-emerald-400">${t.pts}</td>`;
+        html += `<td class="px-3 py-3 text-center text-slate-400">${t.gf}</td><td class="px-3 py-3 text-center text-slate-400">${t.gc}</td>`;
+        html += `<td class="px-3 py-3 text-center font-bold ${dg >= 0 ? 'text-emerald-400' : 'text-red-400'}">${dg > 0 ? '+' + dg : dg}</td></tr>`;
+    });
+    
+    html += '</tbody></table></div><div class="p-3 text-center text-slate-500 text-[10px]">Toca un equipo para ver detalles</div>';
+    contenedor.innerHTML = html;
 }
 
 // === CARGAR PORTEROS (GUANTE DE ORO) ===

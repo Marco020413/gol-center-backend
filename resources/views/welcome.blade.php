@@ -87,32 +87,32 @@
                 <div id="contenedorListaPartidos"></div>
             </div>
 
-            <div id="content-posiciones" class="tab-pane hidden">
+<div id="content-posiciones" class="tab-pane hidden">
                 <div class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-                    <div class="flex justify-end p-4 border-b border-slate-800">
-                        <button onclick="window.descargarBackupPDF()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition">
+                    <div class="flex justify-end p-2 md:p-4 border-b border-slate-800">
+                        <button onclick="window.descargarBackupPDF()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-2 transition">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                             📥 Backup PDF
                         </button>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
+                    <div class="overflow-x-auto -mx-4 px-4">
+                        <table class="w-full text-left border-collapse min-w-[550px]">
                             <thead>
                                 <tr class="bg-slate-950/50 text-[10px] text-slate-500 uppercase tracking-widest border-b border-slate-800">
-                                    <th class="px-4 py-4 text-center w-12">#</th>
-                                    <th class="px-4 py-4">Club</th>
-                                    <th class="px-2 py-4 text-center">PJ</th>
-                                    <th class="px-2 py-4 text-center hidden md:table-cell">G</th>
-                                    <th class="px-2 py-4 text-center hidden md:table-cell">E</th>
-                                    <th class="px-2 py-4 text-center hidden md:table-cell">P</th>
-                                    <th class="px-3 py-4 text-center font-black text-white">Pts</th>
-                                    <th class="px-2 py-4 text-center">GF</th>
-                                    <th class="px-2 py-4 text-center">GC</th>
-                                    <th class="px-2 py-4 text-center">DG</th>
+                                    <th class="px-1 py-3 text-center w-[32px] sticky left-0 bg-slate-950 z-20 border-r border-slate-800">#</th>
+                                    <th class="px-1 py-3 sticky left-[32px] bg-slate-950 z-10 w-[80px] shadow-[2px_0_5px_rgba(0,0,0,0.3)]">Club</th>
+                                    <th class="px-1 py-3 text-center w-[32px]">PJ</th>
+                                    <th class="px-1 py-3 text-center w-[28px]">G</th>
+                                    <th class="px-1 py-3 text-center w-[28px]">E</th>
+                                    <th class="px-1 py-3 text-center w-[28px]">P</th>
+                                    <th class="px-1 py-3 text-center w-[36px] font-black text-white">Pts</th>
+                                    <th class="px-1 py-3 text-center w-[28px]">GF</th>
+                                    <th class="px-1 py-3 text-center w-[28px]">GC</th>
+                                    <th class="px-1 py-3 text-center w-[28px]">DG</th>
                                 </tr>
                             </thead>
                             <tbody id="tablaCuerpoPosiciones" class="divide-y divide-slate-800/50">
-                                <tr><td colspan="9" class="p-8 text-center text-slate-500 animate-pulse">Cargando posiciones...</td></tr>
+                                <tr><td colspan="10" class="p-4 text-center text-slate-500 animate-pulse text-xs">Cargando posiciones...</td></tr>
                             </tbody>
                         </table>
                     </div>

@@ -2182,100 +2182,85 @@ async function llenarSelectsEquipos() {
     };
 
     // Tabla de Posiciones - Fase Regular
-    window.cargarTablaPosiciones = function() {
+    window.cargarTablaPosiciones = async function() {
         const cuerpo = document.getElementById('tablaCuerpoPosiciones');
         if(!cuerpo) return;
 
-        // Usar cache local para evitar recálculos innecesarios
-        if (window.cacheTablaPosiciones && window.datosTablaPosiciones) {
-            cuerpo.innerHTML = window.cacheTablaPosiciones;
+        cuerpo.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-slate-500 animate-pulse text-xs">Cargando...</td></tr>';
+
+        // Usar datos cacheados o cargar
+        let equipos = window.cacheEquiposData;
+        let partidos = window.cachePartidosData;
+
+        if (!equipos || Object.keys(equipos).length === 0) {
+            const res = await fetch('/api/equipos');
+            equipos = await res.json();
+            window.cacheEquiposData = equipos;
+        }
+        if (!partidos || Object.keys(partidos).length === 0) {
+            const res = await fetch('/api/partidos');
+            partidos = await res.json();
+            window.cachePartidosData = partidos;
+        }
+
+        if (!equipos || Object.keys(equipos).length === 0) {
+            cuerpo.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-slate-500 text-xs">No hay equipos</td></tr>';
             return;
         }
 
-        try {
-            const equipos = window.cacheEquiposData || {};
-            const partidos = window.cachePartidosData || {};
-
-            let stats = {};
-            for (const id in equipos) {
-                stats[equipos[id].nombre] = {
-                    nombre: equipos[id].nombre,
-                    escudo: equipos[id].escudo,
-                    pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0
-                };
+        let stats = {};
+        for (const id in equipos) {
+            if (equipos[id]?.nombre) {
+                stats[equipos[id].nombre] = { nombre: equipos[id].nombre, escudo: equipos[id].escudo || '', pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0 };
             }
+        }
 
-            Object.values(partidos).forEach(partido => {
-                const esFaseRegular = !isNaN(partido.jornada);
-                if (partido.resultado_confirmado && esFaseRegular) {
-                    const loc = partido.equipo_local;
-                    const vis = partido.equipo_visitante;
-                    const gl = parseInt(partido.goles_local || 0);
-                    const gv = parseInt(partido.goles_visitante || 0);
-
-                    if (stats[loc] && stats[vis]) {
-                        stats[loc].pj++; stats[vis].pj++;
-                        stats[loc].gf += gl; stats[loc].gc += gv;
-                        stats[vis].gf += gv; stats[vis].gc += gl;
-
-                        if (gl > gv) {
-                            stats[loc].g++; stats[loc].pts += 3;
-                            stats[vis].p++;
-                        } else if (gl < gv) {
-                            stats[vis].g++; stats[vis].pts += 3;
-                            stats[loc].p++;
-                        } else {
-                            stats[loc].e++; stats[vis].e++;
-                            stats[loc].pts += 1; stats[vis].pts += 1;
-                        }
-                    }
-                }
-            });
-
-            const tablaOrdenada = Object.values(stats).sort((a, b) => {
-                if (b.pts !== a.pts) return b.pts - a.pts;
-                const difA = a.gf - a.gc;
-                const difB = b.gf - b.gc;
-                if (difB !== difA) return difB - difA;
-                return b.gf - a.gf;
-            });
-
-            const fragment = document.createDocumentFragment();
-            tablaOrdenada.forEach((team, index) => {
-                const difG = team.gf - team.gc;
-                const tr = document.createElement('tr');
-                tr.className = 'hover:bg-blue-500/5 transition-colors border-b border-slate-800/50';
-                tr.innerHTML = `
-                    <td class="px-4 py-4 text-center text-slate-500 font-bold text-xs">${index + 1}</td>
-                    <td class="px-4 py-4">
-                        <div class="flex items-center gap-3">
-                            <img src="${team.escudo || 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png'}" class="size-6 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/5323/5323982.png'">
-                            <span class="text-white font-bold text-xs uppercase tracking-tight">${team.nombre}</span>
-                        </div>
-                    </td>
-                    <td class="px-2 py-4 text-center text-slate-300 text-xs">${team.pj}</td>
-                    <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">${team.g}</td>
-                    <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">${team.e}</td>
-                    <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">${team.p}</td>
-                    <td class="px-2 py-4 text-center text-emerald-400 font-bold text-xs">${team.pts}</td>
-                    <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">${team.gf}</td>
-                    <td class="px-2 py-4 text-center text-slate-300 text-xs hidden md:table-cell">${team.gc}</td>
-                    <td class="px-2 py-4 text-center ${difG >= 0 ? 'text-emerald-400' : 'text-red-400'} font-bold text-xs">${difG > 0 ? '+' + difG : difG}</td>
-                `;
-                fragment.appendChild(tr);
-            });
-
-            cuerpo.innerHTML = '';
-            cuerpo.appendChild(fragment);
-            window.cacheTablaPosiciones = cuerpo.innerHTML;
+        Object.values(partidos || {}).forEach(partido => {
+            if (!partido?.jornada || !partido?.equipo_local || !partido?.equipo_visitante) return;
+            const jornadaNum = parseInt(partido.jornada);
+            if (isNaN(jornadaNum) || jornadaNum <= 0) return;
+            if (!partido.resultado_confirmado) return;
             
-            // Guardar datos para backup
-            window.datosTablaPosiciones = tablaOrdenada;
-        } catch (e) { console.error("Error tabla posiciones:", e); }
+            const loc = partido.equipo_local;
+            const vis = partido.equipo_visitante;
+            if (!stats[loc] || !stats[vis]) return;
+            
+            const gl = parseInt(partido.goles_local || 0) || 0;
+            const gv = parseInt(partido.goles_visitante || 0) || 0;
+
+            stats[loc].pj++; stats[vis].pj++;
+            stats[loc].gf += gl; stats[loc].gc += gv;
+            stats[vis].gf += gv; stats[vis].gc += gl;
+
+            if (gl > gv) { stats[loc].g++; stats[loc].pts += 3; stats[vis].p++; }
+            else if (gl < gv) { stats[vis].g++; stats[vis].pts += 3; stats[loc].p++; }
+            else { stats[loc].e++; stats[vis].e++; stats[loc].pts++; stats[vis].pts++; }
+        });
+
+        const tablaOrdenada = Object.values(stats).sort((a, b) => b.pts - a.pts || (b.gf - b.gc) - (a.gf - a.gc));
+
+        const escudoDefault = 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png';
+        let html = '';
+        tablaOrdenada.forEach((t, i) => {
+            const dg = t.gf - t.gc;
+            html += `<tr class="hover:bg-blue-500/10 border-b border-slate-800/50">
+                <td class="px-1 py-2 text-center font-bold ${i < 3 ? 'text-amber-400' : 'text-slate-500'} text-xs sticky left-0 bg-slate-900 z-20 w-[32px] border-r border-slate-800">${i + 1}</td>
+                <td class="px-1 py-2 sticky left-[32px] bg-slate-900 z-10 w-[80px] shadow-[2px_0_5px_rgba(0,0,0,0.3)]"><div class="flex items-center gap-1"><img src="${t.escudo || escudoDefault}" class="w-4 h-4 rounded object-contain" onerror="this.src='${escudoDefault}'"><span class="text-white font-bold text-xs truncate">${t.nombre}</span></div></td>
+                <td class="px-1 py-2 text-center text-slate-400 text-xs w-[32px]">${t.pj}</td>
+                <td class="px-1 py-2 text-center text-slate-400 text-xs w-[28px]">${t.g}</td>
+                <td class="px-1 py-2 text-center text-slate-400 text-xs w-[28px]">${t.e}</td>
+                <td class="px-1 py-2 text-center text-slate-400 text-xs w-[28px]">${t.p}</td>
+                <td class="px-1 py-2 text-center font-bold text-emerald-400 text-xs w-[36px]">${t.pts}</td>
+                <td class="px-1 py-2 text-center text-slate-400 text-xs w-[28px]">${t.gf}</td>
+                <td class="px-1 py-2 text-center text-slate-400 text-xs w-[28px]">${t.gc}</td>
+                <td class="px-1 py-2 text-center font-bold ${dg >= 0 ? 'text-emerald-400' : 'text-red-400'} text-xs w-[28px]">${dg > 0 ? '+' + dg : dg}</td>
+            </tr>`;
+        });
+
+        cuerpo.innerHTML = html;
     };
 
-   
-   window.ejecutarGuardadoCancha = async function(id, data, nuevaSedeId = null) {
+    window.ejecutarGuardadoCancha = async function(id, data, nuevaSedeId = null) {
         if(nuevaSedeId) data.nueva_sede_id = nuevaSedeId;
 
         // Si hay un ID, es actualización (PUT), si no, es registro (POST)
