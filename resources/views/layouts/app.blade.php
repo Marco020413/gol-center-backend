@@ -75,10 +75,27 @@
     <script>
     // Pantalla de carga al inicio (admin)
     window.mostrarCarga('Cargando Panel de Administración...');
+    window.cargaInicialCompletada = false;
 
-    // Ocultar cuando la página esté completamente cargada
+    // Ocultar cuando la página esté completamente cargada Y la pestaña activa esté lista
     window.addEventListener('load', function() {
-        setTimeout(() => window.ocultarCarga(), 500);
+        // Determinar cuántas operaciones deben completar antes de quitar el loader
+        let operacionesPendientes = 1; // load event
+        
+        // Callback cuando una operación termina
+        window.operationComplete = function() {
+            operacionesPendientes--;
+            if (operacionesPendientes <= 0) {
+                window.ocultarCarga();
+                window.cargaInicialCompletada = true;
+            }
+        };
+        
+        // Timeout de seguridad - quitar loader después de 3 segundos máximo
+        setTimeout(() => {
+            window.ocultarCarga();
+            window.cargaInicialCompletada = true;
+        }, 3000);
     });
     </script>
     <header class="w-full bg-slate-900/80 border-b border-slate-800 backdrop-blur-md sticky top-0 z-50">
@@ -261,6 +278,9 @@ fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d)
         // Cambiar a la última pestaña usada
         lastTab = localStorage.getItem('pestanaActiva') || 'jugadores';
         window.changeTab(lastTab);
+        
+        // Indicar que la carga inicial completó
+        if (window.operationComplete) window.operationComplete();
 
         // 4. SANEADOR DE JUGADORES Y FILTRADO INICIAL
         const sanearYFiltrarTabla = async () => {
@@ -1829,6 +1849,7 @@ window.verMasJugadores = function() {
     };
 
     // Intersection Observer deshabilitado - solo botones manuales
+    function inicializarObserverPartidos() { /* deshabilitado */ }
 
     // Funciones de control global
     window.cargarMasPartidos = function() {
@@ -2007,7 +2028,7 @@ async function llenarSelectsEquipos() {
     
     window.verDetallePartido = async function(id) {
         try {
-            const p = window.cachePartidosLista.find(item => item.id === id);
+            const p = window.cachePartidosLista.find(item => String(item.id) === String(id));
             if(!p) return;
 
             const modal = document.getElementById('modalDetallePartido');
@@ -2698,7 +2719,44 @@ async function llenarSelectsEquipos() {
         
         if(modal) modal.classList.remove('hidden');
         if(modal) modal.classList.add('flex');
+        
+        // Cargar lista de equipos con requisitos
+        cargarListaEquiposTorneo();
     };
+
+    async function cargarListaEquiposTorneo() {
+        const contenedor = document.getElementById('listaEquiposTorneo');
+        if(!contenedor) return;
+        
+        try {
+            const [resE, resJ] = await Promise.all([
+                fetch('/api/equipos'),
+                fetch('/api/jugadores')
+            ]);
+            const equiposData = await resE.json();
+            const jugadoresData = await resJ.json();
+            
+            let html = '';
+            for (const [id, eq] of Object.entries(equiposData)) {
+                const jugadoresEq = Object.values(jugadoresData).filter(j => j.equipo === eq.nombre);
+                const tiene11 = jugadoresEq.length >= 11;
+                const tienePortero = eq.portero_id && eq.portero_id !== '';
+                const esValido = tiene11 && tienePortero;
+                
+                const clase = esValido ? 'text-emerald-400' : 'text-red-400';
+                const icono = esValido ? '✅' : '⚠️';
+                const info = !tiene11 ? `${jugadoresEq.length}/11 jug` : (!tienePortero ? 'sin portero' : 'ok');
+                
+                html += `<div class="flex items-center justify-between py-1 px-2 rounded ${esValido ? '' : 'bg-red-500/10'}">
+                    <span class="text-white text-xs">${eq.nombre}</span>
+                    <span class="${clase} text-[10px]">${icono} ${info}</span>
+                </div>`;
+            }
+            contenedor.innerHTML = html || '<p class="text-slate-500 text-xs text-center py-2">No hay equipos</p>';
+        } catch(e) {
+            contenedor.innerHTML = '<p class="text-red-500 text-xs text-center py-2">Error al cargar</p>';
+        }
+    }
 
     window.cerrarModalGenerarTorneo = function() {
         const modal = document.getElementById('modalGenerarTorneo');
@@ -2724,10 +2782,54 @@ async function llenarSelectsEquipos() {
         window.cerrarModalGenerarTorneo();
         
         try {
-            const resE = await fetch('/api/equipos');
+            // Cargar equipos y jugadores
+            const [resE, resJ] = await Promise.all([
+                fetch('/api/equipos'),
+                fetch('/api/jugadores')
+            ]);
             const equiposData = await resE.json();
-            let equipos = Object.values(equiposData).map(e => e.nombre);
-
+            const jugadoresData = await resJ.json();
+            
+            // Validar requisitos de cada equipo
+            const equiposInvalidos = [];
+            const equiposValidos = [];
+            
+            for (const [id, eq] of Object.entries(equiposData)) {
+                // Contar jugadores del equipo
+                const jugadoresEq = Object.values(jugadoresData).filter(j => j.equipo === eq.nombre);
+                const tiene11 = jugadoresEq.length >= 11;
+                const tienePortero = eq.portero_id && eq.portero_id !== '';
+                
+                if (!tiene11 || !tienePortero) {
+                    let problemas = [];
+                    if (!tiene11) problemas.push(`${11 - jugadoresEq.length} jugadores`);
+                    if (!tienePortero) problemas.push('sin portero');
+                    equiposInvalidos.push({ nombre: eq.nombre, problemas: problemas.join(', ') });
+                } else {
+                    equiposValidos.push(eq.nombre);
+                }
+            }
+            
+            // Si hay equipos inválidos, mostrar opciones
+            if (equiposInvalidos.length > 0) {
+                const listaInv = equiposInvalidos.map(e => `• ${e.nombre} (${e.problemas})`).join('\n');
+                const opcion = confirm(`⚠️ ${equiposInvalidos.length} equipo(s) no cumplen requisitos:\n${listaInv}\n\n¿Generar solo con los ${equiposValidos.length} equipos válidos?\n\nAceptar = SÍ (excluir inválidos)\nCancelar = NO (cancelar)`);
+                
+                if (!opcion) {
+                    return alert("❌ Generación cancelada. Completa los equipos antes de generar.");
+                }
+                
+                if (equiposValidos.length < 2) {
+                    return alert("❌ No hay suficientes equipos válidos (mínimo 2).");
+                }
+                
+                // Confirmar que quieres continuar sin los inválidos
+                alert(`✅ Se generará el torneo con ${equiposValidos.length} equipos.\nLos equipos incompletos fueron excluidos.`);
+            }
+            
+            let equipos = equiposValidos;
+            
+            // Resto de la lógica original
             if (equipos.length < 2) return alert("❌ Mínimo 2 equipos para sortear.");
             
             equipos.sort(() => Math.random() - 0.5);
@@ -2768,6 +2870,8 @@ async function llenarSelectsEquipos() {
             if(res.ok) {
                 alert("🏆 ¡Torneo generado con éxito!");
                 window.pintarFixtureVisual(partidosPaquete);
+                // Forzar recarga de partidos antes de cargar
+                window.cachePartidosLista = null;
                 if(window.cargarPartidosCards) window.cargarPartidosCards();
             } else {
                 const err = await res.json();
@@ -2846,8 +2950,13 @@ async function llenarSelectsEquipos() {
                 window.cachePartidosLista = Object.keys(partidosData).map(id => ({ id, ...partidosData[id] }));
             }
 
-            const p = window.cachePartidosLista.find(item => item.id === partidoId);
-            if (!p) return alert("No se encontraron los datos del partido.");
+            const p = window.cachePartidosLista.find(item => String(item.id) === String(partidoId));
+            if (!p) {
+                // Reintentar cargando directamente
+                const resP = await fetch('/api/partidos/' + partidoId);
+                if (!resP.ok) return alert("No se encontraron los datos del partido.");
+                p = await resP.json();
+            }
 
             // 3. CARGA DE CATÁLOGOS (SELECTS)
             await Promise.all([window.llenarSelectsEquipos(), window.llenarSelectsCampos()]);

@@ -591,12 +591,12 @@
 
 <!-- Modal Generar Torneo -->
 <div id="modalGenerarTorneo" class="fixed inset-0 bg-slate-950/90 backdrop-blur-sm hidden items-center justify-center z-[250] p-4">
-    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
         <div class="p-6 border-b border-slate-800">
             <h2 class="text-xl font-black text-white uppercase">🎲 Generar Copa</h2>
             <p class="text-slate-500 text-xs mt-1">Configura los parámetros del torneo</p>
         </div>
-        <div class="p-6 space-y-4">
+        <div class="p-6 space-y-4 overflow-y-auto flex-1">
             <div>
                 <label class="text-slate-400 text-xs font-bold uppercase block mb-2">Día de la semana</label>
                 <select id="diaTorneo" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-sm">
@@ -614,6 +614,14 @@
                 <input type="date" id="fechaInicioTorneo" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-sm">
             </div>
             <p id="mensajeValidacionFecha" class="text-amber-500 text-xs hidden">⚠️ La fecha debe ser un miércoles</p>
+            
+            <div class="border-t border-slate-700 pt-4">
+                <label class="text-slate-400 text-xs font-bold uppercase block mb-2">Equipos participantes</label>
+                <div id="listaEquiposTorneo" class="space-y-1 max-h-40 overflow-y-auto bg-slate-800/50 rounded-lg p-2">
+                    <p class="text-slate-500 text-xs text-center py-2">Cargando equipos...</p>
+                </div>
+                <p class="text-slate-500 text-[10px] mt-2">⚠️ Equipos en rojo no cumplen requisitos (mínimo 11 jugadores + portero)</p>
+            </div>
         </div>
         <div class="p-6 border-t border-slate-800 flex gap-3">
             <button onclick="window.cerrarModalGenerarTorneo()" class="flex-1 bg-slate-800 text-white py-3 rounded-lg font-bold text-sm">Cancelar</button>
