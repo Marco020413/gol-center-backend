@@ -65,23 +65,42 @@
 
             <div id="content-partidos" class="tab-pane hidden space-y-4">
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                     <div class="relative">
-                        <input type="text" id="filtroEquipoPartido" onkeyup="aplicarFiltrosPartidos()" placeholder="Filtrar por equipo..." class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-xs text-white outline-none focus:border-blue-500">
+                        <input type="text" id="filtroEquipoPartido" onkeyup="aplicarFiltrosPartidos()" placeholder="🔍 Equipo..." class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500">
                     </div>
                     
-                    <select id="filtroEstatusPartido" onchange="aplicarFiltrosPartidos()" class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-xs text-white outline-none focus:border-blue-500">
-                        <option value="todos">Todos</option>
-                        <option value="programado">Próximos Partidos</option>
-                        <option value="en_curso">En Vivo 🟢</option>
-                        <option value="finalizado">Por Subir Acta ⚠️</option>
-                        <option value="confirmado">Actas Cerradas 🔒</option>
+                    <select id="filtroJornadaPartido" onchange="aplicarFiltrosPartidos()" class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500">
+                        <option value="">Todas las jornadas</option>
+                        <option value="1">Jornada 1</option>
+                        <option value="2">Jornada 2</option>
+                        <option value="3">Jornada 3</option>
+                        <option value="4">Jornada 4</option>
+                        <option value="5">Jornada 5</option>
+                        <option value="6">Jornada 6</option>
+                        <option value="7">Jornada 7</option>
+                        <option value="8">Jornada 8</option>
+                        <option value="9">Jornada 9</option>
+                        <option value="10">Jornada 10</option>
                     </select>
 
-                    <select id="ordenarPartidos" onchange="aplicarFiltrosPartidos()" class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-xs text-white outline-none focus:border-blue-500">
-                        <option value="recientes">Más Recientes primero</option>
-                        <option value="antiguos">Más Antiguos primero</option>
+                    <select id="filtroEstatusPartido" onchange="aplicarFiltrosPartidos()" class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500">
+                        <option value="todos">Todos los estados</option>
+                        <option value="programado">Próximos</option>
+                        <option value="en_curso">En Vivo</option>
+                        <option value="finalizado">Por Subir Acta</option>
+                        <option value="confirmado">Cerrados</option>
+                        <option value="sin_fecha">Sin Fecha</option>
                     </select>
+                    
+                    <div class="flex gap-2">
+                        <select id="ordenarPartidos" onchange="aplicarFiltrosPartidos()" class="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500">
+                            <option value="proximos">Más próximos</option>
+                            <option value="antiguos">Más antiguos</option>
+                            <option value="jornada">Por jornada</option>
+                        </select>
+                        <button onclick="limpiarFiltrosPartidos()" class="bg-slate-800 hover:bg-red-600/50 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-400 hover:text-white transition" title="Limpiar filtros">✕</button>
+                    </div>
                 </div>
 
                 <div id="contenedorListaPartidos">

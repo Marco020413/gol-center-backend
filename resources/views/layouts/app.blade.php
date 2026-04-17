@@ -156,7 +156,7 @@
         if (necesitaCarga) {
             switch(tabName) {
                 case 'partidos': 
-                    window.limitePartidos = 5;
+window.limitePartidos = 20;
                     if(typeof cargarPartidosCards === 'function') cargarPartidosCards(); 
                     break;
 case 'posiciones': 
@@ -208,7 +208,7 @@ case 'posiciones':
     let editCampoId = null;
     let verificandoLiguilla = false;
     let equiposCargados = false; 
-    let limitePartidos = 5;
+    let limitePartidos = 20;
     let cacheEquiposData = null;
     let cacheCamposData = null;
     let limiteJugadores = 15;
@@ -1695,32 +1695,71 @@ window.verMasJugadores = function() {
         }
     }
 
+    window.limpiarFiltrosPartidos = function() {
+        document.getElementById('filtroEquipoPartido').value = '';
+        document.getElementById('filtroJornadaPartido').value = '';
+        document.getElementById('filtroEstatusPartido').value = 'todos';
+        document.getElementById('ordenarPartidos').value = 'proximos';
+        window.aplicarFiltrosPartidos();
+    };
+
     window.aplicarFiltrosPartidos = function() {
         const contenedor = document.getElementById('contenedorListaPartidos');
         if (!contenedor || !window.cachePartidosLista) return;
 
-        const busqueda = document.getElementById('filtroEquipoPartido').value.toLowerCase().trim();
-        const estatusFiltro = document.getElementById('filtroEstatusPartido').value;
-        const orden = document.getElementById('ordenarPartidos').value;
+        const busqueda = document.getElementById('filtroEquipoPartido')?.value?.toLowerCase().trim() || '';
+        const jornadaFiltro = document.getElementById('filtroJornadaPartido')?.value || '';
+        const estatusFiltro = document.getElementById('filtroEstatusPartido')?.value || 'todos';
+        const orden = document.getElementById('ordenarPartidos')?.value || 'proximos';
 
         // 1. FILTRAR
         let filtrados = window.cachePartidosLista.filter(p => {
             const local = (p.equipo_local || "Equipo").toLowerCase();
             const visitante = (p.equipo_visitante || "Equipo").toLowerCase();
-            const nombreMatch = local.includes(busqueda) || visitante.includes(busqueda);
-            const estatusMatch = (estatusFiltro === 'todos') ? true : (p.estatus === estatusFiltro);
-            return nombreMatch && estatusMatch;
+            const nombreMatch = !busqueda || local.includes(busqueda) || visitante.includes(busqueda);
+            
+            let estatusMatch = true;
+            const tieneFecha = p.fecha && p.fecha !== 'PENDIENTE';
+            const estaConfirmado = p.resultado_confirmado === true || p.estatus === 'confirmado';
+            
+            if (estatusFiltro === 'todos') {
+                estatusMatch = true;
+            } else if (estatusFiltro === 'sin_fecha') {
+                estatusMatch = !tieneFecha;
+            } else if (estatusFiltro === 'programado') {
+                estatusMatch = tieneFecha && !estaConfirmado;
+            } else if (estatusFiltro === 'confirmado') {
+                estatusMatch = estaConfirmado;
+            } else if (estatusFiltro === 'finalizado') {
+                estatusMatch = p.estatus === 'finalizado';
+            } else if (estatusFiltro === 'en_curso') {
+                estatusMatch = p.estatus === 'en_curso';
+            } else {
+                estatusMatch = p.estatus === estatusFiltro;
+            }
+            
+            let jornadaMatch = true;
+            if (jornadaFiltro) {
+                jornadaMatch = String(p.jornada) === jornadaFiltro || parseInt(p.jornada) === parseInt(jornadaFiltro);
+            }
+            
+            return nombreMatch && estatusMatch && jornadaMatch;
         });
 
-        // 2. ORDENAR (Programados arriba, Pendientes abajo)
+        // 2. ORDENAR
         filtrados.sort((a, b) => {
+            if (orden === 'jornada') {
+                const jA = parseInt(a.jornada) || 999;
+                const jB = parseInt(b.jornada) || 999;
+                return jA - jB;
+            }
             const tieneFechaA = a.fecha && a.fecha !== 'PENDIENTE';
             const tieneFechaB = b.fecha && b.fecha !== 'PENDIENTE';
             if (tieneFechaA && !tieneFechaB) return -1;
             if (!tieneFechaA && tieneFechaB) return 1;
             const timeA = new Date(`${a.fecha}T${a.hora || '00:00'}`).getTime();
             const timeB = new Date(`${b.fecha}T${b.hora || '00:00'}`).getTime();
-            return orden === 'recientes' ? timeB - timeA : timeA - timeB;
+            return orden === 'antiguos' ? timeA - timeB : timeB - timeA;
         });
 
         // 3. PAGINACIÓN
