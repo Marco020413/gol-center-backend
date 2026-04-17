@@ -114,6 +114,8 @@
     // ═══════════════════════════════════════════════════════════════════════════════
     // SECCIÓN 1: UTILIDADES (Helpers)
     // ═══════════════════════════════════════════════════════════════════════════════
+    let ultimaCarga = {};
+    
     // ChangeTab: Disponible inmediatamente para los botones del HTML
     window.changeTab = function(tabName) {
         localStorage.setItem('pestanaActiva', tabName);
@@ -130,7 +132,7 @@
             btnActivo.classList.add('text-blue-500', 'border-b-2', 'border-blue-500');
         }
         
-        // CARGAR DATOS SEGÚN PESTAÑA
+        // CARGAR DATOS SEGÚN PESTAÑA - Siempre cargar si es la primera vez o pasaron 10s
         const ahora = Date.now();
         const necesitaCarga = !ultimaCarga[tabName] || (ahora - ultimaCarga[tabName] > 10000);
         
@@ -141,13 +143,13 @@
                     if(typeof cargarPartidosCards === 'function') cargarPartidosCards(); 
                     break;
                 case 'posiciones': 
-                    if(window.cargarTablaPosiciones) window.cargarTablaPosiciones(); 
+                    if(typeof window.cargarTablaPosiciones === 'function') window.cargarTablaPosiciones(); 
                     break;
                 case 'equipos_gest': 
                     if(typeof cargarGestionEquipos === 'function') cargarGestionEquipos(); 
                     break;
                 case 'roles': 
-                    if(typeof recuperarFixtureGuardado === 'function') recuperarFixtureGuardado(); 
+                    if(typeof window.recuperarFixtureGuardado === 'function') window.recuperarFixtureGuardado(); 
                     break;
                 case 'campos':
                     if(typeof cargarCamposCards === 'function') cargarCamposCards();
@@ -184,13 +186,13 @@
     let cachePartidosLista = []; 
     let editCampoId = null;
     let verificandoLiguilla = false;
-    let ultimaCarga = {};
     let equiposCargados = false; 
     let limitePartidos = 5;
     let cacheEquiposData = null;
     let cacheCamposData = null;
     let limiteJugadores = 15;
     let cacheHistorialCompleto = null;
+    let lastTab = 'jugadores';
 
     // ═══════════════════════════════════════════════════════════════════════════════
     // SECCIÓN 3: INICIALIZACIÓN (DOMContentLoaded)
@@ -237,12 +239,14 @@
             sessionStorage.setItem('liguillaVerificada', 'true');
         }
 
-        // 3. PERSISTENCIA DE PESTAÑA (DESPUÉS DE CARGAR DATOS)
+// 3. PERSISTENCIA DE PESTAÑA (DESPUÉS DE CARGAR DATOS)
         // Ahora los datos ya están disponibles para cualquier pestaña
-        const lastTab = localStorage.getItem('pestanaActiva') || 'jugadores';
-        if (typeof window.changeTab === 'function') {
-            window.changeTab(lastTab);
-        }
+        lastTab = localStorage.getItem('pestanaActiva') || 'jugadores';
+        setTimeout(() => {
+            if (typeof window.changeTab === 'function') {
+                window.changeTab(lastTab);
+            }
+        }, 100);
 
         // 4. SANEADOR DE JUGADORES Y FILTRADO INICIAL
         const sanearYFiltrarTabla = async () => {
