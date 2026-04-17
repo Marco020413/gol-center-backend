@@ -1241,41 +1241,231 @@ function cargarPartidos(partidos) {
     if (!contenedor) return;
 
     const allPartidos = Object.values(partidos || {});
-    const upcoming = allPartidos
-        .filter(p => !p.resultado_confirmado && p.fecha && p.fecha !== 'PENDIENTE')
-        .sort((a, b) => {
-            const fechaA = new Date(a.fecha + ' ' + (a.hora || '00:00'));
-            const fechaB = new Date(b.fecha + ' ' + (b.hora || '00:00'));
-            return fechaA - fechaB;
-        })
-        .slice(0, 5);
+    
+    allPartidos.sort((a, b) => {
+        const fechaA = new Date((a.fecha || '9999-99-99') + ' ' + (a.hora || '00:00'));
+        const fechaB = new Date((b.fecha || '9999-99-99') + ' ' + (b.hora || '00:00'));
+        return fechaA - fechaB;
+    });
 
-    if (upcoming.length === 0) {
+    if (allPartidos.length === 0) {
         contenedor.innerHTML = '<p class="sin-datos">No hay partidos programados.</p>';
         return;
     }
 
-       contenedor.innerHTML = upcoming.map(p => `
-            <div class="glass-card p-5 rounded-2xl group hover:border-blue-500/50 transition-all duration-300">
-                <div class="flex justify-between items-center mb-4">
-                    <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-1 bg-slate-800 rounded text-slate-400">
-                        Jornada ${p.jornada || '-'}
-                    </span>
-                    <span class="text-[10px] font-bold text-blue-400 uppercase">
-                        ${p.fecha_formateada || p.fecha}
-                    </span>
-                </div>
-                <div class="flex items-center justify-between gap-4">
-                    <div class="flex-1 text-center">
-                        <div class="text-sm font-bold text-white truncate">${p.equipo_local}</div>
-                    </div>
-                    <div class="px-3 py-1 bg-slate-800 rounded-lg text-[10px] font-black text-slate-500">VS</div>
-                    <div class="flex-1 text-center">
-                        <div class="text-sm font-bold text-white truncate">${p.equipo_visitante}</div>
-                    </div>
-                </div>
+    const jornadaMap = {};
+    allPartidos.forEach(p => {
+        if (p.jornada && String(p.jornada).trim() !== '') {
+            const jornada = String(p.jornada).trim();
+            if (!jornadaMap[jornada]) jornadaMap[jornada] = [];
+            jornadaMap[jornada].push(p);
+        }
+    });
+    
+    const jornadas = {};
+    
+    allPartidos.forEach(p => {
+        const jVal = p.jornada ? String(p.jornada).trim() : '';
+        let jornadaAsignada = jVal;
+        
+        if (jornadaAsignada === '' && p.fecha) {
+            const fechaPartido = String(p.fecha).trim();
+            for (const [j, partidos] of Object.entries(jornadaMap)) {
+                const tieneMismaFecha = partidos.some(f => f.fecha === fechaPartido);
+                if (tieneMismaFecha) {
+                    jornadaAsignada = j;
+                    break;
+                }
+            }
+        }
+        
+        if (jornadaAsignada === '') {
+            const eqLocal = p.equipo_local?.trim() || '';
+            const eqVis = p.equipo_visitante?.trim() || '';
+            for (const [j, partidos] of Object.entries(jornadaMap)) {
+                const tieneMismoEquipo = partidos.some(f => 
+                    f.equipo_local === eqLocal || 
+                    f.equipo_visitante === eqVis ||
+                    f.equipo_local === eqVis ||
+                    f.equipo_visitante === eqLocal
+                );
+                if (tieneMismoEquipo) {
+                    jornadaAsignada = j;
+                    break;
+                }
+            }
+        }
+        
+        if (jornadaAsignada !== '') {
+            if (!jornadas[jornadaAsignada]) jornadas[jornadaAsignada] = [];
+            jornadas[jornadaAsignada].push(p);
+        } else {
+            const fechaKey = p.fecha ? String(p.fecha).trim() : 'sin_fecha';
+            if (!jornadas[fechaKey]) jornadas[fechaKey] = [];
+            jornadas[fechaKey].push(p);
+        }
+    });
+
+    const jornadasOrdenadas = Object.keys(jornadas).sort((a, b) => {
+        const aNum = parseInt(a);
+        const bNum = parseInt(b);
+        if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+        const aIsDate = !isNaN(Date.parse(a));
+        const bIsDate = !isNaN(Date.parse(b));
+        if (aIsDate && bIsDate) {
+            return new Date(a) - new Date(b);
+        }
+        if (aIsDate) return 1;
+        if (bIsDate) return -1;
+        return a.localeCompare(b);
+    });
+
+    const upcoming = allPartidos.filter(p => !p.resultado_confirmado && p.fecha && p.fecha !== 'PENDIENTE' && p.hora && p.hora !== '00:00');
+    const pendingScheduled = allPartidos.filter(p => !p.resultado_confirmado && p.fecha && p.fecha !== 'PENDIENTE' && (!p.hora || p.hora === '00:00'));
+    
+    if (upcoming.length === 0 && pendingScheduled.length > 0) {
+        upcoming.push(...pendingScheduled);
+    }
+    upcoming.sort((a, b) => {
+        const fechaA = new Date((a.fecha || '9999-99-99') + ' ' + (a.hora || '00:00'));
+        const fechaB = new Date((b.fecha || '9999-99-99') + ' ' + (b.hora || '00:00'));
+        return fechaA - fechaB;
+    });
+    const nextMatch = upcoming.length > 0 ? upcoming[0] : null;
+
+    let summaryHTML = '';
+    if (nextMatch) {
+        summaryHTML = `
+        <div class="mb-4 p-3 bg-gradient-to-r from-blue-600/20 to-purple-600/10 rounded-lg border border-blue-500/30">
+            <div class="flex items-center justify-between">
+                <div class="text-[9px] text-blue-400 uppercase font-bold tracking-wider">Próximo Partido</div>
+                <div class="text-[8px] text-slate-500">${nextMatch.fecha_formateada || nextMatch.fecha} ${nextMatch.hora ? '• ' + nextMatch.hora + ' hs' : ''}</div>
             </div>
-        `).join('');
+            <div class="flex items-center justify-between mt-2">
+                <div class="text-xs font-bold text-white truncate max-w-[45%]">${nextMatch.equipo_local}</div>
+                <div class="px-2 py-0.5 bg-blue-600 rounded text-[10px] font-black text-white">VS</div>
+                <div class="text-xs font-bold text-white truncate max-w-[45%]">${nextMatch.equipo_visitante}</div>
+            </div>
+            <div class="text-[8px] text-center text-slate-500 mt-1">📍 ${nextMatch.campo_nombre || nextMatch.campo_id || 'Sede por confirmar'}</div>
+        </div>`;
+    }
+
+    const jornadasHTML = jornadasOrdenadas.map((j, idx) => {
+        const jornadaPartidos = jornadas[j];
+        const total = jornadaPartidos.length;
+        const jugados = jornadaPartidos.filter(p => p.resultado_confirmado).length;
+        const pendientes = total - jugados;
+        
+        const statusBadge = jugados === total 
+            ? `<span class="bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded">✓ Completada</span>`
+            : pendientes > 0 
+                ? `<span class="bg-amber-500/20 text-amber-400 text-[8px] px-1.5 py-0.5 rounded">${pendientes} pendiente${pendientes > 1 ? 's' : ''}</span>`
+                : `<span class="bg-slate-700 text-slate-400 text-[8px] px-1.5 py-0.5 rounded">En curso</span>`;
+        
+        const isJornadaNumerica = /^\d+$/.test(j);
+        const jornadaLabel = isJornadaNumerica ? 'J' + parseInt(j) : (j === 'sin_fecha' ? 'Sin asignar' : j);
+        
+        const primeraFecha = jornadaPartidos[0]?.fecha || '';
+        const infoExtra = primeraFecha && primeraFecha !== 'PENDIENTE' ? primeraFecha : '';
+        
+        return `
+        <div class="mb-3">
+            <button onclick="toggleJornada(${idx})" class="w-full flex items-center justify-between p-2 bg-slate-800/60 rounded-lg border border-slate-700/50 hover:border-blue-500/30 transition-all cursor-pointer">
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold uppercase ${isJornadaNumerica ? 'text-amber-400' : 'text-blue-400'}">${jornadaLabel}</span>
+                    ${infoExtra ? `<span class="text-[8px] text-slate-500">${infoExtra}</span>` : ''}
+                </div>
+                <div class="flex items-center gap-2">
+                    ${statusBadge}
+                    <span class="text-slate-500 transition-transform" id="jornada-icon-${idx}">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </span>
+                </div>
+            </button>
+            <div id="jornada-content-${idx}" class="hidden mt-2 space-y-2 pl-1">
+                ${jornadaPartidos.map(p => {
+                    const estaFinalizado = p.resultado_confirmado || p.estatus === 'confirmado';
+                    const gl = p.goles_local || 0;
+                    const gv = p.goles_visitante || 0;
+                    const claseResultado = estaFinalizado 
+                        ? (gl > gv ? 'text-emerald-400' : gl < gv ? 'text-red-400' : 'text-slate-400')
+                        : 'text-blue-400';
+                    const claseCard = estaFinalizado 
+                        ? 'border-l-2 border-l-emerald-500 bg-emerald-500/5 border-slate-700/50' 
+                        : 'border-l-2 border-l-blue-500 bg-blue-500/5 border-slate-700/50';
+                    
+                    return `
+                    <div class="p-2 rounded bg-slate-800/40 border ${claseCard}">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[8px] font-medium text-blue-300">
+                                ${p.fecha && p.fecha !== 'PENDIENTE' ? p.fecha : '⚠️ Sin fecha'}
+                                ${p.hora && p.hora !== '00:00' ? ` ${p.hora}` : ''}
+                            </span>
+                            <span class="text-[7px] uppercase ${estaFinalizado ? 'text-emerald-400' : 'text-slate-500'}">
+                                ${estaFinalizado ? 'FIN' : p.estatus || 'PEN'}
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between mt-1 gap-2">
+                            <span class="text-[9px] font-bold text-white truncate flex-1">${p.equipo_local || '---'}</span>
+                            <span class="text-[10px] font-black ${claseResultado} px-2 py-0.5 bg-slate-900/60 rounded">${estaFinalizado ? gl + '-' + gv : 'vs'}</span>
+                            <span class="text-[9px] font-bold text-white truncate flex-1 text-right">${p.equipo_visitante || '---'}</span>
+                        </div>
+                        ${p.campo_nombre || p.campo_id ? `<div class="text-[7px] text-slate-500 mt-1 text-right">📍 ${p.campo_nombre || p.campo_id}</div>` : ''}
+                    </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>`;
+    }).join('');
+
+    contenedor.innerHTML = summaryHTML + jornadasHTML + `
+    <style>
+        #jornada-content-0:not(.hidden) + button #jornada-icon-0 { transform: rotate(180deg); }
+    </style>
+    `;
+    
+    setTimeout(() => window.abrirPrimeraJornada(), 100);
+}
+
+window.toggleJornada = function(idx, forceOpen = false) {
+    const content = document.getElementById('jornada-content-' + idx);
+    const icon = document.getElementById('jornada-icon-' + idx);
+    const btn = document.querySelector(`button[onclick="toggleJornada(${idx})"]`);
+    if (content) {
+        const isHidden = content.classList.contains('hidden');
+        if (forceOpen && isHidden) {
+            content.classList.remove('hidden');
+            if (icon) icon.classList.add('rotate-180');
+            if (btn) btn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else if (!forceOpen) {
+            content.classList.toggle('hidden');
+            if (icon) icon.classList.toggle('rotate-180');
+            if (isHidden && btn) {
+                btn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+        if (!forceOpen) {
+            const jornadas = document.querySelectorAll('[id^="jornada-content-"]');
+            jornadas.forEach((jc, i) => {
+                if (i !== idx && !jc.classList.contains('hidden')) {
+                    jc.classList.add('hidden');
+                    const otherIcon = document.getElementById('jornada-icon-' + i);
+                    if (otherIcon) otherIcon.classList.remove('rotate-180');
+                }
+            });
+        }
+    }
+}
+
+window.abrirPrimeraJornada = function() {
+    const buttons = document.querySelectorAll('button[onclick^="toggleJornada("]');
+    buttons.forEach((btn, idx) => {
+        const content = document.getElementById('jornada-content-' + idx);
+        if (content && content.classList.contains('hidden')) {
+            toggleJornada(idx, true);
+            return;
+        }
+    });
 }
 
 // === LIGUILLA / PLAY-OFFS ===

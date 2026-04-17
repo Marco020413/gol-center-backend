@@ -83,6 +83,11 @@ class PartidoController extends Controller
 
             $partidosFiltrados = [];
             foreach ($partidos as $key => $p) {
+                $campoId = $p['campo_id'] ?? '';
+                $campoNombre = '';
+                if ($campoId && isset($campos[$campoId])) {
+                    $campoNombre = $campos[$campoId]['nombre'] ?? $campos[$campoId]['lugar'] ?? $campoId;
+                }
                 $partidosFiltrados[$key] = [
                     'id' => $key,
                     'equipo_local' => $p['equipo_local'] ?? '',
@@ -96,7 +101,8 @@ class PartidoController extends Controller
                     'estatus' => $p['estatus'] ?? '',
                     'goles_local' => (int) ($p['goles_local'] ?? 0),
                     'goles_visitante' => (int) ($p['goles_visitante'] ?? 0),
-                    'campo_id' => $p['campo_id'] ?? '',
+                    'campo_id' => $campoId,
+                    'campo_nombre' => $campoNombre,
                     'detalle_jugadores' => $p['detalle_jugadores'] ?? null,
                 ];
             }
