@@ -440,11 +440,18 @@ fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d)
             window.formPartidos.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const idSorteo = window.idPartidoSorteo;
+                const partidoData = window.partidoDataActual; // Datos del partido cargado
+                
                 const url = idSorteo ? `/api/admin/partidos/actualizar-datos/${idSorteo}` : '/api/admin/partidos/crear';
                 const metodo = idSorteo ? 'PUT' : 'POST';
+                
+                // Usar datos del partido si existen (modo edición), o del select (modo nuevo)
+                const local = partidoData?.equipo_local || document.getElementById('selectLocal').value;
+                const visitante = partidoData?.equipo_visitante || document.getElementById('selectVisitante').value;
+                
                 const data = {
-                    local: document.getElementById('selectLocal').value,
-                    visitante: document.getElementById('selectVisitante').value,
+                    equipo_local: local,
+                    equipo_visitante: visitante,
                     campo_id: document.getElementById('selectCampos').value,
                     fecha: window.formPartidos.fecha.value,
                     hora: window.formPartidos.hora.value
@@ -1576,6 +1583,7 @@ window.verMasJugadores = function() {
             selVisitante.classList.remove('opacity-50', 'cursor-not-allowed');
             
             window.idPartidoSorteo = null;
+            window.partidoDataActual = null;
         }
     };
 
@@ -2870,9 +2878,7 @@ async function llenarSelectsEquipos() {
             if(res.ok) {
                 alert("🏆 ¡Torneo generado con éxito!");
                 window.pintarFixtureVisual(partidosPaquete);
-                // Forzar recarga de partidos antes de cargar
-                window.cachePartidosLista = null;
-                if(window.cargarPartidosCards) window.cargarPartidosCards();
+                location.reload(); // Recargar para actualizar datos
             } else {
                 const err = await res.json();
                 alert("❌ Error: " + (err.error || "No se pudo generar"));
@@ -2998,6 +3004,7 @@ async function llenarSelectsEquipos() {
             }
 
             window.idPartidoSorteo = partidoId;
+            window.partidoDataActual = p; // Guardar datos para el formulario
 
             // 7. DISPARAR AGENDA (Solo si hay datos suficientes)
             if (selCancha.value && inputFecha.value) {
