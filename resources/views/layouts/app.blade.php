@@ -1930,6 +1930,7 @@ window.verMasJugadores = function() {
             const tieneSede = p.campo_id && p.campo_id !== '';
             const tieneHora = p.hora && p.hora !== '00:00';
             const estaListo = tieneFecha && tieneSede && tieneHora;
+            const estaEnVivo = p.estatus === 'en_curso';
             
             let badgeEstatus = '';
             if (p.resultado_confirmado || p.estatus === 'confirmado') {
@@ -1948,7 +1949,8 @@ window.verMasJugadores = function() {
                 badgeEstatus = `<span class="bg-blue-600/20 text-blue-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">PROGRAMADO</span>`;
             }
 
-            const borderClass = estaListo ? 'border-blue-500/50 bg-blue-500/5' : 
+            const borderClass = estaEnVivo ? 'border-green-500/50 bg-green-500/10' : 
+                          estaListo ? 'border-blue-500/50 bg-blue-500/5' : 
                           !tieneFecha ? 'border-red-900/30' : 
                           tieneSede && tieneHora ? 'border-blue-500/30' : 'border-slate-800';
             
@@ -2441,24 +2443,43 @@ async function llenarSelectsEquipos() {
             // --- LÓGICA DE VALIDACIÓN DE CHOQUE (SÓLO AFECTA AL BOTÓN) ---
             if (horaNueva) {
                 let choque = false;
+                let choquePartido = null;
+                
+                // Convertir hora nueva a minutos
                 const [hN, mN] = horaNueva.split(':').map(Number);
                 const totalMinNuevo = (hN * 60) + mN;
 
-                partidosHoy.forEach(p => {
+                // Verificar contra TODOS los partidos del día (incluyendo el actual si cambia de horario)
+                const todosPartidosDia = Object.values(partidos).filter(p => 
+                    p.campo_id === campoId && 
+                    p.fecha === fecha
+                );
+
+                todosPartidosDia.forEach(p => {
+                    // Ignorar el partido que estamos editando
+                    if (p.id === idActual) return;
+                    
+                    // Ignorar partidos sin hora válida
+                    if (!p.hora || p.hora === '00:00') return;
+                    
                     const [hP, mP] = p.hora.split(':').map(Number);
                     const totalMinPartido = (hP * 60) + mP;
                     
                     // Si la diferencia es menor a 100 minutos, hay conflicto
                     if (Math.abs(totalMinPartido - totalMinNuevo) < 100) { 
-                        choque = true; 
+                        choque = true;
+                        choquePartido = p;
                     }
                 });
 
-                if (choque) {
+                if (choque && choquePartido) {
                     btnSubmit.disabled = true;
                     btnSubmit.classList.add('opacity-50', 'cursor-not-allowed');
                     btnSubmit.innerText = "❌ HORARIO OCUPADO";
-                    if(alerta) alerta.classList.remove('hidden');
+                    if(alerta) {
+                        alerta.classList.remove('hidden');
+                        alerta.innerHTML = `⚠️ Horario ocupado por <span class="text-white font-bold">${choquePartido.equipo_local} vs ${choquePartido.equipo_visitante}</span>`;
+                    }
                 } else {
                     btnSubmit.disabled = false;
                     btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -2982,6 +3003,50 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
         window.ejecutarGuardadoCancha(idAEditar, data);
     };
     
+    // Función para calcular el estatus basado en tiempo
+    window.calcularEstatusPartido = function(partido) {
+        if (!partido.fecha || !partido.hora || partido.hora === '00:00') {
+            return { estatus: 'programado', label: 'Pendiente' };
+        }
+        
+        const now = new Date();
+        const partidoDate = new Date(`${partido.fecha}T${partido.hora}`);
+        const partidoEnd = new Date(partidoDate.getTime() + 100 * 60 * 1000); // +100 minutos
+        
+        // Si ya está confirmado/finalizado, mantener ese estado
+        if (partido.resultado_confirmado || partido.estatus === 'confirmado' || partido.estatus === 'finalizado') {
+            return { estatus: 'finalizado', label: 'Finalizado' };
+        }
+        
+        // PENDIENTE: hora_actual < hora_inicio
+        if (now < partidoDate) {
+            const minutosRestantes = Math.floor((partidoDate - now) / 60000);
+            return { estatus: 'programado', label: `En ${minutosRestantes}min`, esProximo: true };
+        }
+        
+        // EN VIVO: hora_inicio <= hora_actual < hora_inicio + 100 min
+        if (now >= partidoDate && now < partidoEnd) {
+            const minutosTranscurridos = Math.floor((now - partidoDate) / 60000);
+            return { estatus: 'en_curso', label: `En Vivo (${minutosTranscurridos}')`, minutos: minutosTranscurridos };
+        }
+        
+        // FINALIZADO: hora_actual >= hora_inicio + 100 min
+        return { estatus: 'finalizado', label: 'Finalizado' };
+    };
+    
+    // Función para sincronizar estatus a Firebase (solo si cambió)
+    window.sincronizarEstatusPartido = async function(partidoId, nuevoEstatus) {
+        try {
+            await fetch(`/api/admin/partidos/actualizar-datos/${partidoId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                body: JSON.stringify({ estatus: nuevoEstatus })
+            });
+        } catch (e) {
+            console.error('Error sincronizando estatus:', e);
+        }
+    };
+
     window.cargarPartidosCards = async function() {
         const contenedor = document.getElementById('contenedorListaPartidos');
         if(!contenedor) return;
@@ -2989,6 +3054,20 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
         try {
             const res = await fetch('/api/partidos');
             const partidos = await res.json();
+
+            // Update estatus based on current time
+            const now = new Date();
+            Object.keys(partidos).forEach(id => {
+                const p = partidos[id];
+                const { estatus } = window.calcularEstatusPartido(p);
+                
+                // Solo actualizar si el estatus calculado es diferente al actual y no está confirmado
+                if (estatus !== p.estatus && p.estatus !== 'confirmado' && p.estatus !== 'finalizado') {
+                    // Sincronizar con Firebase (sin bloquear la UI)
+                    window.sincronizarEstatusPartido(id, estatus);
+                    p.estatus = estatus;
+                }
+            });
 
             window.cachePartidosLista = Object.keys(partidos).map(id => ({
                 id: id,
@@ -3000,6 +3079,13 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
             console.error("Error cargando partidos:", e);
         }
     };
+
+    // Actualizar estatus cada 60 segundos
+    setInterval(() => {
+        if (typeof window.cargarPartidosCards === 'function') {
+            window.cargarPartidosCards();
+        }
+    }, 60000);
 
     window.abrirModalReasignacion = async function(campoId, partidosAfectados, esMantenimiento = false) {
         const modal = document.getElementById('modalReasignarSede');
@@ -3426,7 +3512,7 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
             <div class="flex flex-wrap justify-center gap-4 mb-8 text-[10px] uppercase font-black tracking-widest text-slate-500">
                 <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-slate-700"></span> Pendiente</div>
                 <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-slate-500"></span> Programado</div>
-                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-red-500 animate-pulse"></span> En Vivo</div>
+                <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-green-500 animate-pulse"></span> En Vivo</div>
                 <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-emerald-500"></span> Finalizado</div>
             </div>
         `;
@@ -3475,7 +3561,14 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
             `;
 
             jornadas[numJor].forEach(p => {
-                // ... (Toda tu lógica de statusConfig, estaFinalizado, gl, gv se queda EXACTAMENTE IGUAL)
+                // Check if match should be en_curso based on time
+                let esEnVivo = p.estatus === 'en_curso';
+                if (!esEnVivo && p.fecha && p.hora && p.hora !== '00:00') {
+                    const now = new Date();
+                    const matchTime = new Date(p.fecha + 'T' + p.hora);
+                    esEnVivo = matchTime < now && !p.resultado_confirmado && p.estatus !== 'finalizado';
+                }
+                
                 let statusConfig = {
                     claseBorde: 'border-slate-800/50',
                     claseBg: 'bg-slate-950/50',
@@ -3499,10 +3592,10 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
                     statusConfig.badge = `<span class="text-[8px] bg-emerald-600 text-white px-2 py-0.5 rounded-md uppercase font-black">Finalizado</span>`;
                     if (gl > gv) { claseGanadorLocal = "text-amber-400 font-black scale-110 origin-right"; claseGanadorVisitante = "text-slate-600 font-normal opacity-50"; }
                     else if (gv > gl) { claseGanadorVisitante = "text-amber-400 font-black scale-110 origin-left"; claseGanadorLocal = "text-slate-600 font-normal opacity-50"; }
-                } else if (p.estatus === 'en_curso') {
-                    statusConfig.claseBorde = 'border-red-500/50'; statusConfig.claseBg = 'bg-red-500/5';
-                    statusConfig.claseTexto = 'text-white'; statusConfig.indicador = 'text-red-500 animate-pulse';
-                    statusConfig.badge = `<span class="text-[8px] bg-red-600 text-white px-2 py-0.5 rounded-md uppercase font-black animate-pulse">En Vivo</span>`;
+                } else if (esEnVivo) {
+                    statusConfig.claseBorde = 'border-green-500/50'; statusConfig.claseBg = 'bg-green-500/10';
+                    statusConfig.claseTexto = 'text-white'; statusConfig.indicador = 'text-green-500 animate-pulse';
+                    statusConfig.badge = `<span class="text-[8px] bg-green-600 text-white px-2 py-0.5 rounded-md uppercase font-black animate-pulse">En Vivo</span>`;
                 } else if (p.fecha && p.hora) {
                     statusConfig.claseBorde = 'border-slate-600'; statusConfig.claseBg = 'bg-slate-800/40';
                     statusConfig.claseTexto = 'text-white'; statusConfig.indicador = 'text-blue-500';
@@ -3541,6 +3634,23 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
                 partidosData = await res.json();
                 window.cachePartidosData = partidosData;
             }
+            
+            // Update estatus based on current time
+            const now = new Date();
+            Object.keys(partidosData).forEach(id => {
+                const p = partidosData[id];
+                if (p.fecha && p.hora && p.hora !== '00:00') {
+                    const partidoDate = new Date(`${p.fecha}T${p.hora}`);
+                    
+                    if (partidoDate < now && p.estatus !== 'confirmado' && p.estatus !== 'finalizado') {
+                        if (p.resultado_confirmado) {
+                            p.estatus = 'finalizado';
+                        } else if (!p.estatus || p.estatus === 'programado') {
+                            p.estatus = 'en_curso';
+                        }
+                    }
+                }
+            });
             
             const partidos = Object.keys(partidosData).map(id => ({ id, ...partidosData[id] }));
 

@@ -366,7 +366,7 @@
                 </div>
 
             <div id="alertaConflicto" class="mt-2 hidden bg-red-500/10 border border-red-500/20 p-1 rounded-lg">
-                <p class="text-[10px] text-red-400 font-bold text-center uppercase tracking-tighter">
+                <p id="mensajeConflicto" class="text-[10px] text-red-400 font-bold text-center uppercase tracking-tighter">
                     ⚠️ Horario ocupado. El botón de registro se ha bloqueado.
                 </p>
             </div>

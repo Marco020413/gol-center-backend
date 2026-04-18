@@ -1,5 +1,35 @@
 const escudoDefault = 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png';
 
+// Función para calcular estatus basado en tiempo
+function calcularEstatusPartido(partido) {
+    if (!partido.fecha || !partido.hora || partido.hora === '00:00') {
+        return { estatus: 'programado', label: 'Pendiente' };
+    }
+    
+    const now = new Date();
+    const partidoDate = new Date(partido.fecha + 'T' + partido.hora);
+    const partidoEnd = new Date(partidoDate.getTime() + 100 * 60 * 1000); // +100 minutos
+    
+    // Si ya está confirmado/finalizado
+    if (partido.resultado_confirmado || partido.estatus === 'confirmado' || partido.estatus === 'finalizado') {
+        return { estatus: 'finalizado', label: 'FIN' };
+    }
+    
+    // PENDIENTE: hora_actual < hora_inicio
+    if (now < partidoDate) {
+        return { estatus: 'programado', label: 'PEN' };
+    }
+    
+    // EN VIVO: hora_inicio <= hora_actual < hora_inicio + 100 min
+    if (now >= partidoDate && now < partidoEnd) {
+        const minutosTranscurridos = Math.floor((now - partidoDate) / 60000);
+        return { estatus: 'en_vivo', label: 'EN VIVO', minutos: minutosTranscurridos };
+    }
+    
+    // FINALIZADO: hora_actual >= hora_inicio + 100 min
+    return { estatus: 'finalizado', label: 'FIN' };
+}
+
 // Cache para evitar múltiples llamadas
 let cacheData = null;
 let cacheTime = 0;
@@ -1315,15 +1345,22 @@ function cargarPartidos(partidos) {
         return fechaA - fechaB;
     });
     const nextMatch = upcoming.length > 0 ? upcoming[0] : null;
-
+    
+    // Check if the next match is already in progress (time passed)
+    // Calcular estatus del próximo partido
+    const nextMatchInfo = nextMatch ? calcularEstatusPartido(nextMatch) : null;
+    const nextMatchEnVivo = nextMatchInfo && nextMatchInfo.estatus === 'en_vivo';
+    const minutosProx = nextMatchInfo ? nextMatchInfo.minutos : 0;
+    
     let summaryHTML = '';
     if (nextMatch) {
         const nextListo = nextMatch.hora && nextMatch.hora !== '00:00';
+        const enVivoBadge = nextMatchEnVivo ? `<span class="ml-2 px-1.5 py-0.5 bg-green-600 text-white text-[7px] rounded font-bold animate-pulse">EN VIVO ${minutosProx ? minutosProx + "'" : ''}</span>` : '';
         summaryHTML = `
-        <div class="mb-4 p-3 bg-gradient-to-r from-blue-600/20 to-purple-600/10 border border-blue-500/30 rounded-lg">
+        <div class="mb-4 p-3 ${nextMatchEnVivo ? 'bg-gradient-to-r from-green-600/30 to-emerald-600/20 border-green-500' : 'bg-gradient-to-r from-blue-600/20 to-purple-600/10 border-blue-500/30'} rounded-lg border">
             <div class="flex items-center justify-between">
-                <div class="text-[9px] text-blue-400 uppercase font-bold tracking-wider">Próximo Partido</div>
-                <div class="text-[8px] ${nextListo ? 'text-emerald-400 font-bold' : 'text-slate-500'}">${nextMatch.fecha} ${nextListo ? '• ' + nextMatch.hora + ' hs' : ''}</div>
+                <div class="text-[9px] ${nextMatchEnVivo ? 'text-green-400' : 'text-blue-400'} uppercase font-bold tracking-wider">${nextMatchEnVivo ? 'Partido en Curso' : 'Próximo Partido'}</div>
+                <div class="text-[8px] ${nextListo ? 'text-emerald-400 font-bold' : 'text-slate-500'}">${nextMatch.fecha} ${nextListo ? '• ' + nextMatch.hora + ' hs' : ''}${enVivoBadge}</div>
             </div>
             <div class="flex items-center justify-between mt-2">
                 <div class="text-xs font-bold text-white truncate max-w-[45%]">${nextMatch.equipo_local}</div>
@@ -1370,25 +1407,31 @@ function cargarPartidos(partidos) {
             </button>
             <div id="jornada-content-${idx}" class="hidden mt-2 space-y-2 pl-1">
                 ${jornadaPartidos.map(p => {
-                    const estaFinalizado = p.resultado_confirmado || p.estatus === 'confirmado';
+                    const { estatus, label, minutos } = calcularEstatusPartido(p);
+                    const estaFinalizado = estatus === 'finalizado';
+                    const estaEnVivo = estatus === 'en_vivo';
                     const gl = p.goles_local || 0;
                     const gv = p.goles_visitante || 0;
                     const claseResultado = estaFinalizado 
                         ? (gl > gv ? 'text-emerald-400' : gl < gv ? 'text-red-400' : 'text-slate-400')
                         : 'text-blue-400';
+                    
                     const claseCard = estaFinalizado 
                         ? 'border-l-2 border-l-emerald-500 bg-emerald-500/5 border-slate-700/50' 
-                        : 'border-l-2 border-l-blue-500 bg-blue-500/5 border-slate-700/50';
+                        : estaEnVivo 
+                            ? 'border-l-2 border-l-green-500 bg-green-500/10 border-slate-700/50'
+                            : 'border-l-2 border-l-blue-500 bg-blue-500/5 border-slate-700/50';
                     
                     return `
                     <div class="p-2 rounded bg-slate-800/40 border ${claseCard}">
                         <div class="flex justify-between items-center">
-                            <span class="text-[8px] font-medium text-blue-300">
+                            <span class="text-[8px] font-medium ${estaEnVivo ? 'text-green-400' : 'text-blue-300'}">
                                 ${p.fecha && p.fecha !== 'PENDIENTE' ? p.fecha : '⚠️ Sin fecha'}
                                 ${p.hora && p.hora !== '00:00' ? ` ${p.hora}` : ''}
+                                ${estaEnVivo ? ` 🔴 ${minutos || ''}'` : ''}
                             </span>
-                            <span class="text-[7px] uppercase ${estaFinalizado ? 'text-emerald-400' : 'text-slate-500'}">
-                                ${estaFinalizado ? 'FIN' : p.estatus || 'PEN'}
+                            <span class="text-[7px] uppercase ${estaFinalizado ? 'text-emerald-400' : estaEnVivo ? 'text-green-400 font-bold animate-pulse' : 'text-slate-500'}">
+                                ${label}
                             </span>
                         </div>
                         <div class="flex items-center justify-between mt-1 gap-2">
@@ -2602,3 +2645,23 @@ function renderizarBotonesDescargaJornadas() {
         });
     });
 }
+
+// Actualizar partidos cada 60 segundos para mantener estatus actualizado
+setInterval(async function() {
+    try {
+        const res = await fetch('/api/publico');
+        if (!res.ok) return;
+        const nuevosDatos = await res.json();
+        
+        // Recargar solo la función de partidos
+        if (typeof cargarPartidos === 'function') {
+            cargarPartidos(nuevosDatos.partidos);
+        }
+        if (typeof cargarLiguilla === 'function') {
+            cargarLiguilla(nuevosDatos.partidos);
+        }
+        console.log('Partidos actualizados automáticamente');
+    } catch (e) {
+        console.error('Error actualizando partidos:', e);
+    }
+}, 60000);
