@@ -474,6 +474,36 @@ fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d)
             window.formActualizar.onsubmit = async (e) => {
                 e.preventDefault();
 
+                // VALIDACIÓN: Mínimo 7 jugadores por equipo
+                const localCount = parseInt(document.getElementById('contador_local')?.innerText?.split('/')[0] || '0');
+                const visitanteCount = parseInt(document.getElementById('contador_visitante')?.innerText?.split('/')[0] || '0');
+                
+                if (localCount < 7 || visitanteCount < 7) {
+                    alert('⚠️ Cada equipo debe tener al menos 7 jugadores importados');
+                    return;
+                }
+
+                // VALIDACIÓN: Debe haber un portero por equipo
+                const filasLocal = document.querySelectorAll('.fila-jugador-cedula[data-tipo="local"]');
+                const filasVisitante = document.querySelectorAll('.fila-jugador-cedula[data-tipo="visitante"]');
+                
+                let tienePorteroLocal = false;
+                let tienePorteroVisitante = false;
+                
+                filasLocal.forEach(fila => {
+                    const btn = fila.querySelector('button');
+                    if (btn && btn.textContent.includes('PK')) tienePorteroLocal = true;
+                });
+                filasVisitante.forEach(fila => {
+                    const btn = fila.querySelector('button');
+                    if (btn && btn.textContent.includes('PK')) tienePorteroVisitante = true;
+                });
+                
+                if (!tienePorteroLocal || !tienePorteroVisitante) {
+                    alert('⚠️ Debes asignar un PORTERO (PK) para cada equipo');
+                    return;
+                }
+
                 // 1. Verificar si se marcó cerrar acta
                 const checkCerrar = document.getElementById('confirmar_final'); // O 'confirmar_final' según tu ID de HTML
                 const esFinal = checkCerrar?.checked || false;
@@ -2049,21 +2079,29 @@ window.verMasJugadores = function() {
             if(contenedor) contenedor.innerHTML = '<p class="text-blue-500 animate-pulse text-center py-4 uppercase text-[10px]">Cargando datos del partido...</p>';
             window.modalActualizarMarcador.classList.replace('hidden', 'flex');
 
-            const [resP, resJ] = await Promise.all([
+            const [resP, resJ, resE] = await Promise.all([
                 fetch('/api/partidos'),
-                fetch('/api/jugadores')
+                fetch('/api/jugadores'),
+                fetch('/api/equipos')
             ]);
 
-            if (!resP.ok || !resJ.ok) throw new Error("Error 500");
+            if (!resP.ok || !resJ.ok || !resE.ok) throw new Error("Error 500");
 
             const partidos = await resP.json();
             const todosLosJugadores = await resJ.json();
+            const equiposData = await resE.json();
             const p = partidos[id];
 
             if(!p) {
                 window.modalActualizarMarcador.classList.replace('flex', 'hidden');
                 return alert("Partido no encontrado");
             }
+
+            // Get portero_id for each team
+            const equipoLocalData = Object.values(equiposData).find(e => e.nombre === p.equipo_local);
+            const equipoVisitanteData = Object.values(equiposData).find(e => e.nombre === p.equipo_visitante);
+            const porteroLocal = equipoLocalData?.portero_id || null;
+            const porteroVisitante = equipoVisitanteData?.portero_id || null;
 
             document.getElementById('edit_partido_id').value = id;
             document.getElementById('edit_labelLocal').innerText = p.equipo_local.toUpperCase();
@@ -2075,8 +2113,8 @@ window.verMasJugadores = function() {
             contenedor.innerHTML = ''; 
 
             const equipos = [
-                { nombre: p.equipo_local, tipo: 'local', color: 'blue' },
-                { nombre: p.equipo_visitante, tipo: 'visitante', color: 'red' }
+                { nombre: p.equipo_local, tipo: 'local', color: 'blue', porteroId: porteroLocal },
+                { nombre: p.equipo_visitante, tipo: 'visitante', color: 'red', porteroId: porteroVisitante }
             ];
 
             equipos.forEach(eq => {
@@ -2084,48 +2122,86 @@ window.verMasJugadores = function() {
                     .filter(([tel, j]) => j.equipo === eq.nombre)
                     .sort((a,b) => (a[1].numero || 0) - (b[1].numero || 0));
 
-                const bajas = jugadoresEquipo.filter(([tel, j]) => j.estatus === 'suspendido' || j.estatus === 'lesionado').length;
-
-                let htmlSeccion = `
-                    <div class="border border-slate-800 rounded-xl overflow-hidden mb-3">
-                        <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden')" 
-                                class="w-full flex items-center justify-between p-3 bg-slate-900 hover:bg-slate-800 transition text-left">
-                            <div class="flex flex-col gap-1">
-                                <div class="flex items-center gap-3">
-                                    <div class="size-2 rounded-full bg-${eq.color}-500 shadow-[0_0_8px] shadow-${eq.color}-500/50"></div>
-                                    <span class="text-[11px] font-black text-white uppercase tracking-widest">${eq.nombre}</span>
-                                    <span class="text-[9px] text-slate-500 bg-slate-950 px-2 py-0.5 rounded-full">${jugadoresEquipo.length} REGISTRADOS</span>
-                                </div>
-                                ${bajas > 0 ? `<span class="text-[8px] text-red-400 font-bold ml-5 uppercase italic">⚠️ ${bajas} bajas</span>` : ''}
-                            </div>
-                            <svg class="size-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </button>
-                        <div class="hidden p-2 space-y-2 bg-slate-950/30">
-                `;
-
+                const porteros = [];
+                const campo = [];
+                let countTotal = 0;
                 jugadoresEquipo.forEach(([tel, j]) => {
+                    countTotal++;
+                    // Sort: portero primero si es el portero_id del equipo
+                    if (tel === eq.porteroId) {
+                        porteros.push([tel, j]);
+                    } else {
+                        campo.push([tel, j]);
+                    }
+                });
+                const listaOrdenada = [...porteros, ...campo];
+
+                const countAsistieron = listaOrdenada.filter(([tel, j]) => {
                     const previa = statsGuardadas[tel] || { asistio: true, goles: 0 };
                     const esInactivo = (j.estatus === 'suspendido' || j.estatus === 'lesionado');
+                    return previa.asistio && !esInactivo;
+                }).length;
+                const colorContador = countAsistieron >= 7 ? 'text-green-400' : 'text-red-400';
+                const bgContador = countAsistieron >= 7 ? 'bg-green-900/20' : 'bg-red-900/20';
+
+                let htmlSeccion = `
+                    <div class="border border-slate-800 rounded overflow-hidden mb-1" data-equipo="${eq.tipo}">
+                        <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden'); this.querySelector('svg').classList.toggle('rotate-180')" 
+                                class="w-full flex items-center justify-between px-2 py-1 bg-slate-800 hover:bg-slate-700 transition text-left">
+                            <div class="flex items-center gap-2">
+                                <div class="size-1.5 rounded-full bg-${eq.color}-500"></div>
+                                <span class="text-[9px] font-bold text-white uppercase">${eq.nombre}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[7px] ${colorContador} ${bgContador} px-1.5 py-0.5 rounded font-bold" id="contador_${eq.tipo}">${countAsistieron}/${countTotal}</span>
+                                <svg class="size-3 text-slate-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </div>
+                        </button>
+                        <div class="hidden bg-slate-950/50">
+                `;
+
+                listaOrdenada.forEach(([tel, j]) => {
+                    const previa = statsGuardadas[tel] || { asistio: true, goles: 0 };
+                    const esInactivo = (j.estatus === 'suspendido' || j.estatus === 'lesionado');
+                    // Check if this player is the team's goalkeeper (from portero_id in equipo)
+                    const esPorteroMarcado = previa.es_portero || (tel === eq.porteroId);
+                    const asistio = previa.asistio && !esInactivo;
 
                     htmlSeccion += `
-                        <div class="fila-jugador-cedula flex items-center gap-3 bg-slate-900/60 p-2 rounded-lg border border-slate-800/40 
-                            ${(esInactivo || !previa.asistio) ? 'opacity-30 grayscale' : ''}" id="fila_jugador_${tel}" data-telefono="${tel}">
-                            <input type="checkbox" ${previa.asistio && !esInactivo ? 'checked' : ''} ${esInactivo ? 'disabled' : ''} 
-                                class="check-asistencia size-4 rounded accent-green-500" onchange="window.toggleAsistencia('${tel}', this)">
-                            <div class="flex-1 min-w-0">
-                                <p class="text-[11px] text-white font-bold truncate uppercase">#${j.numero} ${j.nombre}</p>
+                        <div class="fila-jugador-cedula flex items-center gap-1 px-1.5 py-0.5 border-b border-slate-800/30 text-[9px] grupo-fila
+                            ${esPorteroMarcado ? 'border-l-4 border-lime-400 bg-lime-900/30' : ''}
+                            ${asistio ? 'bg-green-900/10' : ''}
+                            ${!asistio ? 'opacity-50' : ''}" 
+                            id="fila_jugador_${tel}" data-telefono="${tel}" data-nombre="${j.nombre.toLowerCase()}" data-numero="${j.numero || ''}" data-asistio="${asistio}" data-tipo="${eq.tipo}">
+                            <input type="checkbox" ${asistio ? 'checked' : ''} ${esInactivo ? 'disabled' : ''} 
+                                class="check-asistencia size-3 rounded accent-green-500" onchange="window.toggleAsistencia('${tel}', this, false)">
+                            <span class="text-[8px] font-bold text-slate-400 w-4">${j.numero}</span>
+                            <div class="flex-1 min-w-0 flex items-center gap-1">
+                                ${esPorteroMarcado ? '<span class="text-[10px]">🧤</span>' : ''}
+                                <span class="text-[9px] text-white font-medium truncate">${j.nombre}</span>
                             </div>
-                            <div class="flex items-center gap-1 bg-slate-950 rounded-lg p-1 border border-slate-800">
-                                <button type="button" onclick="window.modificarGolJugador('${tel}', -1, '${eq.tipo}')" ${esInactivo ? 'disabled' : ''} class="size-6 flex items-center justify-center text-slate-400 hover:text-white rounded">-</button>
+                            <button type="button" onclick="window.togglePortero('${tel}', '${eq.tipo}', this)" 
+                                class="px-1.5 py-0.5 rounded text-[6px] font-bold uppercase border ${esPorteroMarcado ? 'bg-lime-600 text-white border-lime-500' : 'bg-slate-800 text-slate-500 border-slate-700'}">
+                                PK
+                            </button>
+                            <div class="flex items-center gap-0 bg-slate-900 rounded border border-slate-700 ${asistio ? '' : 'invisible'}">
+                                <button type="button" onclick="window.modificarGolJugador('${tel}', -1, '${eq.tipo}')" ${!asistio ? 'disabled' : ''} class="size-4 flex items-center justify-center text-slate-500 hover:text-white rounded">-</button>
                                 <input type="number" value="${previa.goles}" readonly id="goles_jugador_${tel}" 
-                                    class="input-gol-jugador input-gol-${eq.tipo} w-7 bg-transparent text-center text-[11px] font-black text-blue-400 outline-none">
-                                <button type="button" onclick="window.modificarGolJugador('${tel}', 1, '${eq.tipo}')" ${esInactivo ? 'disabled' : ''} class="size-6 flex items-center justify-center text-white bg-blue-600/20 hover:bg-blue-600 rounded">+</button>
+                                    class="input-gol-jugador input-gol-${eq.tipo} w-4 bg-transparent text-center text-[9px] font-bold text-blue-400 outline-none">
+                                <button type="button" onclick="window.modificarGolJugador('${tel}', 1, '${eq.tipo}')" ${!asistio ? 'disabled' : ''} class="size-4 flex items-center justify-center text-blue-400 hover:text-white rounded">+</button>
                             </div>
                         </div>`;
                 });
                 htmlSeccion += `</div></div>`;
                 contenedor.innerHTML += htmlSeccion;
             });
+
+            // Reset filter button
+            const btnFiltro = document.getElementById('btnFiltrarMarcados');
+            if(btnFiltro) {
+                btnFiltro.classList.remove('bg-blue-600', 'text-white');
+                btnFiltro.classList.add('bg-slate-800', 'text-slate-400');
+            }
 
         } catch (e) { 
             console.error(e);
@@ -2398,16 +2474,18 @@ async function llenarSelectsEquipos() {
 
 
     // Función para los botones + y -
-    window.modificarGolJugador = function(telefono, cambio) {
+    window.modificarGolJugador = function(telefono, cambio, tipo) {
         const input = document.getElementById(`goles_jugador_${telefono}`);
-        let nuevoValor = (parseInt(input.value) || 0) + cambio;
-        if (nuevoValor < 0) nuevoValor = 0;
-        input.value = nuevoValor;
-        // window.recalcularMarcador(); // función no existe
+        let nuevoVal = (parseInt(input.value) || 0) + cambio;
+        if (nuevoVal < 0) nuevoVal = 0;
+        input.value = nuevoVal;
+        window.recalcularMarcadorGlobal();
     };
 
-    // Stub function para evitar errores
-    window.recalcularMarcador = function() { console.log('recalcularMarcador called'); };
+    // Actualizar el marcador global en tiempo real
+    window.recalcularMarcador = function() {
+        window.recalcularMarcadorGlobal();
+    };
 
     // Sumar todos los goles de la lista y actualizar los cuadros grandes de arriba
     window.recalcularMarcadorGlobal = function() {
@@ -2421,28 +2499,176 @@ async function llenarSelectsEquipos() {
         document.getElementById('goles_visitante').value = sumaVisitante;
     };
 
-    window.toggleAsistencia = function(telefono, checkbox) {
+window.toggleAsistencia = function(telefono, checkbox, esPortero) {
         const fila = document.getElementById(`fila_jugador_${telefono}`);
         const inputGol = document.getElementById(`goles_jugador_${telefono}`);
-        const botones = fila.querySelectorAll('.btn-control-gol');
+        const botones = fila ? fila.querySelectorAll('button') : [];
+        const tipoEquipo = fila ? fila.dataset.tipo : null;
 
         if (checkbox.checked) {
-            fila.classList.remove('opacity-30', 'grayscale');
+            if(fila) {
+                fila.classList.remove('opacity-50');
+                fila.classList.add('bg-green-900/10');
+                fila.dataset.asistio = "true";
+            }
             botones.forEach(b => b.disabled = false);
+            const controls = fila ? fila.querySelector('.flex.items-center.gap-0') : null;
+            if(controls) controls.classList.remove('invisible');
+            // Add VIP styling if goalkeeper (check by class)
+            const btnCheck = fila ? fila.querySelector('button') : null;
+            const esPorteroMarcado = btnCheck && btnCheck.classList.contains('bg-lime-600');
+            if(esPorteroMarcado) {
+                fila.classList.add('border-l-4', 'border-lime-400', 'bg-lime-900/30');
+            }
         } else {
-            fila.classList.add('opacity-30', 'grayscale');
-            inputGol.value = 0; // Si no jugó, 0 goles
+            if(fila) {
+                const btnPK = fila.querySelector('button');
+                // Check if this specific button has the active style (bg-lime-600) AND has PK text
+                const esPorteroMarcado = btnPK && btnPK.classList.contains('bg-lime-600');
+                
+                if (esPorteroMarcado) {
+                    alert('Debe asignar a otro portero antes de quitar al actual');
+                    checkbox.checked = true;
+                    return;
+                }
+                fila.classList.add('opacity-50');
+                fila.classList.remove('bg-green-900/10', 'border-l-4', 'border-lime-400', 'bg-lime-900/30');
+                fila.dataset.asistio = "false";
+            }
+            if(inputGol) inputGol.value = 0;
             botones.forEach(b => b.disabled = true);
+            const controls = fila ? fila.querySelector('.flex.items-center.gap-0') : null;
+            if(controls) controls.classList.add('invisible');
             window.recalcularMarcadorGlobal();
+        }
+        
+        // Update per-team counter
+        if(tipoEquipo) {
+            window.actualizarContadorEquipo(tipoEquipo);
         }
     };
 
-    window.modificarGolJugador = function(telefono, cambio, tipo) {
-        const input = document.getElementById(`goles_jugador_${telefono}`);
-        let nuevoVal = (parseInt(input.value) || 0) + cambio;
-        if (nuevoVal < 0) nuevoVal = 0;
-        input.value = nuevoVal;
-        window.recalcularMarcadorGlobal();
+    // Update counter for specific team
+    window.actualizarContadorEquipo = function(tipo) {
+        const contador = document.getElementById(`contador_${tipo}`);
+        if(!contador) return;
+        
+        const filas = document.querySelectorAll(`.fila-jugador-cedula[data-tipo="${tipo}"]`);
+        let count = 0;
+        let total = 0;
+        filas.forEach(fila => {
+            total++;
+            if(fila.dataset.asistio === "true") count++;
+        });
+        
+        const colorClase = count >= 7 ? 'text-green-400 bg-green-900/20' : 'text-red-400 bg-red-900/20';
+        contador.className = `text-[7px] px-1.5 py-0.5 rounded font-bold ${colorClase}`;
+        contador.innerText = `${count}/${total}`;
+    };
+
+// Toggle goalkeeper - only one per team
+    window.togglePortero = function(telefono, tipo, btn) {
+        const equipoContainer = btn.closest('.border.border-slate-800');
+        const filas = equipoContainer.querySelectorAll('.fila-jugador-cedula');
+        
+        // Remove previous goalkeeper styling
+        filas.forEach(fila => {
+            const b = fila.querySelector('button');
+            if (b) {
+                // Check if this button has the active style (lime-600)
+                if (b.classList.contains('bg-lime-600')) {
+                    b.classList.remove('bg-lime-600', 'text-white', 'border-lime-500');
+                    b.classList.add('bg-slate-800', 'text-slate-500', 'border-slate-700');
+                    b.innerText = 'PK';
+                    fila.classList.remove('border-l-4', 'border-lime-400', 'bg-lime-900/30');
+                    // Remove glove icon from name if exists
+                    const nameSpan = fila.querySelector('.flex-1 span');
+                    if (nameSpan && nameSpan.textContent.startsWith('🧤')) {
+                        nameSpan.textContent = nameSpan.textContent.replace('🧤', '');
+                    }
+                }
+            }
+        });
+        
+        // Add styling to new goalkeeper
+        btn.classList.remove('bg-slate-800', 'text-slate-500', 'border-slate-700');
+        btn.classList.add('bg-lime-600', 'text-white', 'border-lime-500');
+        btn.innerText = 'PK';
+        
+        // Add visual highlight to row
+        const fila = document.getElementById(`fila_jugador_${telefono}`);
+        if(fila) {
+            const checkbox = fila.querySelector('.check-asistencia');
+            if(checkbox && !checkbox.checked) {
+                checkbox.checked = true;
+                fila.classList.remove('opacity-50');
+                fila.classList.add('bg-green-900/10');
+                fila.dataset.asistio = "true";
+                const controls = fila.querySelector('.flex.items-center.gap-0');
+                if(controls) controls.classList.remove('invisible');
+                fila.querySelectorAll('button').forEach(b => b.disabled = false);
+            }
+            // Add VIP styling
+            fila.classList.add('border-l-4', 'border-lime-400', 'bg-lime-900/30');
+            // Add glove icon to name
+            const nameSpan = fila.querySelector('.flex-1 span');
+            if(nameSpan && !nameSpan.textContent.startsWith('🧤')) {
+                nameSpan.textContent = '🧤 ' + nameSpan.textContent;
+            }
+        }
+        window.actualizarContadorEquipo(tipo);
+    };
+
+    // Filter only marked players
+    window.filtrarSoloMarcados = function() {
+        const btn = document.getElementById('btnFiltrarMarcados');
+        const activa = btn.classList.toggle('bg-blue-600');
+        btn.classList.toggle('text-white');
+        btn.classList.toggle('bg-slate-800');
+        
+        const filas = document.querySelectorAll('.fila-jugador-cedula');
+        
+        if(activa) {
+            // Hide unmarked
+            filas.forEach(fila => {
+                if(fila.dataset.asistio === "true") {
+                    fila.classList.remove('hidden');
+                } else {
+                    fila.classList.add('hidden');
+                }
+            });
+        } else {
+            // Show all
+            // Reset filter based on current search
+            const searchTerm = document.getElementById('buscadorJugadores').value;
+            window.filtrarJugadores(searchTerm || '');
+        }
+    };
+
+    // Filter players by name or number
+    window.filtrarJugadores = function(termino) {
+        const term = termino.toLowerCase().trim();
+        const filas = document.querySelectorAll('.fila-jugador-cedula');
+        
+        filas.forEach(fila => {
+            const nombre = fila.dataset.nombre || '';
+            const numero = fila.dataset.numero || '';
+            
+            if (!term || nombre.includes(term) || numero.includes(term)) {
+                fila.classList.remove('hidden');
+            } else {
+                fila.classList.add('hidden');
+            }
+        });
+        
+        // Also show/hide section headers based on visible children
+        document.querySelectorAll('.border.border-slate-800').forEach(seccion => {
+            const visibles = seccion.querySelectorAll('.fila-jugador-cedula:not(.hidden)');
+            const contenido = seccion.querySelector('.hidden');
+            if (contenido) {
+                contenido.classList.toggle('hidden', visibles.length === 0);
+            }
+        });
     };
 
     // Tabla de Posiciones
