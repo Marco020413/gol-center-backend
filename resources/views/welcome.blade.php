@@ -8,8 +8,8 @@
             <button onclick="window.changeTab('posiciones')" id="btn-tab-posiciones" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Posiciones</button>
             <button onclick="window.changeTab('equipos_gest')" id="btn-tab-equipos_gest" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Gestionar Equipos</button>
             <button onclick="window.changeTab('partidos')" id="btn-tab-partidos" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Partidos</button>
-            <button onclick="window.changeTab('campos')" id="btn-tab-campos" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Canchas</button>
             <button onclick="window.changeTab('roles')" id="btn-tab-roles" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Roles</button>
+            <button onclick="window.changeTab('campos')" id="btn-tab-campos" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Canchas</button>
             <button onclick="window.changeTab('historial')" id="btn-tab-historial" class="tab-btn pb-4 text-slate-500 hover:text-slate-300 font-bold text-sm uppercase tracking-wider whitespace-nowrap">Salón de la Fama</button>
         </div>
     <div id="podio-final" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"></div>
@@ -65,42 +65,27 @@
 
             <div id="content-partidos" class="tab-pane hidden space-y-4">
 
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-                    <div class="relative">
-                        <input type="text" id="filtroEquipoPartido" onkeyup="aplicarFiltrosPartidos()" placeholder="🔍 Equipo..." class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500">
-                    </div>
-                    
-                    <select id="filtroJornadaPartido" onchange="aplicarFiltrosPartidos()" class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500">
-                        <option value="">Todas las jornadas</option>
-                        <option value="1">Jornada 1</option>
-                        <option value="2">Jornada 2</option>
-                        <option value="3">Jornada 3</option>
-                        <option value="4">Jornada 4</option>
-                        <option value="5">Jornada 5</option>
-                        <option value="6">Jornada 6</option>
-                        <option value="7">Jornada 7</option>
-                        <option value="8">Jornada 8</option>
-                        <option value="9">Jornada 9</option>
-                        <option value="10">Jornada 10</option>
+                <div class="flex gap-2 mb-4 overflow-x-auto pb-2">
+                    <input type="text" id="filtroEquipoPartido" onkeyup="aplicarFiltrosPartidos()" placeholder="Buscar..." class="min-w-[120px] flex-shrink-0 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500">
+                    <select id="filtroJornadaPartido" onchange="aplicarFiltrosPartidos()" class="min-w-[70px] flex-shrink-0 bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white outline-none focus:border-blue-500">
+                        <option value="">J</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10</option>
                     </select>
-
-                    <select id="filtroEstatusPartido" onchange="aplicarFiltrosPartidos()" class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500">
-                        <option value="todos">Todos los estados</option>
-                        <option value="programado">Próximos</option>
-                        <option value="en_curso">En Vivo</option>
-                        <option value="finalizado">Por Subir Acta</option>
-                        <option value="confirmado">Cerrados</option>
-                        <option value="sin_fecha">Sin Fecha</option>
+                    <select id="ordenarPartidos" onchange="aplicarFiltrosPartidos()" class="min-w-[100px] flex-shrink-0 bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white outline-none focus:border-blue-500">
+                        <option value="proximos">Todos</option>
+                        <option value="listos">Listos</option>
+                        <option value="no_listos">Sin prog</option>
                     </select>
-                    
-                    <div class="flex gap-2">
-                        <select id="ordenarPartidos" onchange="aplicarFiltrosPartidos()" class="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500">
-                            <option value="proximos">Más próximos</option>
-                            <option value="antiguos">Más antiguos</option>
-                            <option value="jornada">Por jornada</option>
-                        </select>
-                        <button onclick="limpiarFiltrosPartidos()" class="bg-slate-800 hover:bg-red-600/50 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-400 hover:text-white transition" title="Limpiar filtros">✕</button>
-                    </div>
+                    <button onclick="toggleVistaPartidos()" id="btnToggleVista" class="flex-shrink-0 bg-slate-800 hover:bg-blue-600 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white transition">Lista</button>
                 </div>
 
                 <div id="contenedorListaPartidos">
@@ -332,63 +317,55 @@
     </div>
 </div>
 
-<div id="modalCrearPartido" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center z-[120] p-4">
-    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
-        <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-blue-600/10">
-            <h3 class="text-xl font-bold text-white uppercase tracking-tighter">Programar Partido</h3>
-            <button onclick="(typeof window.cerrarModalCrearPartido === 'function') ? window.cerrarModalCrearPartido() : ''" class="text-slate-500 hover:text-white text-2xl">&times;</button>
+<div id="modalCrearPartido" class="fixed inset-0 bg-slate-950/90 backdrop-blur-sm hidden items-center justify-center z-[120] px-2 py-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+        <div class="p-3 border-b border-slate-800 flex justify-between items-center bg-blue-600/10">
+            <h3 class="text-sm font-bold text-white uppercase tracking-tighter">Programar Partido</h3>
+            <button onclick="(typeof window.cerrarModalCrearPartido === 'function') ? window.cerrarModalCrearPartido() : ''" class="text-slate-500 hover:text-white text-xl">&times;</button>
         </div>
-        <form id="formCrearPartido" class="p-6 space-y-4 text-sm">
-<div class="grid grid-cols-2 gap-4">
+        <form id="formCrearPartido" class="p-3 space-y-3 text-xs">
+            <div class="grid grid-cols-2 gap-2">
                 <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Local</label>
-                    <select name="local" id="selectLocal" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500"></select>
+                    <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Local</label>
+                    <select name="local" id="selectLocal" required class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-blue-500"></select>
                 </div>
                 <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Visitante</label>
-                    <select name="visitante" id="selectVisitante" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500"></select>
-                </div>
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Sede / Cancha</label>
-                    <select name="campo_id" id="selectCampos" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
-                        <option value="">Cargando canchas...</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Jornada</label>
-                    <input type="number" name="jornada" min="1" placeholder="1" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                    <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Visitante</label>
+                    <select name="visitante" id="selectVisitante" required class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-blue-500"></select>
                 </div>
             </div>
-     
-            <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Sede / Cancha</label>
+                <select name="campo_id" id="selectCampos" required class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-blue-500">
+                    <option value="">Cargando...</option>
+                </select>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
                 <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Fecha</label>
-                    <input type="date" name="fecha" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                    <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Jornada</label>
+                    <input type="number" name="jornada" min="1" placeholder="1" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-blue-500">
                 </div>
                 <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Hora</label>
-                    <input type="time" name="hora" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500">
+                    <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Fecha</label>
+                    <input type="date" name="fecha" required class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Hora</label>
+                    <input type="time" name="hora" required class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-blue-500">
                 </div>
             </div>
 
-
-            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition uppercase text-xs">Crear Encuentro ⚽</button>
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg shadow-lg transition uppercase text-xs">Guardar ⚽</button>
         </form>
-        <div id="agendaCanchaContenedor" class="mt-4 hidden bg-slate-950/50 border border-slate-800 rounded-xl p-4 overflow-hidden">
-            <div class="flex items-center gap-2 mb-3">
-                <span class="relative flex h-2 w-2">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                </span>
-                <h4 class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Disponibilidad de la Sede</h4>
+        <div id="agendaCanchaContenedor" class="mt-3 hidden bg-slate-950/50 border border-slate-800 rounded-xl p-2 overflow-hidden">
+            <div class="flex items-center gap-2 mb-2">
+                <h4 class="text-[9px] font-black text-blue-400 uppercase tracking-widest">Disponibilidad</h4>
             </div>
             
-            <div id="listaAgendaCancha" class="space-y-2 max-h-40 overflow-y-auto pr-2">
+            <div id="listaAgendaCancha" class="space-y-1 max-h-24 overflow-y-auto text-xs">
                 </div>
 
-            <div id="alertaConflicto" class="mt-3 hidden bg-red-500/10 border border-red-500/20 p-2 rounded-lg">
+            <div id="alertaConflicto" class="mt-2 hidden bg-red-500/10 border border-red-500/20 p-1 rounded-lg">
                 <p class="text-[10px] text-red-400 font-bold text-center uppercase tracking-tighter">
                     ⚠️ Horario ocupado. El botón de registro se ha bloqueado.
                 </p>

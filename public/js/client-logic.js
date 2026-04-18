@@ -1318,18 +1318,19 @@ function cargarPartidos(partidos) {
 
     let summaryHTML = '';
     if (nextMatch) {
+        const nextListo = nextMatch.hora && nextMatch.hora !== '00:00';
         summaryHTML = `
-        <div class="mb-4 p-3 bg-gradient-to-r from-blue-600/20 to-purple-600/10 rounded-lg border border-blue-500/30">
+        <div class="mb-4 p-3 bg-gradient-to-r from-blue-600/20 to-purple-600/10 border border-blue-500/30 rounded-lg">
             <div class="flex items-center justify-between">
                 <div class="text-[9px] text-blue-400 uppercase font-bold tracking-wider">Próximo Partido</div>
-                <div class="text-[8px] text-slate-500">${nextMatch.fecha_formateada || nextMatch.fecha} ${nextMatch.hora ? '• ' + nextMatch.hora + ' hs' : ''}</div>
+                <div class="text-[8px] ${nextListo ? 'text-emerald-400 font-bold' : 'text-slate-500'}">${nextMatch.fecha} ${nextListo ? '• ' + nextMatch.hora + ' hs' : ''}</div>
             </div>
             <div class="flex items-center justify-between mt-2">
                 <div class="text-xs font-bold text-white truncate max-w-[45%]">${nextMatch.equipo_local}</div>
                 <div class="px-2 py-0.5 bg-blue-600 rounded text-[10px] font-black text-white">VS</div>
                 <div class="text-xs font-bold text-white truncate max-w-[45%]">${nextMatch.equipo_visitante}</div>
             </div>
-            <div class="text-[8px] text-center text-slate-500 mt-1">📍 ${nextMatch.campo_nombre || nextMatch.campo_id || 'Sede por confirmar'}</div>
+            <div class="text-[8px] text-center text-slate-500 mt-1">${nextMatch.campo_nombre || nextMatch.campo_id || 'Sede por confirmar'}</div>
         </div>`;
     }
 
@@ -1340,10 +1341,12 @@ function cargarPartidos(partidos) {
         const pendientes = total - jugados;
         
         const statusBadge = jugados === total 
-            ? `<span class="bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded">✓ Completada</span>`
-            : pendientes > 0 
-                ? `<span class="bg-amber-500/20 text-amber-400 text-[8px] px-1.5 py-0.5 rounded">${pendientes} pendiente${pendientes > 1 ? 's' : ''}</span>`
-                : `<span class="bg-slate-700 text-slate-400 text-[8px] px-1.5 py-0.5 rounded">En curso</span>`;
+            ? `<span class="bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded">Completada</span>`
+            : pendientes > 0 && jugados > 0
+                ? `<span class="bg-amber-500/20 text-amber-400 text-[8px] px-1.5 py-0.5 rounded">${jugados}/${total}</span>`
+                : pendientes > 0 
+                    ? `<span class="bg-amber-500/20 text-amber-400 text-[8px] px-1.5 py-0.5 rounded">Pendiente</span>`
+                    : `<span class="bg-slate-700 text-slate-400 text-[8px] px-1.5 py-0.5 rounded">En curso</span>`;
         
         const isJornadaNumerica = /^\d+$/.test(j);
         const jornadaLabel = isJornadaNumerica ? 'J' + parseInt(j) : (j === 'sin_fecha' ? 'Sin asignar' : j);

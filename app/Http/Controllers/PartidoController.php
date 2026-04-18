@@ -18,6 +18,15 @@ class PartidoController extends Controller
     {
         try {
             $partidos = $this->database->getReference('partidos')->getValue() ?? [];
+            $campos = $this->database->getReference('campos')->getValue() ?? [];
+
+            // Añadir campo_nombre a cada partido
+            foreach ($partidos as $key => $p) {
+                $campoId = $p['campo_id'] ?? '';
+                if ($campoId && isset($campos[$campoId])) {
+                    $partidos[$key]['campo_nombre'] = $campos[$campoId]['nombre'] ?? $campos[$campoId]['lugar'] ?? $campoId;
+                }
+            }
 
             return response()->json($partidos);
         } catch (\Exception $e) {

@@ -1704,6 +1704,94 @@ window.verMasJugadores = function() {
         window.aplicarFiltrosPartidos();
     };
 
+    let vistaPartidosActual = 'lista';
+
+    window.toggleVistaPartidos = function() {
+        const contenedor = document.getElementById('contenedorListaPartidos');
+        const btn = document.getElementById('btnToggleVista');
+        if (!contenedor) return;
+        
+        if (vistaPartidosActual === 'lista') {
+            vistaPartidosActual = 'jornadas';
+            if (btn) btn.innerText = 'Fixture';
+            window.cargarPartidosPorJornadas();
+        } else {
+            vistaPartidosActual = 'lista';
+            if (btn) btn.innerText = 'Lista';
+            window.aplicarFiltrosPartidos();
+        }
+    };
+
+    window.cargarPartidosPorJornadas = function() {
+        const contenedor = document.getElementById('contenedorListaPartidos');
+        if (!contenedor || !window.cachePartidosLista) {
+            window.aplicarFiltrosPartidos();
+            return;
+        }
+        
+        const partidos = window.cachePartidosLista;
+        const jornadas = {};
+        
+        partidos.forEach(p => {
+            const j = p.jornada || (p.fecha ? p.fecha : 'sin_fecha');
+            if (!jornadas[j]) jornadas[j] = [];
+            jornadas[j].push(p);
+        });
+        
+        const jornadasOrdenadas = Object.keys(jornadas).sort((a, b) => {
+            const aNum = parseInt(a);
+            const bNum = parseInt(b);
+            if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+            return a.localeCompare(b);
+        });
+        
+        contenedor.innerHTML = jornadasOrdenadas.map((j, idx) => {
+            const jornadaPartidos = jornadas[j];
+            const jugados = jornadaPartidos.filter(p => p.resultado_confirmado).length;
+            const listos = jornadaPartidos.filter(p => p.fecha && p.fecha !== 'PENDIENTE' && p.hora && p.hora !== '00:00').length;
+            const total = jornadaPartidos.length;
+            
+            return `
+            <div class="mb-4">
+                <div class="flex items-center justify-between p-3 bg-slate-800 rounded-t-lg border border-slate-700">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-blue-400">J${j}</span>
+                        <span class="text-xs text-slate-400">${total} partidos</span>
+                    </div>
+                    <div class="flex gap-2 text-[10px]">
+                        <span class="text-emerald-400">${listos} listos</span>
+                        <span class="text-slate-500">${jugados} jugados</span>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    ${jornadaPartidos.map(p => {
+                        const tieneFecha = p.fecha && p.fecha !== 'PENDIENTE';
+                        const tieneHora = p.hora && p.hora !== '00:00';
+                        const estaListo = tieneFecha && tieneHora;
+                        const estaFinalizado = p.resultado_confirmado || p.estatus === 'confirmado';
+                        
+                        const borderColor = estaFinalizado ? 'border-emerald-500/30' : estaListo ? 'border-blue-500/50' : tieneFecha ? 'border-amber-500/30' : 'border-red-500/30';
+                        const bgColor = estaFinalizado ? 'bg-emerald-500/5' : estaListo ? 'bg-blue-500/5' : 'bg-slate-800/50';
+                        
+                        return `
+                        <div class="p-3 rounded border ${borderColor} ${bgColor} flex items-center justify-between">
+                            <div onclick="window.verDetallePartido('${p.id}')" class="cursor-pointer flex items-center gap-2 flex-1 hover:border-blue-400 transition">
+                                <span class="text-xs font-bold text-white">${p.equipo_local}</span>
+                                <span class="text-xs font-bold text-slate-500">vs</span>
+                                <span class="text-xs font-bold text-white">${p.equipo_visitante}</span>
+                                <span class="text-[10px] text-slate-500">${tieneFecha ? p.fecha : 'SIN FECHA'} ${tieneHora ? p.hora : ''}</span>
+                            </div>
+                            <div class="flex gap-1">
+                                <button onclick="event.stopPropagation(); window.abrirAsignacionRapida('${p.equipo_local}', '${p.equipo_visitante}', '${p.id}')" class="bg-slate-700 hover:bg-slate-600 text-white text-[8px] px-2 py-1 rounded uppercase">LOG</button>
+                                ${!estaFinalizado ? `<button onclick="event.stopPropagation(); window.abrirActualizarMarcador('${p.id}')" class="bg-blue-600 hover:bg-blue-500 text-white text-[8px] px-2 py-1 rounded uppercase">EST</button>` : ''}
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>`;
+        }).join('');
+    };
+
     window.aplicarFiltrosPartidos = function() {
         const contenedor = document.getElementById('contenedorListaPartidos');
         if (!contenedor || !window.cachePartidosLista) return;
@@ -1754,6 +1842,22 @@ window.verMasJugadores = function() {
                 const jB = parseInt(b.jornada) || 999;
                 return jA - jB;
             }
+            const listoA = a.fecha && a.fecha !== 'PENDIENTE' && a.hora && a.hora !== '00:00';
+            const listoB = b.fecha && b.fecha !== 'PENDIENTE' && b.hora && b.hora !== '00:00';
+            if (orden === 'listos') {
+                if (listoA && !listoB) return -1;
+                if (!listoA && listoB) return 1;
+                const jA = parseInt(a.jornada) || 999;
+                const jB = parseInt(b.jornada) || 999;
+                return jA - jB;
+            }
+            if (orden === 'no_listos') {
+                if (!listoA && listoB) return -1;
+                if (listoA && !listoB) return 1;
+                const jA = parseInt(a.jornada) || 999;
+                const jB = parseInt(b.jornada) || 999;
+                return jA - jB;
+            }
             const tieneFechaA = a.fecha && a.fecha !== 'PENDIENTE';
             const tieneFechaB = b.fecha && b.fecha !== 'PENDIENTE';
             if (tieneFechaA && !tieneFechaB) return -1;
@@ -1793,22 +1897,34 @@ window.verMasJugadores = function() {
             }
 
             // LÓGICA DE BADGE DE ESTADO (CENTRAL)
+            const tieneSede = p.campo_id && p.campo_id !== '';
+            const tieneHora = p.hora && p.hora !== '00:00';
+            const estaListo = tieneFecha && tieneSede && tieneHora;
+            
             let badgeEstatus = '';
             if (p.resultado_confirmado || p.estatus === 'confirmado') {
-                badgeEstatus = `<span class="bg-slate-800 text-slate-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">CERRADA 🔒</span>`;
+                badgeEstatus = `<span class="bg-slate-800 text-slate-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">CERRADA</span>`;
             } else if (p.estatus === 'en_curso') {
-                badgeEstatus = `<span class="bg-green-600/20 text-green-500 text-[8px] px-2 py-1 rounded-md font-black uppercase animate-pulse">EN VIVO 🟢</span>`;
+                badgeEstatus = `<span class="bg-green-600 text-white text-[8px] px-2 py-1 rounded-md font-black uppercase animate-pulse">EN VIVO</span>`;
             } else if (p.estatus === 'finalizado') {
-                badgeEstatus = `<span class="bg-amber-600/20 text-amber-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">POR SUBIR ACTA ⚠️</span>`;
+                badgeEstatus = `<span class="bg-amber-600/20 text-amber-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">POR SUBIR ACTA</span>`;
             } else if (!tieneFecha) {
-                badgeEstatus = `<span class="bg-red-600/20 text-red-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">SIN FECHA</span>`;
+                badgeEstatus = `<span class="bg-red-600/30 text-red-400 text-[8px] px-2 py-1 rounded-md font-black uppercase">SIN FECHA</span>`;
+            } else if (estaListo) {
+                badgeEstatus = `<span class="bg-blue-600 text-white text-[8px] px-2 py-1 rounded-md font-black uppercase">LISTO</span>`;
+            } else if (tieneFecha && (!tieneSede || !tieneHora)) {
+                badgeEstatus = `<span class="bg-slate-600/50 text-slate-300 text-[8px] px-2 py-1 rounded-md font-black uppercase">PENDIENTE</span>`;
             } else {
                 badgeEstatus = `<span class="bg-blue-600/20 text-blue-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">PROGRAMADO</span>`;
             }
 
+            const borderClass = estaListo ? 'border-blue-500/50 bg-blue-500/5' : 
+                          !tieneFecha ? 'border-red-900/30' : 
+                          tieneSede && tieneHora ? 'border-blue-500/30' : 'border-slate-800';
+            
             html += `
                 <div onclick="window.verDetallePartido('${p.id}')" 
-                    class="cursor-pointer bg-slate-900 border ${!tieneFecha ? 'border-red-900/30' : 'border-slate-800'} p-5 rounded-3xl mb-4 transition-all hover:border-blue-500 hover:bg-slate-800/50 shadow-lg relative overflow-hidden group">
+                    class="cursor-pointer bg-slate-900 border ${borderClass} p-5 rounded-3xl mb-4 transition-all hover:border-blue-500 hover:bg-slate-800/50 shadow-lg relative overflow-hidden group">
                     
                     <div class="flex justify-between items-center gap-4">
                         
@@ -1836,20 +1952,22 @@ window.verMasJugadores = function() {
                             <span class="text-[10px] ${!tieneFecha ? 'text-red-500 font-black' : 'text-slate-500 font-bold'}">
                                 ${p.fecha || 'FECHA PENDIENTE'}
                             </span>
+                            ${tieneSede ? `<span class="text-[9px] text-emerald-400 font-bold">${p.campo_nombre || p.campo_id}</span>` : ''}
+                            ${tieneHora && p.hora !== '00:00' ? `<span class="text-[9px] text-emerald-400 font-bold">${p.hora}</span>` : ''}
 
                             <button onclick="event.stopPropagation(); window.abrirAsignacionRapida('${p.equipo_local}', '${p.equipo_visitante}', '${p.id}')" 
                                     class="w-full bg-slate-800 hover:bg-slate-700 text-white text-[9px] font-black py-2 rounded-xl transition-all uppercase border border-slate-700 active:scale-95">
-                                📅 LOGÍSTICA
+                                LOGISTICA
                             </button>
 
                             ${!(p.resultado_confirmado || p.estatus === 'confirmado') ? `
                                 <button onclick="event.stopPropagation(); window.abrirActualizarMarcador('${p.id}')" 
                                         class="w-full bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black py-2 rounded-xl transition-all uppercase shadow-lg shadow-blue-900/20 active:scale-95">
-                                    ⚽ ESTADÍSTICAS
+                                    ESTADISTICAS
                                 </button>
                             ` : `
                                 <div class="w-full text-center py-2 bg-slate-950/50 rounded-xl">
-                                    <span class="text-[8px] text-slate-600 italic uppercase">🔒 Finalizado</span>
+                                    <span class="text-[8px] text-slate-600 italic uppercase">CERRADA</span>
                                 </div>
                             `}
                         </div>
@@ -2076,8 +2194,14 @@ async function llenarSelectsEquipos() {
     
     window.verDetallePartido = async function(id) {
         try {
+            const escudoDefault = 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png';
             const p = window.cachePartidosLista.find(item => String(item.id) === String(id));
-            if(!p) return;
+            if(!p) {
+                // fallback: buscar directamente
+                const res = await fetch('/api/partidos/' + id);
+                if (!res.ok) return;
+                p = await res.json();
+            }
 
             const modal = document.getElementById('modalDetallePartido');
             modal.classList.replace('hidden', 'flex');
