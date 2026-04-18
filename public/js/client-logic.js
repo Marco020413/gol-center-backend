@@ -10,9 +10,9 @@ function calcularEstatusPartido(partido) {
     const partidoDate = new Date(partido.fecha + 'T' + partido.hora);
     const partidoEnd = new Date(partidoDate.getTime() + 100 * 60 * 1000); // +100 minutos
     
-    // Si ya está confirmado/finalizado
-    if (partido.resultado_confirmado || partido.estatus === 'confirmado' || partido.estatus === 'finalizado') {
-        return { estatus: 'finalizado', label: 'FIN' };
+    // Si ya está confirmado con acta, mantener como "cerrado"
+    if (partido.resultado_confirmado === true || partido.estatus === 'confirmado') {
+        return { estatus: 'cerrado', label: 'FIN' };
     }
     
     // PENDIENTE: hora_actual < hora_inicio
@@ -26,8 +26,8 @@ function calcularEstatusPartido(partido) {
         return { estatus: 'en_vivo', label: 'EN VIVO', minutos: minutosTranscurridos };
     }
     
-    // FINALIZADO: hora_actual >= hora_inicio + 100 min
-    return { estatus: 'finalizado', label: 'FIN' };
+    // FINALIZADO SIN ACTA: pasó el tiempo pero no hay acta
+    return { estatus: 'sin_acta', label: 'POR SUBIR' };
 }
 
 // Cache para evitar múltiples llamadas
@@ -1333,8 +1333,25 @@ function cargarPartidos(partidos) {
         return a.localeCompare(b);
     });
 
-    const upcoming = allPartidos.filter(p => !p.resultado_confirmado && p.fecha && p.fecha !== 'PENDIENTE' && p.hora && p.hora !== '00:00');
-    const pendingScheduled = allPartidos.filter(p => !p.resultado_confirmado && p.fecha && p.fecha !== 'PENDIENTE' && (!p.hora || p.hora === '00:00'));
+    // Filtrar solo partidos pendientes (excluir "En Vivo" y "Sin Acta" según tiempo REAL)
+    const upcoming = allPartidos.filter(p => {
+        if (p.resultado_confirmado) return false;
+        if (!p.fecha || p.fecha === 'PENDIENTE') return false;
+        if (!p.hora || p.hora === '00:00') return false;
+        // Usar cálculo dinámico de estatus basado en tiempo actual
+        const status = calcularEstatusPartido(p);
+        // Excluir: en_vivo (partido en curso) y sin_acta (pasó el tiempo sin resultado)
+        if (status.estatus === 'en_vivo' || status.estatus === 'sin_acta') return false;
+        return true;
+    });
+    
+    const pendingScheduled = allPartidos.filter(p => {
+        if (p.resultado_confirmado) return false;
+        // Sin fecha = pendiente por programar
+        if (!p.fecha || p.fecha === 'PENDIENTE') return true;
+        // Sin hora = pendiente por asignar horario
+        return !p.hora || p.hora === '00:00';
+    });
     
     if (upcoming.length === 0 && pendingScheduled.length > 0) {
         upcoming.push(...pendingScheduled);
@@ -1408,35 +1425,39 @@ function cargarPartidos(partidos) {
             <div id="jornada-content-${idx}" class="hidden mt-2 space-y-2 pl-1">
                 ${jornadaPartidos.map(p => {
                     const { estatus, label, minutos } = calcularEstatusPartido(p);
-                    const estaFinalizado = estatus === 'finalizado';
+                    // Ahora usamos 'cerrado' para acta confirmada, 'sin_acta' para tiempo transcurrido sin acta
+                    const estaCerrado = estatus === 'cerrado';
                     const estaEnVivo = estatus === 'en_vivo';
+                    const estaSinActa = estatus === 'sin_acta';
                     const gl = p.goles_local || 0;
                     const gv = p.goles_visitante || 0;
-                    const claseResultado = estaFinalizado 
+                    const claseResultado = estaCerrado 
                         ? (gl > gv ? 'text-emerald-400' : gl < gv ? 'text-red-400' : 'text-slate-400')
                         : 'text-blue-400';
                     
-                    const claseCard = estaFinalizado 
+                    const claseCard = estaCerrado 
                         ? 'border-l-2 border-l-emerald-500 bg-emerald-500/5 border-slate-700/50' 
                         : estaEnVivo 
                             ? 'border-l-2 border-l-green-500 bg-green-500/10 border-slate-700/50'
-                            : 'border-l-2 border-l-blue-500 bg-blue-500/5 border-slate-700/50';
+                            : estaSinActa
+                                ? 'border-l-2 border-l-amber-500 bg-amber-500/10 border-slate-700/50'
+                                : 'border-l-2 border-l-blue-500 bg-blue-500/5 border-slate-700/50';
                     
                     return `
                     <div class="p-2 rounded bg-slate-800/40 border ${claseCard}">
                         <div class="flex justify-between items-center">
-                            <span class="text-[8px] font-medium ${estaEnVivo ? 'text-green-400' : 'text-blue-300'}">
+                            <span class="text-[8px] font-medium ${estaEnVivo ? 'text-green-400' : estaSinActa ? 'text-amber-400' : 'text-blue-300'}">
                                 ${p.fecha && p.fecha !== 'PENDIENTE' ? p.fecha : '⚠️ Sin fecha'}
                                 ${p.hora && p.hora !== '00:00' ? ` ${p.hora}` : ''}
                                 ${estaEnVivo ? ` 🔴 ${minutos || ''}'` : ''}
                             </span>
-                            <span class="text-[7px] uppercase ${estaFinalizado ? 'text-emerald-400' : estaEnVivo ? 'text-green-400 font-bold animate-pulse' : 'text-slate-500'}">
+                            <span class="text-[7px] uppercase ${estaCerrado ? 'text-emerald-400' : estaEnVivo ? 'text-green-400 font-bold animate-pulse' : estaSinActa ? 'text-amber-400' : 'text-slate-500'}">
                                 ${label}
                             </span>
                         </div>
                         <div class="flex items-center justify-between mt-1 gap-2">
                             <span class="text-[9px] font-bold text-white truncate flex-1">${p.equipo_local || '---'}</span>
-                            <span class="text-[10px] font-black ${claseResultado} px-2 py-0.5 bg-slate-900/60 rounded">${estaFinalizado ? gl + '-' + gv : 'vs'}</span>
+                            <span class="text-[10px] font-black ${claseResultado} px-2 py-0.5 bg-slate-900/60 rounded">${estaCerrado ? gl + '-' + gv : 'vs'}</span>
                             <span class="text-[9px] font-bold text-white truncate flex-1 text-right">${p.equipo_visitante || '---'}</span>
                         </div>
                         ${p.campo_nombre || p.campo_id ? `<div class="text-[7px] text-slate-500 mt-1 text-right">📍 ${p.campo_nombre || p.campo_id}</div>` : ''}

@@ -1926,18 +1926,22 @@ window.verMasJugadores = function() {
                 yaPuseSeparadorPendientes = true;
             }
 
-            // LÓGICA DE BADGE DE ESTADO (CENTRAL)
+            // LÓGICA DE BADGE DE ESTADO (CENTRAL) - CÁLCULO DINÁMICO BASADO EN TIEMPO
             const tieneSede = p.campo_id && p.campo_id !== '';
             const tieneHora = p.hora && p.hora !== '00:00';
             const estaListo = tieneFecha && tieneSede && tieneHora;
-            const estaEnVivo = p.estatus === 'en_curso';
+            
+            // Calcular estatus en tiempo real
+            const statusCalc = window.calcularEstatusPartido(p);
+            const estaEnVivo = statusCalc.estatus === 'en_curso';
+            const estaFinalizadoTiempo = statusCalc.estatus === 'finalizado' && !p.resultado_confirmado;
             
             let badgeEstatus = '';
             if (p.resultado_confirmado || p.estatus === 'confirmado') {
                 badgeEstatus = `<span class="bg-slate-800 text-slate-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">CERRADA</span>`;
-            } else if (p.estatus === 'en_curso') {
+            } else if (estaEnVivo) {
                 badgeEstatus = `<span class="bg-green-600 text-white text-[8px] px-2 py-1 rounded-md font-black uppercase animate-pulse">EN VIVO</span>`;
-            } else if (p.estatus === 'finalizado') {
+            } else if (estaFinalizadoTiempo) {
                 badgeEstatus = `<span class="bg-amber-600/20 text-amber-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">POR SUBIR ACTA</span>`;
             } else if (!tieneFecha) {
                 badgeEstatus = `<span class="bg-red-600/30 text-red-400 text-[8px] px-2 py-1 rounded-md font-black uppercase">SIN FECHA</span>`;
@@ -3013,9 +3017,9 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
         const partidoDate = new Date(`${partido.fecha}T${partido.hora}`);
         const partidoEnd = new Date(partidoDate.getTime() + 100 * 60 * 1000); // +100 minutos
         
-        // Si ya está confirmado/finalizado, mantener ese estado
-        if (partido.resultado_confirmado || partido.estatus === 'confirmado' || partido.estatus === 'finalizado') {
-            return { estatus: 'finalizado', label: 'Finalizado' };
+        // Si ya está confirmado con acta, mantener como "cerrado"
+        if (partido.resultado_confirmado === true || partido.estatus === 'confirmado') {
+            return { estatus: 'cerrado', label: 'Cerrada' };
         }
         
         // PENDIENTE: hora_actual < hora_inicio
@@ -3030,8 +3034,8 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
             return { estatus: 'en_curso', label: `En Vivo (${minutosTranscurridos}')`, minutos: minutosTranscurridos };
         }
         
-        // FINALIZADO: hora_actual >= hora_inicio + 100 min
-        return { estatus: 'finalizado', label: 'Finalizado' };
+        // FINALIZADO SIN ACTA: hora_actual >= hora_inicio + 100 min (pasó el tiempo pero no hay acta)
+        return { estatus: 'sin_acta', label: 'Por subir acta' };
     };
     
     // Función para sincronizar estatus a Firebase (solo si cambió)
@@ -3061,8 +3065,15 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
                 const p = partidos[id];
                 const { estatus } = window.calcularEstatusPartido(p);
                 
-                // Solo actualizar si el estatus calculado es diferente al actual y no está confirmado
-                if (estatus !== p.estatus && p.estatus !== 'confirmado' && p.estatus !== 'finalizado') {
+                // Solo sincronizar si:
+                // 1. El estatus calculado es diferente al actual
+                // 2. No está confirmado (resultado_confirmado = true)
+                // 3. No está explícitamente marcado como 'cerrado'
+                const debeSincronizar = estatus !== p.estatus && 
+                    p.resultado_confirmado !== true && 
+                    p.estatus !== 'cerrado';
+                
+                if (debeSincronizar) {
                     // Sincronizar con Firebase (sin bloquear la UI)
                     window.sincronizarEstatusPartido(id, estatus);
                     p.estatus = estatus;
