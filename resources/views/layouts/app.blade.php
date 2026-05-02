@@ -1934,15 +1934,16 @@ window.verMasJugadores = function() {
             // Calcular estatus en tiempo real
             const statusCalc = window.calcularEstatusPartido(p);
             const estaEnVivo = statusCalc.estatus === 'en_curso';
-            const estaFinalizadoTiempo = statusCalc.estatus === 'finalizado' && !p.resultado_confirmado;
+            const estaResultadosPendientes = statusCalc.estatus === 'resultados_pendientes';
+            const estaCerrado = statusCalc.estatus === 'cerrado';
             
             let badgeEstatus = '';
-            if (p.resultado_confirmado || p.estatus === 'confirmado') {
-                badgeEstatus = `<span class="bg-slate-800 text-slate-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">CERRADA</span>`;
+            if (estaCerrado) {
+                badgeEstatus = `<span class="bg-slate-800 text-slate-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">FINALIZADO</span>`;
             } else if (estaEnVivo) {
                 badgeEstatus = `<span class="bg-green-600 text-white text-[8px] px-2 py-1 rounded-md font-black uppercase animate-pulse">EN VIVO</span>`;
-            } else if (estaFinalizadoTiempo) {
-                badgeEstatus = `<span class="bg-amber-600/20 text-amber-500 text-[8px] px-2 py-1 rounded-md font-black uppercase">POR SUBIR ACTA</span>`;
+            } else if (estaResultadosPendientes) {
+                badgeEstatus = `<span class="bg-amber-600/20 text-amber-500 text-[8px] px-2 py-1 rounded-md font-black uppercase animate-pulse">RESULTADOS POR SUBIR</span>`;
             } else if (!tieneFecha) {
                 badgeEstatus = `<span class="bg-red-600/30 text-red-400 text-[8px] px-2 py-1 rounded-md font-black uppercase">SIN FECHA</span>`;
             } else if (estaListo) {
@@ -1954,6 +1955,7 @@ window.verMasJugadores = function() {
             }
 
             const borderClass = estaEnVivo ? 'border-green-500/50 bg-green-500/10' : 
+                          estaResultadosPendientes ? 'border-amber-500/50 bg-amber-500/10' :
                           estaListo ? 'border-blue-500/50 bg-blue-500/5' : 
                           !tieneFecha ? 'border-red-900/30' : 
                           tieneSede && tieneHora ? 'border-blue-500/30' : 'border-slate-800';
@@ -3010,19 +3012,19 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
     // Función para calcular el estatus basado en tiempo
     window.calcularEstatusPartido = function(partido) {
         if (!partido.fecha || !partido.hora || partido.hora === '00:00') {
-            return { estatus: 'programado', label: 'Pendiente' };
+            return { estatus: 'programado', label: 'Pendiente', esProximo: true };
         }
         
         const now = new Date();
         const partidoDate = new Date(`${partido.fecha}T${partido.hora}`);
         const partidoEnd = new Date(partidoDate.getTime() + 100 * 60 * 1000); // +100 minutos
         
-        // Si ya está confirmado con acta, mantener como "cerrado"
+        // Si ya está confirmado con acta = CERRADO (acta guardada)
         if (partido.resultado_confirmado === true || partido.estatus === 'confirmado') {
-            return { estatus: 'cerrado', label: 'Cerrada' };
+            return { estatus: 'cerrado', label: 'Finalizado' };
         }
         
-        // PENDIENTE: hora_actual < hora_inicio
+        // PENDIENTE: hora_actual < hora_inicio (partido futuro)
         if (now < partidoDate) {
             const minutosRestantes = Math.floor((partidoDate - now) / 60000);
             return { estatus: 'programado', label: `En ${minutosRestantes}min`, esProximo: true };
@@ -3034,8 +3036,8 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
             return { estatus: 'en_curso', label: `En Vivo (${minutosTranscurridos}')`, minutos: minutosTranscurridos };
         }
         
-        // FINALIZADO SIN ACTA: hora_actual >= hora_inicio + 100 min (pasó el tiempo pero no hay acta)
-        return { estatus: 'sin_acta', label: 'Por subir acta' };
+        // FINALIZADO (SIN ACTA): pasaron más de 100 min pero no hay acta guardada
+        return { estatus: 'resultados_pendientes', label: 'Resultados por subir' };
     };
     
     // Función para sincronizar estatus a Firebase (solo si cambió)
@@ -3091,10 +3093,17 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
         }
     };
 
-    // Actualizar estatus cada 60 segundos
+    // Actualizar estatus cada 60 segundos (Partidos)
     setInterval(() => {
         if (typeof window.cargarPartidosCards === 'function') {
             window.cargarPartidosCards();
+        }
+    }, 60000);
+
+    // Actualizar Roles/Fixture cada 60 segundos para cambio automático de estados
+    setInterval(() => {
+        if (typeof window.recuperarFixtureGuardado === 'function') {
+            window.recuperarFixtureGuardado();
         }
     }, 60000);
 
@@ -3572,13 +3581,14 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
             `;
 
             jornadas[numJor].forEach(p => {
-                // Check if match should be en_curso based on time
-                let esEnVivo = p.estatus === 'en_curso';
-                if (!esEnVivo && p.fecha && p.hora && p.hora !== '00:00') {
-                    const now = new Date();
-                    const matchTime = new Date(p.fecha + 'T' + p.hora);
-                    esEnVivo = matchTime < now && !p.resultado_confirmado && p.estatus !== 'finalizado';
-                }
+                // Usar función central de cálculo de estatus
+                const statusCalc = window.calcularEstatusPartido(p);
+                const estaCerrado = statusCalc.estatus === 'cerrado';
+                const estaEnVivo = statusCalc.estatus === 'en_curso';
+                const estaResultadosPendientes = statusCalc.estatus === 'resultados_pendientes';
+                
+                let claseGanadorLocal = "";
+                let claseGanadorVisitante = "";
                 
                 let statusConfig = {
                     claseBorde: 'border-slate-800/50',
@@ -3588,14 +3598,11 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
                     indicador: 'text-slate-700'
                 };
 
-                const estaFinalizado = p.estatus === 'finalizado' || p.resultado_confirmado === true;
-                let claseGanadorLocal = "";
-                let claseGanadorVisitante = "";
                 const gl = parseInt(p.goles_local || 0);
                 const gv = parseInt(p.goles_visitante || 0);
                 const mostrarBadgeCampeon = p.jornada === 'FINAL' && p.resultado_confirmado === true && gl !== gv;
 
-                if (estaFinalizado) {
+                if (estaCerrado) {
                     statusConfig.claseBorde = p.jornada === 'FINAL' ? 'border-amber-500/50' : 'border-emerald-500/40';
                     statusConfig.claseBg = p.jornada === 'FINAL' ? 'bg-amber-500/5' : 'bg-emerald-500/10';
                     statusConfig.claseTexto = 'text-white';
@@ -3603,7 +3610,11 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
                     statusConfig.badge = `<span class="text-[8px] bg-emerald-600 text-white px-2 py-0.5 rounded-md uppercase font-black">Finalizado</span>`;
                     if (gl > gv) { claseGanadorLocal = "text-amber-400 font-black scale-110 origin-right"; claseGanadorVisitante = "text-slate-600 font-normal opacity-50"; }
                     else if (gv > gl) { claseGanadorVisitante = "text-amber-400 font-black scale-110 origin-left"; claseGanadorLocal = "text-slate-600 font-normal opacity-50"; }
-                } else if (esEnVivo) {
+                } else if (estaResultadosPendientes) {
+                    statusConfig.claseBorde = 'border-amber-500/50'; statusConfig.claseBg = 'bg-amber-500/10';
+                    statusConfig.claseTexto = 'text-white'; statusConfig.indicador = 'text-amber-500 font-bold animate-pulse';
+                    statusConfig.badge = `<span class="text-[8px] bg-amber-600 text-white px-2 py-0.5 rounded-md uppercase font-black animate-pulse">Resultados por Subir</span>`;
+                } else if (estaEnVivo) {
                     statusConfig.claseBorde = 'border-green-500/50'; statusConfig.claseBg = 'bg-green-500/10';
                     statusConfig.claseTexto = 'text-white'; statusConfig.indicador = 'text-green-500 animate-pulse';
                     statusConfig.badge = `<span class="text-[8px] bg-green-600 text-white px-2 py-0.5 rounded-md uppercase font-black animate-pulse">En Vivo</span>`;
@@ -3619,7 +3630,7 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
                         ${mostrarBadgeCampeon ? '<div class="absolute -top-1 -right-1 text-[10px] bg-amber-500 text-black px-2 font-black rotate-12 shadow-lg">CAMPEÓN</div>' : ''}
                         <div class="flex items-center justify-between w-full">
                             <div class="flex-1 text-right text-[11px] uppercase truncate ${claseGanadorLocal || statusConfig.claseTexto}">${p.equipo_local}</div>
-                            <div class="px-4 ${statusConfig.indicador} font-black text-[10px] italic">${estaFinalizado ? gl + ' - ' + gv : 'VS'}</div>
+                            <div class="px-4 ${statusConfig.indicador} font-black text-[10px] italic">${estaCerrado ? gl + ' - ' + gv : 'VS'}</div>
                             <div class="flex-1 text-left text-[11px] uppercase truncate ${claseGanadorVisitante || statusConfig.claseTexto}">${p.equipo_visitante}</div>
                         </div>
                         <div class="flex justify-center items-center mt-1">${statusConfig.badge}</div>
@@ -3646,20 +3657,14 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
                 window.cachePartidosData = partidosData;
             }
             
-            // Update estatus based on current time
+            // Update estatus based on current time - USAR FUNCIÓN CENTRAL
             const now = new Date();
             Object.keys(partidosData).forEach(id => {
                 const p = partidosData[id];
-                if (p.fecha && p.hora && p.hora !== '00:00') {
-                    const partidoDate = new Date(`${p.fecha}T${p.hora}`);
-                    
-                    if (partidoDate < now && p.estatus !== 'confirmado' && p.estatus !== 'finalizado') {
-                        if (p.resultado_confirmado) {
-                            p.estatus = 'finalizado';
-                        } else if (!p.estatus || p.estatus === 'programado') {
-                            p.estatus = 'en_curso';
-                        }
-                    }
+                const { estatus } = window.calcularEstatusPartido(p);
+                // Solo actualizar si hay cambio y no está confirmado
+                if (estatus !== p.estatus && p.resultado_confirmado !== true && p.estatus !== 'cerrado') {
+                    p.estatus = estatus;
                 }
             });
             

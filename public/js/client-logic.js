@@ -3,21 +3,21 @@ const escudoDefault = 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png';
 // Función para calcular estatus basado en tiempo
 function calcularEstatusPartido(partido) {
     if (!partido.fecha || !partido.hora || partido.hora === '00:00') {
-        return { estatus: 'programado', label: 'Pendiente' };
+        return { estatus: 'programado', label: 'Pendiente', esProximo: true };
     }
     
     const now = new Date();
     const partidoDate = new Date(partido.fecha + 'T' + partido.hora);
     const partidoEnd = new Date(partidoDate.getTime() + 100 * 60 * 1000); // +100 minutos
     
-    // Si ya está confirmado con acta, mantener como "cerrado"
+    // Si ya está confirmado con acta = CERRADO
     if (partido.resultado_confirmado === true || partido.estatus === 'confirmado') {
         return { estatus: 'cerrado', label: 'FIN' };
     }
     
-    // PENDIENTE: hora_actual < hora_inicio
+    // PENDIENTE: hora_actual < hora_inicio (partido futuro)
     if (now < partidoDate) {
-        return { estatus: 'programado', label: 'PEN' };
+        return { estatus: 'programado', label: 'PEN', esProximo: true };
     }
     
     // EN VIVO: hora_inicio <= hora_actual < hora_inicio + 100 min
@@ -26,8 +26,8 @@ function calcularEstatusPartido(partido) {
         return { estatus: 'en_vivo', label: 'EN VIVO', minutos: minutosTranscurridos };
     }
     
-    // FINALIZADO SIN ACTA: pasó el tiempo pero no hay acta
-    return { estatus: 'sin_acta', label: 'POR SUBIR' };
+    // FINALIZADO (SIN ACTA): pasaron más de 100 min pero no hay acta guardada
+    return { estatus: 'resultados_pendientes', label: 'POR SUBIR' };
 }
 
 // Cache para evitar múltiples llamadas
@@ -1333,15 +1333,15 @@ function cargarPartidos(partidos) {
         return a.localeCompare(b);
     });
 
-    // Filtrar solo partidos pendientes (excluir "En Vivo" y "Sin Acta" según tiempo REAL)
+    // Filtrar solo partidos pendientes (excluir "En Vivo" y "Resultados por subir" según tiempo REAL)
     const upcoming = allPartidos.filter(p => {
         if (p.resultado_confirmado) return false;
         if (!p.fecha || p.fecha === 'PENDIENTE') return false;
         if (!p.hora || p.hora === '00:00') return false;
         // Usar cálculo dinámico de estatus basado en tiempo actual
         const status = calcularEstatusPartido(p);
-        // Excluir: en_vivo (partido en curso) y sin_acta (pasó el tiempo sin resultado)
-        if (status.estatus === 'en_vivo' || status.estatus === 'sin_acta') return false;
+        // Excluir: en_vivo (partido en curso) y resultados_pendientes (pasó el tiempo sin resultado)
+        if (status.estatus === 'en_vivo' || status.estatus === 'resultados_pendientes') return false;
         return true;
     });
     
@@ -1367,17 +1367,30 @@ function cargarPartidos(partidos) {
     // Calcular estatus del próximo partido
     const nextMatchInfo = nextMatch ? calcularEstatusPartido(nextMatch) : null;
     const nextMatchEnVivo = nextMatchInfo && nextMatchInfo.estatus === 'en_vivo';
+    const nextMatchResultadosPendientes = nextMatchInfo && nextMatchInfo.estatus === 'resultados_pendientes';
     const minutosProx = nextMatchInfo ? nextMatchInfo.minutos : 0;
     
     let summaryHTML = '';
     if (nextMatch) {
         const nextListo = nextMatch.hora && nextMatch.hora !== '00:00';
         const enVivoBadge = nextMatchEnVivo ? `<span class="ml-2 px-1.5 py-0.5 bg-green-600 text-white text-[7px] rounded font-bold animate-pulse">EN VIVO ${minutosProx ? minutosProx + "'" : ''}</span>` : '';
+        const resultadosPendientesBadge = nextMatchResultadosPendientes ? `<span class="ml-2 px-1.5 py-0.5 bg-amber-600 text-white text-[7px] rounded font-bold animate-pulse">RESULTADOS POR SUBIR</span>` : '';
+        
+        // Determinar clase según estado
+        const cardClass = nextMatchEnVivo 
+            ? 'bg-gradient-to-r from-green-600/30 to-emerald-600/20 border-green-500'
+            : nextMatchResultadosPendientes
+                ? 'bg-gradient-to-r from-amber-600/30 to-yellow-600/20 border-amber-500'
+                : 'bg-gradient-to-r from-blue-600/20 to-purple-600/10 border-blue-500/30';
+        
+        const labelClass = nextMatchEnVivo ? 'text-green-400' : nextMatchResultadosPendientes ? 'text-amber-400' : 'text-blue-400';
+        const labelText = nextMatchEnVivo ? 'Partido en Curso' : nextMatchResultadosPendientes ? 'Partido Pendiente' : 'Próximo Partido';
+        
         summaryHTML = `
-        <div class="mb-4 p-3 ${nextMatchEnVivo ? 'bg-gradient-to-r from-green-600/30 to-emerald-600/20 border-green-500' : 'bg-gradient-to-r from-blue-600/20 to-purple-600/10 border-blue-500/30'} rounded-lg border">
+        <div class="mb-4 p-3 ${cardClass} rounded-lg border">
             <div class="flex items-center justify-between">
-                <div class="text-[9px] ${nextMatchEnVivo ? 'text-green-400' : 'text-blue-400'} uppercase font-bold tracking-wider">${nextMatchEnVivo ? 'Partido en Curso' : 'Próximo Partido'}</div>
-                <div class="text-[8px] ${nextListo ? 'text-emerald-400 font-bold' : 'text-slate-500'}">${nextMatch.fecha} ${nextListo ? '• ' + nextMatch.hora + ' hs' : ''}${enVivoBadge}</div>
+                <div class="text-[9px] ${labelClass} uppercase font-bold tracking-wider">${labelText}</div>
+                <div class="text-[8px] ${nextListo ? 'text-emerald-400 font-bold' : 'text-slate-500'}">${nextMatch.fecha} ${nextListo ? '• ' + nextMatch.hora + ' hs' : ''}${enVivoBadge}${resultadosPendientesBadge}</div>
             </div>
             <div class="flex items-center justify-between mt-2">
                 <div class="text-xs font-bold text-white truncate max-w-[45%]">${nextMatch.equipo_local}</div>
@@ -1425,10 +1438,10 @@ function cargarPartidos(partidos) {
             <div id="jornada-content-${idx}" class="hidden mt-2 space-y-2 pl-1">
                 ${jornadaPartidos.map(p => {
                     const { estatus, label, minutos } = calcularEstatusPartido(p);
-                    // Ahora usamos 'cerrado' para acta confirmada, 'sin_acta' para tiempo transcurrido sin acta
+                    // estados: cerrado (acta guardada), en_vivo, resultados_pendientes, programado
                     const estaCerrado = estatus === 'cerrado';
                     const estaEnVivo = estatus === 'en_vivo';
-                    const estaSinActa = estatus === 'sin_acta';
+                    const estaResultadosPendientes = estatus === 'resultados_pendientes';
                     const gl = p.goles_local || 0;
                     const gv = p.goles_visitante || 0;
                     const claseResultado = estaCerrado 
@@ -1439,19 +1452,19 @@ function cargarPartidos(partidos) {
                         ? 'border-l-2 border-l-emerald-500 bg-emerald-500/5 border-slate-700/50' 
                         : estaEnVivo 
                             ? 'border-l-2 border-l-green-500 bg-green-500/10 border-slate-700/50'
-                            : estaSinActa
+                            : estaResultadosPendientes
                                 ? 'border-l-2 border-l-amber-500 bg-amber-500/10 border-slate-700/50'
                                 : 'border-l-2 border-l-blue-500 bg-blue-500/5 border-slate-700/50';
                     
                     return `
                     <div class="p-2 rounded bg-slate-800/40 border ${claseCard}">
                         <div class="flex justify-between items-center">
-                            <span class="text-[8px] font-medium ${estaEnVivo ? 'text-green-400' : estaSinActa ? 'text-amber-400' : 'text-blue-300'}">
+                            <span class="text-[8px] font-medium ${estaEnVivo ? 'text-green-400' : estaResultadosPendientes ? 'text-amber-400' : 'text-blue-300'}">
                                 ${p.fecha && p.fecha !== 'PENDIENTE' ? p.fecha : '⚠️ Sin fecha'}
                                 ${p.hora && p.hora !== '00:00' ? ` ${p.hora}` : ''}
                                 ${estaEnVivo ? ` 🔴 ${minutos || ''}'` : ''}
                             </span>
-                            <span class="text-[7px] uppercase ${estaCerrado ? 'text-emerald-400' : estaEnVivo ? 'text-green-400 font-bold animate-pulse' : estaSinActa ? 'text-amber-400' : 'text-slate-500'}">
+                            <span class="text-[7px] uppercase ${estaCerrado ? 'text-emerald-400' : estaEnVivo ? 'text-green-400 font-bold animate-pulse' : estaResultadosPendientes ? 'text-amber-400 font-bold' : 'text-slate-500'}">
                                 ${label}
                             </span>
                         </div>
@@ -1527,9 +1540,11 @@ function cargarLiguilla(partidos) {
         .filter(p => {
             const esLiguilla = p.tipo === 'liguilla' || p.tipo === 'playoff';
             const esFaseEliminatoria = ['Cuartos', 'Semifinal', 'Final', 'Tercer Lugar'].includes(p.fase);
-            const esFinalizado = p.estatus === 'finalizado' || p.resultado_confirmado;
+            // Usar cálculo dinámico de estatus
+            const status = calcularEstatusPartido(p);
+            const estaCerrado = status.estatus === 'cerrado';
             const tieneFase = p.fase || p.jornada;
-            return (esLiguilla || esFaseEliminatoria || esFinalizado) && tieneFase;
+            return (esLiguilla || esFaseEliminatoria || estaCerrado) && tieneFase;
         });
 
     if (liguilla.length === 0) {
