@@ -502,18 +502,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 9. LÓGICA DE FORMULARIO: REGISTRO DE EQUIPOS
         if(window.formEquipo) {
-            window.formEquipo.onsubmit = async (e) => {
-                e.preventDefault();
-                const data = new FormData(window.formEquipo);
-                try {
-                    const response = await fetch('/api/admin/equipos/registrar', {
-                        method: 'POST',
-                        body: data,
-                        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
-                    });
-                    if (response.ok) { alert('🏆 Equipo creado'); location.reload(); }
-                } catch (error) { alert('❌ Error'); }
-            };
+             window.formEquipo.onsubmit = async (e) => {
+                 e.preventDefault();
+                 const data = new FormData(window.formEquipo);
+                 try {
+                     const url = construirUrlConLiga('/api/admin/equipos/registrar');
+                     const response = await fetch(url, {
+                         method: 'POST',
+                         body: data,
+                         headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+                     });
+                     if (response.ok) { alert('🏆 Equipo creado'); location.reload(); }
+                 } catch (error) { alert('❌ Error'); }
+             };
         }
 
         // 10. LÓGICA DE FORMULARIO: CREAR PARTIDO
@@ -1101,74 +1102,72 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function cargarJugadoresEquipo(equipoNombre) {
-        const select = equipoElements.selectPortero();
-        resetSelectPortero(false);
+    const select = equipoElements.selectPortero();
+    resetSelectPortero(false);
+    const btn = equipoElements.btn();
+    const infoBox = document.getElementById('equipoJugadoresInfo');
+    const countSpan = document.getElementById('eqJugadoresCount');
 
-        const btn = equipoElements.btn();
-        const infoBox = document.getElementById('equipoJugadoresInfo');
-        const countSpan = document.getElementById('eqJugadoresCount');
-        
-        try {
-            const res = await fetch(construirUrlConLiga('/api/jugadores') + '?_=' + Date.now());
-            const jugadores = await res.json();
+    try {
+        const baseUrl = construirUrlConLiga('/api/jugadores');
+        const separator = baseUrl.includes('?') ? '&' : '?';
+        const url = `${baseUrl}${separator}equipo=${encodeURIComponent(equipoNombre)}&_=${Date.now()}`;
 
-            const fragment = document.createDocumentFragment();
-            const porteroIdActual = equipoState.equipoData?.portero_id;
+        const res = await fetch(url);
+        const jugadores = await res.json();
+        const fragment = document.createDocumentFragment();
+        const porteroIdActual = equipoState.equipoData?.portero_id;
 
-            const jugadoresEquipo = Object.entries(jugadores)
-                .filter(([_, j]) => j.equipo === equipoNombre)
-                .sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
-            
-            // Contador de jugadores
-            const totalJugadores = jugadoresEquipo.length;
-            equipoState.jugadoresCount = totalJugadores;
-            
-            // Actualizar indicador visual
-            if (infoBox && countSpan) {
-                countSpan.innerText = totalJugadores;
-                if (totalJugadores < 11) {
-                    infoBox.classList.remove('hidden');
-                } else {
-                    infoBox.classList.add('hidden');
-                }
-            }
-            
-            // Si no hay jugadores, mostrar mensaje
-            if (totalJugadores === 0) {
-                select.disabled = true;
-                select.innerHTML = '<option value="">Asigna jugadores al equipo primero para elegir un portero</option>';
-                equipoState.porterosCargados = true;
-                btn.disabled = true; // Bloquear hasta tener 11+
-                btn.innerText = `Requiere 11+ jugadores (${totalJugadores}/11)`;
-                return;
-            }
+        const jugadoresEquipo = Object.entries(jugadores)
+            .filter(([_, j]) => j.equipo === equipoNombre)
+            .sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
 
-            // Si tiene menos de 11, informar pero permitir selección
+        const totalJugadores = jugadoresEquipo.length;
+        equipoState.jugadoresCount = totalJugadores;
+
+        if (infoBox && countSpan) {
+            countSpan.innerText = totalJugadores;
             if (totalJugadores < 11) {
-                btn.disabled = true;
-                btn.innerText = `Faltan ${11 - totalJugadores} jugadores (${totalJugadores}/11)`;
+                infoBox.classList.remove('hidden');
+            } else {
+                infoBox.classList.add('hidden');
             }
-
-            // Habilitar y permitir onchange
-            select.disabled = false;
-            select.onchange = validarEstadoBoton;
-
-            jugadoresEquipo.forEach(([telefono, j]) => {
-                const opt = new Option(`${j.nombre} (#${j.numero || '?'})`, telefono);
-                if (telefono === porteroIdActual) {
-                    opt.selected = true;
-                }
-                fragment.appendChild(opt);
-            });
-
-            select.appendChild(fragment);
-        } catch (e) {
-            console.error('Error:', e);
-        } finally {
-            equipoState.porterosCargados = true;
-            validarEstadoBoton();
         }
+
+        if (totalJugadores === 0) {
+            select.disabled = true;
+            select.innerHTML = '<option value="">Asigna jugadores al equipo primero</option>';
+            btn.disabled = true;
+            btn.innerText = `Requiere 11+ jugadores (${totalJugadores}/11)`;
+            return;
+        }
+
+        if (totalJugadores < 11) {
+            btn.disabled = true;
+            btn.innerText = `Faltan ${11 - totalJugadores} jugadores (${totalJugadores}/11)`;
+        } else {
+            btn.disabled = false;
+            btn.innerText = "Guardar Equipo";
+        }
+
+        select.disabled = false;
+        select.onchange = validarEstadoBoton;
+        select.innerHTML = '<option value="">-- Seleccionar portero --</option>';
+
+        jugadoresEquipo.forEach(([telefono, j]) => {
+            const opt = new Option(`${j.nombre} (#${j.numero || '?'})`, telefono);
+            if (telefono === porteroIdActual) opt.selected = true;
+            fragment.appendChild(opt);
+        });
+        select.appendChild(fragment);
+
+    } catch (e) {
+        console.error('Error:', e);
+    } finally {
+        equipoState.porterosCargados = true;
+        if (typeof validarEstadoBoton === 'function') validarEstadoBoton();
     }
+}
 
     async function registrarNuevoEquipo() {
         const btn = document.getElementById('btnGuardarEquipo');
@@ -1361,15 +1360,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             const tiene11 = totalJugadores >= 11;
             const tienePortero = eq.portero_id && eq.portero_id !== '';
             
-            // Indicador minimalista
-            let indicador = '';
-            if (!tiene11 && !tienePortero) {
-                indicador = '<span class="text-amber-500 text-[10px] font-bold">⚠️ Falta portero + 11</span>';
-            } else if (!tiene11) {
-                indicador = '<span class="text-amber-500 text-[10px] font-bold">⚠️ Faltan ' + (11 - stats.total) + ' jugadores</span>';
-            } else if (!tienePortero) {
-                indicador = '<span class="text-blue-400 text-[10px] font-bold">⚠️ Sin portero</span>';
-            }
+             // Indicador minimalista
+             let indicador = '';
+             if (!tiene11 && !tienePortero) {
+                 indicador = '<span class="text-amber-500 text-[10px] font-bold">⚠️ Falta portero + 11</span>';
+             } else if (!tiene11) {
+                 indicador = '<span class="text-amber-500 text-[10px] font-bold">⚠️ Faltan ' + (11 - totalJugadores) + ' jugadores</span>';
+             } else if (!tienePortero) {
+                 indicador = '<span class="text-blue-400 text-[10px] font-bold">⚠️ Sin portero</span>';
+             }
             
             contenedor.innerHTML += `
                 <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between shadow-lg hover:border-emerald-500/50 cursor-pointer transition" onclick="verJugadoresEquipo('${id}', '${eq.nombre}')">
@@ -4384,10 +4383,10 @@ window.logout = function() {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         
-        try {
-            // Add timestamp to prevent caching
-            const res = await fetch('/api/jugadores?_=' + Date.now());
-            const jugadores = await res.json();
+         try {
+             // Add timestamp to prevent caching and include liga_id
+             const res = await fetch(construirUrlConLiga('/api/jugadores') + '_=' + Date.now());
+             const jugadores = await res.json();
             
             const jugadoresEquipo = Object.entries(jugadores)
                 .filter(([_, j]) => j.equipo === nombreEquipo)

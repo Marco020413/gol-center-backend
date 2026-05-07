@@ -13,8 +13,8 @@ class JugadorController extends Controller
     {
         $this->database = app('firebase')->createDatabase();
     }
-
-    public function registrar(Request $request) {
+    public function registrar(Request $request)
+    {
         $validator = Validator::make($request->all(), [
             'nombre'    => 'required|string|max:55',
             'telefono'  => 'required|digits:10',   
@@ -33,50 +33,70 @@ class JugadorController extends Controller
         }
 
         try {
-        // --- PROTECCIÓN EXTRA: Verificar si el teléfono ya existe ---
-        $path = 'jugadores/' . $request->telefono;
-        $jugadorExistente = $this->database->getReference($path)->getSnapshot()->exists();
+            // --- DETERMINAR LA RUTA DE FIREBASE BASADA EN EL CONTEXTO DE LIGA ---
+            $ligaId = $request->query('liga_id');
+            if ($ligaId) {
+                // Estamos en el contexto de una liga específica
+                $basePath = 'ligas/' . $ligaId . '/jugadores';
+            } else {
+                // Contexto general (ligas principales o sin liga seleccionada)
+                $basePath = 'jugadores';
+            }
+            
+            // --- PROTECCIÓN EXTRA: Verificar si el teléfono ya existe ---
+            $path = $basePath . '/' . $request->telefono;
+            $jugadorExistente = $this->database->getReference($path)->getSnapshot()->exists();
 
-        if ($jugadorExistente) {
-            return response()->json([
-                'error' => "El número de teléfono ya está registrado. Si quieres cambiar sus datos sin borrar sus goles, usa el modo 'Editar'."
-            ], 422);
-        }
+            if ($jugadorExistente) {
+                return response()->json([
+                    'error' => "El número de teléfono ya está registrado. Si quieres cambiar sus datos sin borrar sus goles, usa el modo 'Editar'."
+                ], 422);
+            }
 
-        // --- VALIDACIÓN DE DORSAL (Tu lógica de siempre) ---
-        $jugadores = $this->database->getReference('jugadores')->getValue() ?? [];
-        foreach ($jugadores as $j) {
-            if (isset($j['equipo']) && isset($j['numero'])) {
-                if ($j['equipo'] === $request->equipo && (int)$j['numero'] === (int)$request->numero) {
-                    return response()->json(['error' => "Dorsal ocupado."], 422);
+            // --- VALIDACIÓN DE DORSAL (Tu lógica de siempre) ---
+            $jugadores = $this->database->getReference($basePath)->getValue() ?? [];
+            foreach ($jugadores as $j) {
+                if (isset($j['equipo']) && isset($j['numero'])) {
+                    if ($j['equipo'] === $request->equipo && (int)$j['numero'] === (int)$request->numero) {
+                        return response()->json(['error' => "Dorsal ocupado."], 422);
+                    }
                 }
             }
-        }
 
-        // Si pasó las pruebas, registramos como nuevo con ceros
-        $this->database->getReference($path)->set([
-            'nombre'              => $request->nombre,
-            'numero'              => (int)$request->numero,
-            'edad'                => $request->edad,
-            'direccion'           => $request->direccion,
-            'equipo'              => $request->equipo,
-            'partidos_jugados'    => 0,
-            'goles'               => 0,
-            'estatus'             => 'activo', 
-            'partidos_suspension' => 0       
-        ]);
+            // Si pasó las pruebas, registramos como nuevo con ceros
+            $this->database->getReference($path)->set([
+                'nombre'              => $request->nombre,
+                'numero'              => (int)$request->numero,
+                'edad'                => $request->edad,
+                'direccion'           => $request->direccion,
+                'equipo'              => $request->equipo,
+                'partidos_jugados'    => 0,
+                'goles'               => 0,
+                'estatus'             => 'activo', 
+                'partidos_suspension' => 0       
+            ]);
 
-        return response()->json(['message' => '¡Registrado con éxito!']);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['message' => '¡Registrado con éxito!']);
+            } catch (\Exception $e) {
+                return response()->json(['error' => $e->getMessage()], 500);
+            }
         }
-    }
 
     public function actualizar(Request $request, $telefono)
     {
         try {
+            // DETERMINAR LA RUTA DE FIREBASE BASADA EN EL CONTEXTO DE LIGA
+            $ligaId = $request->query('liga_id');
+            if ($ligaId) {
+                // Estamos en el contexto de una liga específica
+                $basePath = 'ligas/' . $ligaId . '/jugadores';
+            } else {
+                // Contexto general (ligas principales o sin liga seleccionada)
+                $basePath = 'jugadores';
+            }
+            
             // Obtener datos actuales del jugador
-            $jugadorActual = $this->database->getReference('jugadores/' . $telefono)->getValue();
+            $jugadorActual = $this->database->getReference($basePath . '/' . $telefono)->getValue();
             
             if (!$jugadorActual) {
                 return response()->json(['error' => 'Jugador no encontrado'], 404);
@@ -92,14 +112,14 @@ class JugadorController extends Controller
             $partidos_suspension = $request->partidos_suspension ?? ($jugadorActual['partidos_suspension'] ?? 0);
             
             // --- 1. VALIDACIÓN DE DORSAL ÚNICO (Para que no se repitan en el equipo) ---
-            $jugadores = $this->database->getReference('jugadores')->getValue() ?? [];
+            $jugadores = $this->database->getReference($basePath)->getValue() ?? [];
             $equipoRequest = strtolower(trim($equipo));
             $numeroRequest = (int)$numero;
             $telefonoEditando = (string)$telefono;
             
             foreach ($jugadores as $key => $j) {
                 if ((string)$key === $telefonoEditando) continue;
-
+                
                 if (isset($j['equipo']) && isset($j['numero'])) {
                     if (strtolower(trim($j['equipo'])) === $equipoRequest && (int)$j['numero'] === $numeroRequest) {
                         return response()->json([
@@ -108,9 +128,9 @@ class JugadorController extends Controller
                     }
                 }
             }
-
+            
             // --- 2. ACTUALIZACIÓN SEGURA ---
-            $jugadorRef = $this->database->getReference('jugadores/' . $telefono);
+            $jugadorRef = $this->database->getReference($basePath . '/' . $telefono);
             $updateData = [
                 'nombre'              => $nombre,
                 'numero'              => (int)$numero,
@@ -120,18 +140,41 @@ class JugadorController extends Controller
                 'estatus'             => $estatus,
                 'partidos_suspension' => (int)$partidos_suspension,
             ];
-
+            
             $jugadorRef->update($updateData);
-
+            
             return response()->json(['message' => '¡Jugador actualizado correctamente!']);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
-    public function listarTodos() {
-        $jugadores = $this->database->getReference('jugadores')->getValue();
-        return response()->json($jugadores);
+    public function listarTodos(Request $request) {
+        $ligaId = $request->query('liga_id');
+        $equipoNombre = $request->query('equipo');
+        
+        // Construir la path base según la liga
+        if ($ligaId) {
+            $basePath = 'ligas/' . $ligaId . '/jugadores';
+        } else {
+            $basePath = 'jugadores';
+        }
+        
+        // Obtener todos los jugadores de la liga (o generales)
+        $jugadores = $this->database->getReference($basePath)->getValue();
+        
+        // Si se especifica un equipo, filtrar por nombre de equipo
+        if ($equipoNombre && is_array($jugadores)) {
+            $filtrados = [];
+            foreach ($jugadores as $telefono => $jugador) {
+                if (isset($jugador['equipo']) && $jugador['equipo'] === $equipoNombre) {
+                    $filtrados[$telefono] = $jugador;
+                }
+            }
+            $jugadores = $filtrados;
+        }
+        
+        return response()->json($jugadores ?? []);
     }
 
     public function eliminar($telefono) {

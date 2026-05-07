@@ -50,19 +50,29 @@ class EquipoController extends Controller
                 Log::error('Error al mover archivo de escudo');
             }
         }
-
+        
         // Si no hay escudo seleccionado ni subido, usar default
         if (empty($escudoUrl)) {
             $escudoUrl = 'https://cdn-icons-png.flaticon.com/512/5323/5323982.png';
         }
-
-        $this->database->getReference('equipos/' . $equipoId)->update([
+        
+        // DETERMINAR LA RUTA DE FIREBASE BASADA EN EL CONTEXTO DE LIGA
+        $ligaId = $request->query('liga_id');
+        if ($ligaId) {
+            // Estamos en el contexto de una liga específica
+            $basePath = 'ligas/' . $ligaId . '/equipos';
+        } else {
+            // Contexto general (ligas principales o sin liga seleccionada)
+            $basePath = 'equipos';
+        }
+        
+        $this->database->getReference($basePath . '/' . $equipoId)->update([
             'nombre' => $request->nombre,
             'escudo' => $escudoUrl,
             'portero_id' => $request->portero_id ?? null,
             'portero_nombre' => $request->portero_nombre ?? null
         ]);
-
+        
         return response()->json(['message' => 'Equipo guardado', 'escudo' => $escudoUrl]);
     }
 
