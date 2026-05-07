@@ -4,10 +4,16 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\JugadorController;
 use App\Http\Controllers\EquipoController;
+use App\Http\Controllers\LigaController;
 
 // Rutas Públicas (El JS las usa para el select)
 Route::get('/equipos', [EquipoController::class, 'listar']);
 Route::get('/jugadores', [JugadorController::class, 'listarTodos']);
+
+// Rutas de Ligas
+Route::get('/ligas', [LigaController::class, 'listar']);
+Route::get('/ligas/{id}/nombre', [LigaController::class, 'obtenerNombre']);
+
 Route::delete('/admin/jugadores/eliminar/{telefono}', [App\Http\Controllers\JugadorController::class, 'eliminar']);
 Route::put('/admin/jugadores/actualizar/{telefono}', [App\Http\Controllers\JugadorController::class, 'actualizar']);
 Route::get('/equipos/escudos', [App\Http\Controllers\EquipoController::class, 'listarEscudos']);

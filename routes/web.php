@@ -45,6 +45,31 @@ Route::get('/logout', function () {
     return $response;
 });
 
+// Selección de liga
+Route::get('/seleccionar-liga', function () {
+    $token = request()->cookie('admin_token') ?: request()->bearerToken();
+    $cookieHeader = request()->header('Cookie');
+    
+    if (!$token && $cookieHeader) {
+        preg_match('/admin_token=([^;]+)/', $cookieHeader, $matches);
+        if (isset($matches[1])) {
+            $token = $matches[1];
+        }
+    }
+    
+    if (!$token) {
+        return redirect('/login');
+    }
+    
+    try {
+        $auth = app('firebase.auth');
+        $auth->verifyIdToken($token);
+        return view('seleccionar-liga');
+    } catch (\Exception $e) {
+        return redirect('/login');
+    }
+});
+
 // Admin route - OPTIMIZADO: Carga mínima inicial, datos vía AJAX
 Route::get('/admin', function () {
     $token = request()->cookie('admin_token') ?: request()->bearerToken();

@@ -66,10 +66,17 @@ class EquipoController extends Controller
         return response()->json(['message' => 'Equipo guardado', 'escudo' => $escudoUrl]);
     }
 
-    public function listar()
+    public function listar(Request $request)
     {
         $database = app('firebase')->createDatabase();
-        $equipos = $database->getReference('equipos')->getValue();
+        
+        $ligaId = $request->query('liga_id');
+        
+        if ($ligaId) {
+            $equipos = $database->getReference('ligas/' . $ligaId . '/equipos')->getValue();
+        } else {
+            $equipos = $database->getReference('equipos')->getValue();
+        }
     
         // Si no hay equipos, devolvemos un array vacío para que el JS no rompa
         return response()->json($equipos ?? []);

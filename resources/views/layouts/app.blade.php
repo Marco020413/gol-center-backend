@@ -22,6 +22,20 @@
         #formActualizarMarcador {
             overflow-y: auto;
         }
+        
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        /* Hide scrollbar for IE, Edge and Firefox */
+        .scrollbar-hide {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+        /* Ensure mobile tabs don't cause horizontal scroll */
+        .tab-btn {
+            flex-shrink: 0;
+        }
 
         #overlay-carga {
         position: fixed;
@@ -99,23 +113,52 @@
     });
     </script>
     <header class="w-full bg-slate-900/80 border-b border-slate-800 backdrop-blur-md sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <div class="flex items-center gap-4">
-                <div class="size-12 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/20 overflow-hidden text-white font-bold text-2xl">
-                    <img src="https://cdn-icons-png.flaticon.com/512/5323/5323982.png" alt="Escudo" class="size-10 object-contain">
+        <!-- Desktop: Single row, Mobile: Two rows -->
+        <div class="max-w-7xl mx-auto px-4">
+            <!-- Row 1: Logo + Logout (mobile top, desktop inline) -->
+            <div class="flex items-center justify-between py-3 md:hidden">
+                <div class="flex items-center gap-3">
+                    <div class="size-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg overflow-hidden">
+                        <img src="https://cdn-icons-png.flaticon.com/512/5323/5323982.png" alt="Escudo" class="size-8 object-contain">
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold tracking-tight text-white uppercase">GOL <span class="text-blue-500">CENTER</span></h1>
+                    </div>
                 </div>
-                <div>
-                    <h1 class="text-2xl font-bold tracking-tight text-white uppercase">GOL <span class="text-blue-500">CENTER</span></h1>
-                    <p class="text-xs text-slate-500 uppercase tracking-widest font-semibold">Panel de Administración</p>
-                </div>
-            </div>
-            
-            <nav class="flex gap-4">
-                <span class="text-sm text-slate-400 self-center hidden sm:block">Bienvenido, <strong>Admin</strong></span>
-                <button onclick="logout()" id="logout-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-semibold transition shadow-md shadow-blue-900/40 flex items-center gap-2">
-                    <span id="logout-icon">Cerrar Sesión</span>
+                <button onclick="logout()" class="bg-slate-800 border border-slate-700 text-slate-300 size-9 rounded-lg hover:bg-slate-700 transition flex items-center justify-center" title="Cerrar Sesión">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
                 </button>
-            </nav>
+            </div>
+
+            <!-- Row 2: League Selector (mobile centered, desktop with all elements) -->
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pb-3">
+                <!-- Desktop Logo -->
+                <div class="hidden md:flex items-center gap-4">
+                    <div class="size-12 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg overflow-hidden">
+                        <img src="https://cdn-icons-png.flaticon.com/512/5323/5323982.png" alt="Escudo" class="size-10 object-contain">
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold tracking-tight text-white uppercase">GOL <span class="text-blue-500">CENTER</span></h1>
+                        <p class="text-xs text-slate-500 uppercase tracking-widest font-semibold">Panel de Administración</p>
+                    </div>
+                </div>
+
+                <!-- League Selector / Nav -->
+                <nav class="flex items-center justify-center md:justify-end gap-3 w-full md:w-auto">
+                    <button onclick="window.location.href='/seleccionar-liga'" id="ligaSelectorBtn" class="flex items-center gap-2 bg-slate-800 border border-slate-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-slate-700 transition font-medium">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="size-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m3-16v4m-2-2h4m3 8v4m-2-2h4M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5c0-1.1.9-2 2-2z" />
+                        </svg>
+                        <span id="liga-display-text">Cambiar Liga</span>
+                    </button>
+                    <span class="text-sm text-slate-400 hidden md:inline">Bienvenido, <strong>Admin</strong></span>
+                    <button onclick="logout()" class="hidden md:flex bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-semibold transition shadow-md shadow-blue-900/40 items-center gap-2">
+                        <span>Cerrar Sesión</span>
+                    </button>
+                </nav>
+            </div>
         </div>
     </header>
 
@@ -132,6 +175,17 @@
     // SECCIÓN 1: UTILIDADES (Helpers)
     // ═══════════════════════════════════════════════════════════════════════════════
     let ultimaCarga = {};
+
+    // Helper: Obtener liga_id actual desde localStorage
+    function obtenerLigaId() {
+        return localStorage.getItem('current_liga_id') || null;
+    }
+
+    // Helper: Construir URL con liga_id
+    function construirUrlConLiga(basePath) {
+        const ligaId = obtenerLigaId();
+        return ligaId ? `${basePath}?liga_id=${ligaId}` : basePath;
+    }
     
     // ChangeTab: Disponible inmediatamente para los botones del HTML
     window.changeTab = function(tabName) {
@@ -177,6 +231,9 @@ case 'posiciones':
                     break;
                 case 'equipos_gest': 
                     if(typeof cargarGestionEquipos === 'function') cargarGestionEquipos(); 
+                    break;
+                case 'ligas':
+                    if(typeof window.cargarLigas === 'function') window.cargarLigas();
                     break;
             }
             ultimaCarga[tabName] = ahora;
@@ -231,11 +288,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 2. CARGA DE DATOS BASE (OPTIMIZADO: Parallel + Caching)
         // Cargar todos los datos base en paralelo una sola vez al inicio
         const datosBase = await Promise.all([
-            fetch('/api/equipos').then(r => r.json()).catch(() => ({})),
+            fetch(construirUrlConLiga('/api/equipos')).then(r => r.json()).catch(() => ({})),
             fetch('/api/campos').then(r => r.json()).catch(() => ({})),
-            fetch('/api/partidos').then(r => r.json()).catch(() => ({})),
-            fetch('/api/jugadores').then(r => r.json()).catch(() => ({}))
+            fetch(construirUrlConLiga('/api/partidos')).then(r => r.json()).catch(() => ({})),
+            fetch(construirUrlConLiga('/api/jugadores')).then(r => r.json()).catch(() => ({}))
         ]);
+        
+        // Mostrar nombre de la liga actual desde localStorage o fetch
+        const ligaId = obtenerLigaId();
+        const ligaNombreDisplayEl = document.getElementById('liga-display-text');
+        const ligaStored = localStorage.getItem('current_liga_nombre');
+        
+        const mostrarNombreLiga = (nombre) => {
+            if (nombre && ligaNombreDisplayEl) {
+                ligaNombreDisplayEl.textContent = nombre;
+                ligaNombreDisplayEl.title = nombre;
+            }
+        };
+        
+        if (ligaStored) {
+            mostrarNombreLiga(ligaStored);
+        } else if (ligaId) {
+            fetch(`/api/ligas/${ligaId}/nombre`).then(r => r.json()).then(d => {
+                if (d.nombre) {
+                    localStorage.setItem('current_liga_nombre', d.nombre);
+                    mostrarNombreLiga(d.nombre);
+                }
+            }).catch(() => {});
+        }
         
         // Guardar en caché global para reuse
         window.cacheEquiposData = datosBase[0];
@@ -254,10 +334,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         setTimeout(() => {
             // Cargar datos base si no están
             if (!window.cacheEquiposData || Object.keys(window.cacheEquiposData).length === 0) {
-fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d);
+                fetch(construirUrlConLiga('/api/equipos')).then(r => r.json()).then(d => window.cacheEquiposData = d);
             }
             if (!window.cachePartidosData) {
-                fetch('/api/partidos').then(r => r.json()).then(d => window.cachePartidosData = d);
+                fetch(construirUrlConLiga('/api/partidos')).then(r => r.json()).then(d => window.cachePartidosData = d);
             }
             if (!window.cacheCamposData) {
                 fetch('/api/campos').then(r => r.json()).then(d => window.cacheCamposData = d);
@@ -385,10 +465,11 @@ fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d)
                     equipo: document.getElementById('selectEquipos').value,
                     numero: window.formJugador.numero.value,
                     estatus: document.getElementById('edit_estatus').value, 
-                    partidos_suspension: parseInt(document.getElementById('partidos_suspension').value) || 0
+                    partidos_suspension: parseInt(document.getElementById('partidos_suspension').value) || 0,
+                    liga_id: obtenerLigaId()
                 };
 
-                const url = esEdicion ? `/api/admin/jugadores/actualizar/${telefonoFinal}` : '/api/admin/jugadores/registrar';
+                const url = esEdicion ? construirUrlConLiga(`/api/admin/jugadores/actualizar/${telefonoFinal}`) : construirUrlConLiga('/api/admin/jugadores/registrar');
                 const method = esEdicion ? 'PUT' : 'POST';
 
                 try {
@@ -442,7 +523,7 @@ fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d)
                 const idSorteo = window.idPartidoSorteo;
                 const partidoData = window.partidoDataActual; // Datos del partido cargado
                 
-                const url = idSorteo ? `/api/admin/partidos/actualizar-datos/${idSorteo}` : '/api/admin/partidos/crear';
+                const url = idSorteo ? construirUrlConLiga(`/api/admin/partidos/actualizar-datos/${idSorteo}`) : construirUrlConLiga('/api/admin/partidos/crear');
                 const metodo = idSorteo ? 'PUT' : 'POST';
                 
                 // Usar datos del partido si existen (modo edición), o del select (modo nuevo)
@@ -538,7 +619,7 @@ fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d)
                 };
 
                 try {
-                    const res = await fetch(`/api/admin/partidos/actualizar/${id}`, {
+                    const res = await fetch(construirUrlConLiga(`/api/admin/partidos/actualizar/${id}`), {
                         method: 'PUT',
                         headers: { 
                             'Content-Type': 'application/json', 
@@ -564,10 +645,16 @@ fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d)
         setTimeout(() => {
             // Cargar datos base si no están
             if (!window.cacheEquiposData) {
-                fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d);
+                fetch(construirUrlConLiga('/api/equipos')).then(r => r.json()).then(d => window.cacheEquiposData = d);
             }
             if (!window.cachePartidosData) {
-                fetch('/api/partidos').then(r => r.json()).then(d => window.cachePartidosData = d);
+                fetch(construirUrlConLiga('/api/partidos')).then(r => r.json()).then(d => window.cachePartidosData = d);
+            }
+            if (!window.cacheCamposData) {
+                fetch('/api/campos').then(r => r.json()).then(d => window.cacheCamposData = d);
+            }
+            if (!window.cachePartidosData) {
+                fetch(construirUrlConLiga('/api/partidos')).then(r => r.json()).then(d => window.cachePartidosData = d);
             }
             if (!window.cacheCamposData) {
                 fetch('/api/campos').then(r => r.json()).then(d => window.cacheCamposData = d);
@@ -803,32 +890,32 @@ fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d)
     };
 
      window.eliminarJugador = async function(telefono) {
-        // 1. Confirmación de seguridad
-        if (!confirm('⚠️ ¿Estás seguro de eliminar a este jugador? Se borrarán sus estadísticas permanentemente.')) {
-            return;
-        }
+         if (!confirm('⚠️ ¿Estás seguro de eliminar a este jugador? Se borrarán sus estadísticas permanentemente.')) {
+             return;
+         }
 
-        try {
-            const response = await fetch(`/api/admin/jugadores/eliminar/${telefono}`, {
-                method: 'DELETE',
-                headers: { 
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json'
-                }
-            });
+         try {
+             const url = construirUrlConLiga(`/api/admin/jugadores/eliminar/${telefono}`);
+             const response = await fetch(url, {
+                 method: 'DELETE',
+                 headers: { 
+                     'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                     'Accept': 'application/json'
+                 }
+             });
 
-            if (response.ok) {
-                alert('🗑️ Jugador eliminado correctamente');
-                location.reload(); // Recargamos para actualizar la tabla
-            } else {
-                const result = await response.json();
-                alert('❌ Error: ' + (result.error || 'No se pudo eliminar al jugador'));
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('❌ Error de conexión con el servidor');
-        }
-    };
+             if (response.ok) {
+                 alert('🗑️ Jugador eliminado correctamente');
+                 location.reload();
+             } else {
+                 const result = await response.json();
+                 alert('❌ Error: ' + (result.error || 'No se pudo eliminar al jugador'));
+             }
+         } catch (error) {
+             console.error('Error:', error);
+             alert('❌ Error de conexión con el servidor');
+         }
+     };
 
     function cerrarModal() { 
         window.modalJugador.classList.replace('flex', 'hidden'); 
@@ -844,7 +931,7 @@ fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d)
         const select = document.getElementById('selectEquipos');
         if(!select) return;
         try {
-            const response = await fetch('/api/equipos');
+            const response = await fetch(construirUrlConLiga('/api/equipos'));
             const equipos = await response.json();
             const currentVal = select.value;
             select.innerHTML = '<option value="Libre">-- AGENTE LIBRE --</option>';
@@ -1022,7 +1109,7 @@ fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d)
         const countSpan = document.getElementById('eqJugadoresCount');
         
         try {
-            const res = await fetch('/api/jugadores?_=' + Date.now());
+            const res = await fetch(construirUrlConLiga('/api/jugadores') + '?_=' + Date.now());
             const jugadores = await res.json();
 
             const fragment = document.createDocumentFragment();
@@ -1125,6 +1212,9 @@ fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d)
         const form = document.getElementById('formRegistroEquipo');
         const data = new FormData(form);
         
+        // Añadir liga_id
+        data.append('liga_id', obtenerLigaId());
+        
         if (equipoId) {
             data.append('_method', 'PUT');
         }
@@ -1133,10 +1223,9 @@ fetch('/api/equipos').then(r => r.json()).then(d => window.cacheEquiposData = d)
             data.append('escudo_url', escudoFinal);
         }
 
-const select = document.getElementById('selectPortero');
+        const select = document.getElementById('selectPortero');
         const porteroId = select?.value;
         const porteroNombre = (select?.selectedOptions?.[0]?.text || '').replace(/\s*\(#[^)]*\)\s*/g, '').trim();
-        
         
         if (porteroId && porteroNombre) {
             data.append('portero_id', porteroId);
@@ -1146,6 +1235,7 @@ const select = document.getElementById('selectPortero');
         }
 
         try {
+            const url = construirUrlConLiga('/api/admin/equipos/registrar');
             const response = await fetch(url, {
                 method: 'POST',
                 body: data,
@@ -1333,7 +1423,8 @@ const select = document.getElementById('selectPortero');
         
         if (validacion === nombre) {
             try {
-                const response = await fetch(`/api/admin/equipos/eliminar/${id}`, {
+                const url = construirUrlConLiga(`/api/admin/equipos/eliminar/${id}`);
+                const response = await fetch(url, {
                     method: 'DELETE',
                     headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
                 });
@@ -1627,7 +1718,7 @@ window.verMasJugadores = function() {
         try {
             // USAR CACHÉ GLOBAL SI ESTÁ DISPONIBLE (ya cargado al inicio)
             if (!window.cacheEquiposData && !cacheEquiposData) {
-                const res = await fetch('/api/equipos');
+                const res = await fetch(construirUrlConLiga('/api/equipos'));
                 cacheEquiposData = await res.json();
             }
             const datos = window.cacheEquiposData || cacheEquiposData;
@@ -1667,7 +1758,8 @@ window.verMasJugadores = function() {
             if (window.cachePartidosData && Object.keys(window.cachePartidosData).length > 0) {
                 partidos = window.cachePartidosData;
             } else {
-                const res = await fetch('/api/partidos');
+                const url = construirUrlConLiga('/api/partidos');
+                const res = await fetch(url);
                 if (!res.ok) {
                     contenedor.innerHTML = '<p class="text-red-500 text-[10px] text-center py-10">⚠️ Error del servidor. Intenta más tarde.</p>';
                     return;
@@ -1684,7 +1776,7 @@ window.verMasJugadores = function() {
             //Obtener equipos para escudos (si no están en cache)
             let equiposData = window.cacheEquiposData;
             if (!equiposData) {
-                const resE = await fetch('/api/equipos');
+                const resE = await fetch(construirUrlConLiga('/api/equipos'));
                 equiposData = await resE.json();
                 window.cacheEquiposData = equiposData;
             }
@@ -2088,9 +2180,9 @@ window.verMasJugadores = function() {
             window.modalActualizarMarcador.classList.replace('hidden', 'flex');
 
             const [resP, resJ, resE] = await Promise.all([
-                fetch('/api/partidos'),
-                fetch('/api/jugadores'),
-                fetch('/api/equipos')
+                fetch(construirUrlConLiga('/api/partidos')),
+                fetch(construirUrlConLiga('/api/jugadores')),
+                fetch(construirUrlConLiga('/api/equipos'))
             ]);
 
             if (!resP.ok || !resJ.ok || !resE.ok) throw new Error("Error 500");
@@ -2226,7 +2318,7 @@ window.verMasJugadores = function() {
         if (!confirm("⚠️ ¿Estás COMPLETAMENTE seguro de borrar este partido? Esta acción es irreversible.")) return;
         
         try {
-            const res = await fetch(`/api/admin/partidos/eliminar/${id}`, {
+            const res = await fetch(construirUrlConLiga(`/api/admin/partidos/eliminar/${id}`), {
                 method: 'DELETE',
                 headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
             });
@@ -2243,7 +2335,7 @@ window.verMasJugadores = function() {
    
     
 async function llenarSelectsEquipos() {
-        const res = await fetch('/api/equipos');
+        const res = await fetch(construirUrlConLiga('/api/equipos'));
         const equipos = await res.json();
         const selects = [document.getElementById('selectLocal'), document.getElementById('selectVisitante')];
         selects.forEach(s => {
@@ -2340,7 +2432,7 @@ async function llenarSelectsEquipos() {
 
             if(p.detalle_jugadores) {
                 if(!window.cacheJugadoresGlobal) {
-                    const resJ = await fetch('/api/jugadores');
+                    const resJ = await fetch(construirUrlConLiga('/api/jugadores'));
                     window.cacheJugadoresGlobal = await resJ.json();
                 }
                 
@@ -2407,12 +2499,12 @@ async function llenarSelectsEquipos() {
             return;
         }
 
-        try {
+         try {
             // Indicador visual de carga sutil solo en la zona de la agenda
             listaAgenda.innerHTML = '<p class="text-[10px] text-blue-500 animate-pulse text-center py-2">Consultando disponibilidad...</p>';
             contenedor.classList.remove('hidden');
 
-            const res = await fetch('/api/partidos');
+            const res = await fetch(construirUrlConLiga('/api/partidos'));
             const partidos = await res.json();
             
             // Filtramos: Partidos en la misma sede/fecha QUE NO SEAN el que estamos editando actualmente
@@ -2720,12 +2812,12 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
         let partidos = window.cachePartidosData;
         
         if (!equipos || Object.keys(equipos).length === 0) {
-            const res = await fetch('/api/equipos');
+            const res = await fetch(construirUrlConLiga('/api/equipos'));
             equipos = await res.json();
             window.cacheEquiposData = equipos;
         }
         if (!partidos || Object.keys(partidos).length === 0) {
-            const res = await fetch('/api/partidos');
+            const res = await fetch(construirUrlConLiga('/api/partidos'));
             partidos = await res.json();
             window.cachePartidosData = partidos;
         }
@@ -3041,15 +3133,19 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
     };
     
     // Función para sincronizar estatus a Firebase (solo si cambió)
-    window.sincronizarEstatusPartido = async function(partidoId, nuevoEstatus) {
+    window.sincronizarEstatusPartido = async function(partidoId, nuevoEstatus, ligaIdDestino) {
+        const ligaId = ligaIdDestino || obtenerLigaId();
+        if (!ligaId) return;
+        
         try {
-            await fetch(`/api/admin/partidos/actualizar-datos/${partidoId}`, {
+            const url = `/api/admin/partidos/actualizar-datos/${partidoId}?liga_id=${ligaId}`;
+            const response = await fetch(url, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                 body: JSON.stringify({ estatus: nuevoEstatus })
             });
         } catch (e) {
-            console.error('Error sincronizando estatus:', e);
+            // Error silencioso - el partido podría no existir o estar en migración
         }
     };
 
@@ -3058,7 +3154,7 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
         if(!contenedor) return;
 
         try {
-            const res = await fetch('/api/partidos');
+            const res = await fetch(construirUrlConLiga('/api/partidos'));
             const partidos = await res.json();
 
             // Update estatus based on current time
@@ -3138,7 +3234,7 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
 
         try {
             // 3. CARGAR SEDES DISPONIBLES (Validando estado y agenda)
-            const [resC, resP] = await Promise.all([fetch('/api/campos'), fetch('/api/partidos')]);
+            const [resC, resP] = await Promise.all([fetch('/api/campos'), fetch(construirUrlConLiga('/api/partidos'))]);
             const campos = await resC.json();
             const todosLosPartidos = Object.values(await resP.json());
 
@@ -3234,8 +3330,8 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
         
         try {
             const [resE, resJ] = await Promise.all([
-                fetch('/api/equipos'),
-                fetch('/api/jugadores')
+                fetch(construirUrlConLiga('/api/equipos')),
+                fetch(construirUrlConLiga('/api/jugadores'))
             ]);
             const equiposData = await resE.json();
             const jugadoresData = await resJ.json();
@@ -3288,8 +3384,8 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
         try {
             // Cargar equipos y jugadores
             const [resE, resJ] = await Promise.all([
-                fetch('/api/equipos'),
-                fetch('/api/jugadores')
+                fetch(construirUrlConLiga('/api/equipos')),
+                fetch(construirUrlConLiga('/api/jugadores'))
             ]);
             const equiposData = await resE.json();
             const jugadoresData = await resJ.json();
@@ -3362,7 +3458,7 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
                 equipos.splice(1, 0, equipos.pop());
             }
 
-            const res = await fetch('/api/admin/partidos/generar-torneo', {
+            const res = await fetch(construirUrlConLiga('/api/admin/partidos/generar-torneo'), {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json', 
@@ -3399,7 +3495,7 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
         if(!confirm("❓ ¿Ya archivaste este torneo en el Salón de la Fama? Si no lo hiciste, perderás las estadísticas de esta copa para siempre.")) return;
 
         try {
-            const res = await fetch('/api/admin/partidos/limpiar-todo', {
+            const res = await fetch(construirUrlConLiga('/api/admin/partidos/limpiar-todo'), {
                 method: 'DELETE',
                 headers: { 
                     'X-CSRF-TOKEN': '{{ csrf_token() }}',
@@ -3447,7 +3543,7 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
         try {
             // 2. CARGA DE DATOS (CACHE)
             if (!window.cachePartidosLista || window.cachePartidosLista.length === 0) {
-                const res = await fetch('/api/partidos');
+                const res = await fetch(construirUrlConLiga('/api/partidos'));
                 const partidosData = await res.json();
                 window.cachePartidosLista = Object.keys(partidosData).map(id => ({ id, ...partidosData[id] }));
             }
@@ -3646,12 +3742,12 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
     // ═══════════════════════════════════════════════════════════════════════════════
     // SECCIÓN 8: LIGUILLA/TORNEO (Generación, progreso, archivado)
     // ═══════════════════════════════════════════════════════════════════════════════
-    window.recuperarFixtureGuardado = async function() {
+     window.recuperarFixtureGuardado = async function() {
         try {
             // USAR CACHÉ GLOBAL SI ESTÁ DISPONIBLE
             let partidosData = window.cachePartidosData;
             if (!partidosData) {
-                const res = await fetch('/api/partidos');
+                const res = await fetch(construirUrlConLiga('/api/partidos'));
                 if (!res.ok) throw new Error('Error cargando partidos');
                 partidosData = await res.json();
                 window.cachePartidosData = partidosData;
@@ -3707,7 +3803,7 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
     window.verificarFinFaseRegular = async function() {
         try {
             console.log("Verificando fin de fase...");
-            const res = await fetch('/api/partidos');
+            const res = await fetch(construirUrlConLiga('/api/partidos'));
             const partidos = await res.json();
             const listaPartidos = Object.values(partidos);
 
@@ -3794,7 +3890,7 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
     try {
         window.isGenerandoLiguilla = true; // ACTIVAMOS EL CANDADO
 
-        const res = await fetch('/api/admin/partidos/generar-liguilla', {
+        const res = await fetch(construirUrlConLiga('/api/admin/partidos/generar-liguilla'), {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json', 
@@ -3901,7 +3997,7 @@ window.toggleAsistencia = function(telefono, checkbox, esPortero) {
         verificandoLiguilla = true;
         
         try {
-            const res = await fetch('/api/partidos');
+            const res = await fetch(construirUrlConLiga('/api/partidos'));
             const partidosData = await res.json();
             const lista = Object.values(partidosData);
 
@@ -4419,8 +4515,8 @@ contenedor.innerHTML = html;
             
             try {
                 const [resJug, resEq] = await Promise.all([
-                    fetch('/api/jugadores?_=' + Date.now()),
-                    fetch('/api/equipos')
+                    fetch(construirUrlConLiga('/api/jugadores') + '?_=' + Date.now()),
+                    fetch(construirUrlConLiga('/api/equipos'))
                 ]);
                 const jugadores = await resJug.json();
                 const equipos = await resEq.json();
